@@ -47,10 +47,15 @@ describe("Outcome health with the real Workboard plugin", () => {
         expect(connected.hello.auth?.scopes).toEqual(["operator.read"]);
         const self = await client.request<{ profile: { id: string } }>("users.self", {});
         expect(self.profile.id).toEqual(expect.any(String));
-        const health = await client.request<{ workboard?: { available?: boolean } }>(
+        const health = await client.request<{
+          gateway?: { available?: boolean; requestScoped?: boolean };
+          workboard?: { available?: boolean };
+        }>(
           "outcomes.health",
           {},
         );
+        expect(health.gateway?.available).toBe(true);
+        expect(health.gateway?.requestScoped).toBe(true);
         expect(health.workboard?.available).toBe(enabled);
       },
       async () => {
