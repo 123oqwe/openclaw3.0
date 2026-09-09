@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
+import { runQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 import {
   createSkillLibraryWireInstance,
   SKILL_LIBRARY_BOB,
   SkillLibraryWireClient,
 } from "./skill-library-wire-fixture.js";
-import { runQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 
 describe("Outcome health with the real Workboard plugin", () => {
   it.each([true, false])("reports Workboard availability=%s", async (enabled) => {
@@ -29,7 +29,10 @@ describe("Outcome health with the real Workboard plugin", () => {
                 allowUsers: [SKILL_LIBRARY_BOB],
               },
             },
-            controlUi: { enabled: false },
+            controlUi: {
+              enabled: false,
+              allowedOrigins: [`http://127.0.0.1:${instance.port}`],
+            },
           },
           agents: { defaults: { workspace: instance.state.workspaceDir } },
           plugins: {
