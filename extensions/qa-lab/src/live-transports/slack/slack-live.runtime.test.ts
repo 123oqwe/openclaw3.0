@@ -1,4 +1,5 @@
 // Qa Lab tests cover slack live plugin behavior.
+import { performance } from "node:perf_hooks";
 import { sanitizeAssistantVisibleText } from "openclaw/plugin-sdk/text-chunking";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { readQaScenarioById } from "../../scenario-catalog.js";
@@ -1539,6 +1540,8 @@ describe("Slack live QA runtime helpers", () => {
 
   it("proves the public Slack send path stores complete ordered fallback chunks", async () => {
     const probe = testing.buildSlackInvalidBlocksTableProbe();
+    const diagnosticStartedAt = performance.now();
+    const diagnosticStages: Array<{ elapsedMs: number; stage: string }> = [];
     const storedPayloads: Array<Record<string, unknown> & { ts: string }> = [];
     const postMessage = vi.fn(async (payload: Record<string, unknown>) => {
       const ts = `2.${String(storedPayloads.length + 1).padStart(6, "0")}`;
@@ -1568,6 +1571,11 @@ describe("Slack live QA runtime helpers", () => {
     const result = await testing.runSlackTableInvalidBlocksFallbackScenario({
       cfg,
       channelId: "C123456789",
+      diagnosticStage: (stage) => {
+        const elapsedMs = Math.round(performance.now() - diagnosticStartedAt);
+        diagnosticStages.push({ elapsedMs, stage });
+        process.stderr.write(`[slack-invalid-blocks-fallback] ${stage} +${elapsedMs}ms\n`);
+      },
       sutAccountId: "sut",
       sutIdentity: { userId: "U999999999" },
       sutReadClient: { conversations: { history } } as never,
@@ -1604,6 +1612,14 @@ describe("Slack live QA runtime helpers", () => {
     expect(result.details).toContain("final row=present");
     expect(result.details).toContain("complete delivery=true");
     expect(sutWriteClient.chat.postMessage).toBe(postMessage);
+    expect(diagnosticStages.map(({ stage }) => stage)).toEqual([
+      "runtime-load:start",
+      "runtime-load:complete",
+      "send:start",
+      "send:complete",
+      "readback:start",
+      "readback:complete",
+    ]);
   });
 
   it("bounds invalid_blocks readback diagnostics while showing the observed text", async () => {

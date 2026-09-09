@@ -449,6 +449,16 @@ def main():
     global kind, workspace, remote, reset
     if len(sys.argv) > 1:
         if sys.argv[1] == "--policy":
+            # Policy execution is a fetch-capable path too.  Establish the same
+            # transient, repository-scoped HTTP auth used by checkout before
+            # loading trusted policy code; never persist credentials in git.
+            checkout_repo = os.environ.get("CHECKOUT_REPO", "")
+            github_repo = os.environ.get("GITHUB_REPOSITORY", "")
+            token = os.environ.pop("CHECKOUT_TOKEN", "")
+            if token and checkout_repo and checkout_repo == github_repo:
+                remote = f"https://github.com/{checkout_repo}.git"
+                checkout_environment.update(git_auth_environment(remote, token))
+            del token
             # The caller supplies trusted policy bytes; imports share this exact
             # owner and its terminal lifecycle state, never a second supervisor.
             sys.modules["ci_git_owner"] = sys.modules[__name__]
@@ -458,6 +468,7 @@ def main():
                 else:
                     runpy.run_path(sys.argv[2], run_name="__main__")
             finally:
+                checkout_environment.clear()
                 if closed:
                     raise RuntimeError("Git owner is closed")
                 check_cancelled()

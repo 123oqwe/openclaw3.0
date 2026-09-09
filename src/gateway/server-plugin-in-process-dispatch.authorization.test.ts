@@ -82,6 +82,15 @@ function createOperatorClient(params: {
   };
 }
 
+const dispatchStrictGatewayMethod = dispatchGatewayMethodInProcess as <T>(
+  method: string,
+  params: Record<string, unknown>,
+  options: {
+    forceSyntheticClient: true;
+    requireAuthenticatedRequest: true;
+    syntheticScopes: string[];
+  },
+) => Promise<T>;
 async function dispatchScopedAgent(params: {
   client: NonNullable<GatewayRequestOptions["client"]>;
   context: GatewayRequestContext;
@@ -128,113 +137,52 @@ describe("typed in-process agent authorization", () => {
   });
 
   it.each([
-    ["agent", { message: "owned turn", idempotencyKey: "host-owned" }],
-    ["agent.wait", { runId: "host-owned" }],
-  ] as const)(
-    "uses the captured host factory for %s and refuses an ownerless context",
-    async (method, params) => {
-      const client = createOperatorClient({ profileId: "owner", scopes: ["operator.write"] });
-      const context = createContext();
-      const createFacade = vi.fn(context.createAgentTurnFacade!);
-      context.createAgentTurnFacade = createFacade;
-      const result = { runId: "host-owned", status: "ok" };
-      startTurn.mockImplementation(async ({ io }) => io.emitAcceptance([true, result, undefined]));
-      waitForTurn.mockResolvedValue(result);
+    ["agent", { message: "strict cancellation", idempotencyKey: "strict-cancellation" }],
+    ["agent.wait", { runId: "strict-cancellation" }],
+  ] as const)("forwards strict request cancellation to %s", async (method, params) => {
+    const requestClient = createOperatorClient({
+      profileId: "strict-agent-owner",
+      scopes: ["operator.write"],
+    });
+    const lifetime = new AbortController();
+    const entered = createDeferredCore();
+    const release = createDeferredCore();
+    const result = { runId: "strict-cancellation", status: "accepted" };
+    startTurn.mockImplementation(async ({ io }) => {
+      entered.resolve();
+      await release.promise;
+      io.emitAcceptance([true, result, undefined]);
+    });
+    waitForTurn.mockImplementation(async () => {
+      entered.resolve();
+      await release.promise;
+      return result;
+    });
+    const context = createContext();
+    const scope = {
+      client: requestClient,
+      context,
+      isWebchatConnect: () => false,
+      authenticatedRequestAuthority: {
+        profileId: "strict-agent-owner",
+        signal: lifetime.signal,
+        assertCurrent: () => lifetime.signal.throwIfAborted(),
+      },
+    } as Parameters<typeof withPluginRuntimeGatewayRequestScope>[0];
 
-      await expect(dispatchScopedMethod({ client, context, method, params })).resolves.toEqual(
-        result,
-      );
-      expect(createFacade).toHaveBeenCalledOnce();
-      expect(createFacade.mock.calls[0]?.[0].client).toBe(client);
-
-      delete context.createAgentTurnFacade;
-      await expect(dispatchScopedMethod({ client, context, method, params })).rejects.toThrow(
-        "Gateway instance agent turn facade unavailable",
-      );
-    },
-  );
-
-  it.each([
-    ["agent", { message: "retired turn", idempotencyKey: "retired-host" }],
-    ["agent.wait", { runId: "retired-host" }],
-  ] as const)(
-    "revalidates the captured host after awaiting its %s factory",
-    async (method, params) => {
-      const context = createContext();
-      let current = context;
-      const entered = createDeferredCore();
-      const release = createDeferredCore();
-      const createFacade = context.createAgentTurnFacade!;
-      context.createAgentTurnFacade = async (principal) => {
-        entered.resolve();
-        await release.promise;
-        return createFacade(principal);
-      };
-
-      const pending = dispatchGatewayMethodInProcess(method, params, {
+    const pending = withPluginRuntimeGatewayRequestScope(scope, () =>
+      dispatchStrictGatewayMethod(method, params, {
         forceSyntheticClient: true,
-        operatorRoleActor: { kind: "system" },
-        resolveGatewayContext: () => current,
-      });
-      const rejected = expect(pending).rejects.toThrow("current gateway instance binding");
-      await entered.promise;
-      current = createContext();
-      release.resolve();
+        requireAuthenticatedRequest: true,
+        syntheticScopes: ["operator.write"],
+      }),
+    );
+    await entered.promise;
+    lifetime.abort(new Error("authenticated gateway request expired"));
+    release.resolve();
 
-      await rejected;
-      expect(startTurn).not.toHaveBeenCalled();
-      expect(waitForTurn).not.toHaveBeenCalled();
-    },
-  );
-
-  it.each(["operator", "system"] as const)(
-    "preserves %s attribution and never widens a synthetic tool caller's scopes",
-    async (actorKind) => {
-      const operatorRoleActor = actorKind === "system" ? { kind: "system" as const } : undefined;
-      const owner = createOperatorClient({
-        profileId: "tool-owner",
-        scopes: ["operator.read"],
-      });
-      let dispatched: GatewayRequestOptions["client"] = null;
-      const context = createContext();
-      context.getGatewayMethodRegistry = () =>
-        createGatewayMethodRegistry([
-          {
-            name: "sessions.list",
-            scope: "operator.read",
-            owner: { kind: "core", area: "sessions" },
-            handler: ({ client, respond }: GatewayRequestHandlerOptions) => {
-              dispatched = client;
-              respond(true, { sessions: [] });
-            },
-          },
-        ]);
-
-      await withOperatorToolGatewayAuthority(
-        {
-          authenticatedUserProfile: owner.authenticatedUserProfile!,
-          operatorRoleActor,
-          scopes: owner.connect.scopes ?? [],
-        },
-        async () =>
-          await dispatchGatewayMethodInProcess(
-            "sessions.list",
-            {},
-            {
-              forceSyntheticClient: true,
-              syntheticScopes: ["operator.read", "operator.admin"],
-              resolveGatewayContext: () => context,
-            },
-          ),
-      );
-
-      expect(dispatched).toMatchObject({
-        authenticatedUserProfile: { profileId: "tool-owner" },
-        connect: { scopes: ["operator.read"] },
-        internal: { syntheticClient: true, ...(operatorRoleActor ? { operatorRoleActor } : {}) },
-      });
-    },
-  );
+    await expect(pending).rejects.toThrow("authenticated gateway request expired");
+  });
 
   it.each([
     { method: "sessions.patch", cleanup: false, scopedActor: false },

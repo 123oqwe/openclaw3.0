@@ -114,7 +114,7 @@ export async function createSlackQaTransportAdapter(
   context: FactoryContext,
 ): Promise<AdapterDefinition> {
   const { createSlackWebClient, createSlackWriteClient, resolveSlackWebClientOptions } =
-    loadSlackQaRuntime();
+    await loadSlackQaRuntime();
   const options = context.adapterOptions ?? {};
   const lease = await acquireQaCredentialLease<SlackQaRuntimeEnv>({
     kind: "slack",

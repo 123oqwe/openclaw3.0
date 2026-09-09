@@ -24,7 +24,7 @@ import {
   classifyReleaseSnapshot,
   formatReleaseStateOutcome,
   hydrateReusedPlan,
-  readChild,
+  readChild as readReleaseChild,
   releaseGhRetryDelayMs,
   releasePlanGateFailures,
   releaseStateChildEvidence,
@@ -47,6 +47,14 @@ const SHA = "a".repeat(40);
 const TARGET_SHA = "b".repeat(40);
 const TRUSTED_MAIN = { fullRef: "refs/heads/main", ref: "main", sha: SHA };
 const tempDirs = useAutoCleanupTempDirTracker(afterEach);
+
+function readChild(...args: Parameters<typeof readReleaseChild>) {
+  const [child, previous, signal, options] = args;
+  return readReleaseChild(child, previous, signal, {
+    ...options,
+    repository: "openclaw/openclaw",
+  });
+}
 
 function candidateRequestInput(overrides: Record<string, unknown> = {}) {
   return {
@@ -1343,6 +1351,33 @@ describe("release decision policy", () => {
       ]);
     },
   );
+
+  it("rejects an observed child from a different repository than the explicit binding", async () => {
+    const planned = child("normalCi");
+    const result = await readReleaseChild(planned, undefined, undefined, {
+      repository: "openclaw/openclaw",
+      readAttemptJobs: async () => [{ name: "test", status: "completed", conclusion: "success" }],
+      readRun: async () => ({
+        actor: { login: "github-actions[bot]" },
+        conclusion: "success",
+        display_title: planned.displayTitle,
+        event: "workflow_dispatch",
+        head_branch: planned.workflowRef,
+        head_sha: planned.workflowSha,
+        html_url: planned.url,
+        id: 101,
+        path: ".github/workflows/ci.yml",
+        repository: { full_name: "123oqwe/openclaw-private" },
+        run_attempt: 1,
+        status: "completed",
+        triggering_actor: { login: "github-actions[bot]" },
+      }),
+    });
+
+    expect(result.errors).toEqual([
+      expect.objectContaining({ kind: "provenance_mismatch", runId: "101" }),
+    ]);
+  });
 
   it.each([
     "HTTP 503: Server Error",

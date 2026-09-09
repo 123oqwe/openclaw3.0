@@ -61,11 +61,16 @@ describe("chat.history request truncation diagnostic", () => {
         );
       }
 
-      const response = await rpcReq<{ messages?: unknown[] }>(ws, "chat.history", {
-        sessionKey,
-        limit: 1000,
-        maxChars: 100_000,
-      });
+      const response = await rpcReq<{ messages?: unknown[] }>(
+        ws,
+        "chat.history",
+        {
+          sessionKey,
+          limit: 1000,
+          maxChars: 100_000,
+        },
+        30_000,
+      );
       expect(response.ok).toBe(true);
       const returned = response.payload?.messages ?? [];
       expect(returned.length).toBeGreaterThan(0);

@@ -1415,6 +1415,186 @@ describe("loadGatewayPlugins", () => {
     expect(getLastDispatchedClientInternal().pluginRuntimeOwnerId).toBe("google-meet");
   });
 
+  test("requires an authenticated request when trusted plugins opt in", async () => {
+    loadOpenClawPlugins.mockReturnValue(addLoadedPlugin(createRegistry([]), { id: "google-meet" }));
+    loadGatewayStartupPluginsForTest();
+    serverPluginsModule.setFallbackGatewayContext(
+      createTestContext("plugin-gateway-authenticated-request"),
+    );
+    const runtime = createRuntimeFromLastGatewayLoad();
+
+    await expect(
+      gatewayRequestScopeModule.withPluginRuntimePluginScope(
+        { pluginId: "google-meet", pluginOrigin: "bundled" },
+        () =>
+          runtime.gateway.request(
+            "voicecall.start",
+            { to: "+15550001234" },
+            { requireAuthenticatedRequest: true },
+          ),
+      ),
+    ).rejects.toThrow("authenticated plugin request scope");
+    expect(handleGatewayRequest).not.toHaveBeenCalled();
+  });
+
+  test("rejects opted-in trusted plugin requests without an authenticated profile", async () => {
+    loadOpenClawPlugins.mockReturnValue(addLoadedPlugin(createRegistry([]), { id: "google-meet" }));
+    loadGatewayStartupPluginsForTest({ resolveGatewayContext: undefined });
+    const scope = {
+      context: createTestContext("plugin-gateway-missing-authenticated-profile"),
+      client: {
+        connect: { scopes: ["operator.read"] },
+      } as GatewayRequestOptions["client"],
+      isWebchatConnect: () => false,
+    } satisfies PluginRuntimeGatewayRequestScope;
+    const runtime = createRuntimeFromLastGatewayLoad();
+
+    await expect(
+      gatewayRequestScopeModule.withPluginRuntimeGatewayRequestScope(scope, () =>
+        gatewayRequestScopeModule.withPluginRuntimePluginScope(
+          { pluginId: "google-meet", pluginOrigin: "bundled" },
+          () =>
+            runtime.gateway.request(
+              "voicecall.start",
+              { to: "+15550001234" },
+              { requireAuthenticatedRequest: true },
+            ),
+        ),
+      ),
+    ).rejects.toThrow("authenticated plugin request scope");
+    expect(handleGatewayRequest).not.toHaveBeenCalled();
+  });
+
+  test("inherits the authenticated profile for opted-in trusted plugin requests", async () => {
+    loadOpenClawPlugins.mockReturnValue(addLoadedPlugin(createRegistry([]), { id: "google-meet" }));
+    loadGatewayStartupPluginsForTest({ resolveGatewayContext: undefined });
+    const authenticatedUserProfile = {
+      profileId: "profile-outcomes-owner",
+      displayName: "Outcome Owner",
+      hasAvatar: false,
+      updatedAt: 1,
+    };
+    const requestLifetime = new AbortController();
+    const scope = {
+      context: createTestContext("plugin-gateway-authenticated-profile"),
+      client: {
+        authenticatedUserProfile,
+        connect: { scopes: ["operator.read"] },
+      } as GatewayRequestOptions["client"],
+      isWebchatConnect: () => false,
+      authenticatedRequestAuthority: {
+        profileId: authenticatedUserProfile.profileId,
+        signal: requestLifetime.signal,
+        assertCurrent: () => requestLifetime.signal.throwIfAborted(),
+      },
+    } satisfies PluginRuntimeGatewayRequestScope;
+    const runtime = createRuntimeFromLastGatewayLoad();
+
+    await gatewayRequestScopeModule.withPluginRuntimeGatewayRequestScope(scope, () =>
+      gatewayRequestScopeModule.withPluginRuntimePluginScope(
+        { pluginId: "google-meet", pluginOrigin: "bundled" },
+        () =>
+          runtime.gateway.request(
+            "voicecall.start",
+            { to: "+15550001234" },
+            { requireAuthenticatedRequest: true, scopes: ["operator.read"] },
+          ),
+      ),
+    );
+
+    const dispatched = getLastMockFirstArg(
+      handleGatewayRequest,
+      "gateway request",
+    ) as HandleGatewayRequestOptions;
+    expect(dispatched.client?.authenticatedUserProfile).toEqual(authenticatedUserProfile);
+    expect(getLastDispatchedClientScopes()).toEqual(["operator.read"]);
+    expect(getLastDispatchedClientInternal().pluginRuntimeOwnerId).toBe("google-meet");
+  });
+
+  test("limits opted-in trusted plugin scopes to the authenticated caller", async () => {
+    loadOpenClawPlugins.mockReturnValue(addLoadedPlugin(createRegistry([]), { id: "google-meet" }));
+    loadGatewayStartupPluginsForTest({ resolveGatewayContext: undefined });
+    const requestLifetime = new AbortController();
+    const scope = {
+      context: createTestContext("plugin-gateway-authenticated-scopes"),
+      client: {
+        authenticatedUserProfile: {
+          profileId: "profile-outcomes-owner",
+          displayName: "Outcome Owner",
+          hasAvatar: false,
+          updatedAt: 1,
+        },
+        connect: { scopes: ["operator.read", "operator.write"] },
+      } as GatewayRequestOptions["client"],
+      isWebchatConnect: () => false,
+      authenticatedRequestAuthority: {
+        profileId: "profile-outcomes-owner",
+        signal: requestLifetime.signal,
+        assertCurrent: () => requestLifetime.signal.throwIfAborted(),
+      },
+    } satisfies PluginRuntimeGatewayRequestScope;
+    const runtime = createRuntimeFromLastGatewayLoad();
+
+    await gatewayRequestScopeModule.withPluginRuntimeGatewayRequestScope(scope, () =>
+      gatewayRequestScopeModule.withPluginRuntimePluginScope(
+        { pluginId: "google-meet", pluginOrigin: "bundled" },
+        () =>
+          runtime.gateway.request(
+            "browser.request",
+            { method: "GET", path: "/tabs" },
+            {
+              requireAuthenticatedRequest: true,
+              scopes: ["operator.read", "operator.admin"],
+            },
+          ),
+      ),
+    );
+
+    expect(getLastDispatchedClientScopes()).toEqual(["operator.read"]);
+    expect(getLastDispatchedClientScopes()).not.toContain("operator.admin");
+    expect(getLastDispatchedClientScopes()).not.toContain("operator.write");
+  });
+
+  test("does not retain unrequested admin scope for opted-in trusted plugin requests", async () => {
+    loadOpenClawPlugins.mockReturnValue(addLoadedPlugin(createRegistry([]), { id: "google-meet" }));
+    loadGatewayStartupPluginsForTest({ resolveGatewayContext: undefined });
+    const requestLifetime = new AbortController();
+    const scope = {
+      context: createTestContext("plugin-gateway-authenticated-admin-scopes"),
+      client: {
+        authenticatedUserProfile: {
+          profileId: "profile-outcomes-admin",
+          displayName: "Outcome Admin",
+          hasAvatar: false,
+          updatedAt: 1,
+        },
+        connect: { scopes: ["operator.read", "operator.admin"] },
+      } as GatewayRequestOptions["client"],
+      isWebchatConnect: () => false,
+      authenticatedRequestAuthority: {
+        profileId: "profile-outcomes-admin",
+        signal: requestLifetime.signal,
+        assertCurrent: () => requestLifetime.signal.throwIfAborted(),
+      },
+    } satisfies PluginRuntimeGatewayRequestScope;
+    const runtime = createRuntimeFromLastGatewayLoad();
+
+    await gatewayRequestScopeModule.withPluginRuntimeGatewayRequestScope(scope, () =>
+      gatewayRequestScopeModule.withPluginRuntimePluginScope(
+        { pluginId: "google-meet", pluginOrigin: "bundled" },
+        () =>
+          runtime.gateway.request(
+            "browser.request",
+            { method: "GET", path: "/tabs" },
+            { requireAuthenticatedRequest: true, scopes: ["operator.read"] },
+          ),
+      ),
+    );
+
+    expect(getLastDispatchedClientScopes()).toEqual(["operator.read"]);
+    expect(getLastDispatchedClientScopes()).not.toContain("operator.admin");
+  });
+
   test("lets trusted official plugins request explicit Gateway scopes", async () => {
     loadOpenClawPlugins.mockReturnValue(addLoadedPlugin(createRegistry([]), { id: "google-meet" }));
     loadGatewayStartupPluginsForTest();

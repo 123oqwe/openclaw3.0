@@ -1,4 +1,3 @@
-import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import {
   ErrorCodes,
   errorShape,
@@ -53,6 +52,7 @@ import { isOperatorScope } from "./operator-scopes.js";
 import { isRoleAuthorizedForMethod, parseGatewayRole } from "./role-policy.js";
 import { authenticatedProfileUnavailableError } from "./server-methods/gateway-client-identity.js";
 import { createLazyCoreHandlers, lazyHandlerModule } from "./server-methods/lazy-core-handlers.js";
+import { runGatewayPendingWorkContinuation } from "./server-methods/pending-work-continuation.js";
 import { isTargetedNonSafeGatewayRestartRequest } from "./server-methods/restart-request.js";
 import { withSessionMutationCommitGuard } from "./server-methods/session-mutation-guards.js";
 import type {
@@ -319,64 +319,6 @@ const SUSPEND_CONTROL_METHODS = new Set([
   "gateway.suspend.resume",
 ]);
 
-function runGatewayPendingWorkContinuation<T>(params: {
-  method: string;
-  client: GatewayRequestOptions["client"];
-  requestParams: unknown;
-  context: GatewayRequestContext;
-  run: () => Promise<T>;
-}): Promise<T> | null {
-  if (!isRecord(params.requestParams)) {
-    return null;
-  }
-  const request = params.requestParams;
-  if (params.client?.connect.role === "node") {
-    if (getGatewaySuspendAdmissionPhase() !== "draining" && !isGatewayRestartDraining()) {
-      return null;
-    }
-    const invokeId =
-      params.method === "node.invoke.progress"
-        ? request.invokeId
-        : params.method === "node.invoke.result"
-          ? request.id
-          : undefined;
-    if (typeof invokeId !== "string" || typeof request.nodeId !== "string") {
-      return null;
-    }
-    return params.context.nodeRegistry.runPendingInvokeContinuation({
-      invokeId,
-      nodeId: request.nodeId,
-      connId: params.client.connId,
-      run: params.run,
-    });
-  }
-  if (
-    getGatewaySuspendAdmissionPhase() !== "draining" ||
-    params.client?.connect.role !== "operator" ||
-    typeof request.id !== "string"
-  ) {
-    return null;
-  }
-  if (params.method === "question.resolve" || params.method === "question.get") {
-    return params.context.questionManager?.runPendingContinuation(request.id, params.run) ?? null;
-  }
-  const manager =
-    params.method === "exec.approval.resolve"
-      ? params.context.execApprovalManager
-      : params.method === "plugin.approval.resolve"
-        ? params.context.pluginApprovalManager
-        : params.method === "approval.resolve"
-          ? request.kind === "exec"
-            ? params.context.execApprovalManager
-            : request.kind === "plugin"
-              ? params.context.pluginApprovalManager
-              : request.kind === "system-agent"
-                ? params.context.systemAgentApprovalManager
-                : undefined
-          : undefined;
-  return manager?.runPendingContinuation(request.id, params.run) ?? null;
-}
-
 async function authorizeAuthenticatedProfileForMethod(params: {
   client: GatewayRequestOptions["client"];
   method: string;
@@ -532,7 +474,7 @@ export async function authorizeGatewayRequestPreDispatch(params: {
 
 type GatewayRequestEnvelopeOptions<T> = Pick<
   GatewayRequestOptions,
-  "context" | "isWebchatConnect"
+  "context" | "isWebchatConnect" | "signal"
 > & {
   methodRegistry: GatewayMethodRegistry;
   requestParams?: unknown;
@@ -638,6 +580,30 @@ export async function runWithGatewayRequestEnvelope<T>(
       return await options.reject(postAdmissionRateLimitError);
     }
     try {
+      const currentRequestScope = getPluginRuntimeGatewayRequestScope();
+      const inheritedAuthenticatedRequestAuthority =
+        currentRequestScope?.authenticatedRequestAuthority;
+      const authenticatedProfileId = client?.authenticatedUserProfile?.profileId;
+      const requestLifetime =
+        !inheritedAuthenticatedRequestAuthority &&
+        !client?.internal?.syntheticClient &&
+        authenticatedProfileId
+          ? new AbortController()
+          : undefined;
+      const requestSignal = requestLifetime
+        ? options.signal
+          ? AbortSignal.any([options.signal, requestLifetime.signal])
+          : requestLifetime.signal
+        : undefined;
+      const authenticatedRequestAuthority =
+        inheritedAuthenticatedRequestAuthority ??
+        (authenticatedProfileId && requestSignal
+          ? {
+              profileId: authenticatedProfileId,
+              signal: requestSignal,
+              assertCurrent: () => requestSignal.throwIfAborted(),
+            }
+          : undefined);
       const pluginRegistry =
         (options.methodRegistry.pluginRegistry as
           | NonNullable<ReturnType<typeof getActivePluginRegistry>>
@@ -645,19 +611,24 @@ export async function runWithGatewayRequestEnvelope<T>(
         getPluginRuntimeGatewayRequestScope()?.pluginRegistry ??
         getActivePluginRegistry() ??
         undefined;
-      return await withPluginRuntimeGatewayRequestScope(
-        {
-          context: options.context,
-          // Detached turn admission needs the live instance resolver, not a captured request context.
-          resolveGatewayContext: options.context.resolveGatewayContext,
-          client,
-          isWebchatConnect: options.isWebchatConnect,
-          // Only an owner-bound in-process stream may retain admitted Full authority.
-          ...(client?.internal?.nodeInvokeStream ? getPluginRuntimeGatewayNodeAuthorities() : {}),
-          ...(pluginRegistry ? { pluginRegistry } : {}),
-        },
-        fn,
-      );
+      try {
+        return await withPluginRuntimeGatewayRequestScope(
+          {
+            context: options.context,
+            // Detached turn admission needs the live instance resolver, not a captured request context.
+            resolveGatewayContext: options.context.resolveGatewayContext,
+            client,
+            isWebchatConnect: options.isWebchatConnect,
+            // Only an owner-bound in-process stream may retain admitted Full authority.
+            ...(client?.internal?.nodeInvokeStream ? getPluginRuntimeGatewayNodeAuthorities() : {}),
+            ...(pluginRegistry ? { pluginRegistry } : {}),
+            ...(authenticatedRequestAuthority ? { authenticatedRequestAuthority } : {}),
+          },
+          fn,
+        );
+      } finally {
+        requestLifetime?.abort(new Error("authenticated gateway request expired"));
+      }
     } catch (error) {
       if (error instanceof SessionMutationAuthorizationChangedError) {
         return await options.reject(error.error);
@@ -734,6 +705,7 @@ export async function handleGatewayRequest(
     isWebchatConnect,
     methodRegistry,
     requestParams: req.params,
+    signal,
     reject: (error) => respond(false, undefined, error),
   });
 }

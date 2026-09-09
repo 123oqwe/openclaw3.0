@@ -484,7 +484,9 @@ export class ChatSessionVirtualizerHost implements ReactiveControllerHost, ChatT
     }
     this.cancelScroll();
     this.scrollCommand = { behavior, target: "end" };
-    this.virtualizerController.getVirtualizer().scrollToEnd({ behavior });
+    const virtualizer = this.virtualizerController.getVirtualizer();
+    syncScrollMargin(this.scrollElement, virtualizer, this.appliedHeaderHeight);
+    virtualizer.scrollToEnd({ behavior });
     return true;
   }
 

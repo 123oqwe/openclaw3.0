@@ -424,7 +424,18 @@ describe("scripts/lib/ci-node-test-plan.mts", () => {
       "test/vitest/vitest.gateway-methods.config.ts",
     ]);
     expect(gatewayGroups.every((group) => group.includePatterns === undefined)).toBe(true);
-    expect(gatewayGroups.every((group) => group.env === undefined)).toBe(true);
+    expect(gatewayGroups).toHaveLength(2);
+    expect(
+      gatewayGroups.every(
+        (group) =>
+          group.env?.OPENCLAW_NODE_TEST_VITEST_ARGS_JSON ===
+          JSON.stringify([
+            "--reporter=verbose",
+            "--reporter=github-actions",
+            "--reporter=./scripts/lib/vitest-resource-reporter.mts",
+          ]),
+      ),
+    ).toBe(true);
 
     const autoReplyGroups = groups.filter((group) =>
       group.shard_name.startsWith("cache-warm:auto-reply-reply-commands-3:"),
@@ -2470,6 +2481,14 @@ describe("scripts/lib/ci-node-test-plan.mts", () => {
         "test/vitest/vitest.gateway-methods.config.ts",
         "test/vitest/vitest.gateway-methods-isolated.config.ts",
       ],
+      env: {
+        OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: JSON.stringify([
+          "--reporter=verbose",
+          "--reporter=github-actions",
+          "--reporter=./scripts/lib/vitest-resource-reporter.mts",
+        ]),
+        OPENCLAW_VITEST_MAX_WORKERS: "1",
+      },
       requiresDist: false,
       runner: DEFAULT_NODE_TEST_RUNNER,
     });

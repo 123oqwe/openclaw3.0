@@ -35,6 +35,13 @@ import {
 } from "./vitest-build-prerequisites.mts";
 import { VITEST_PRETEST_BUILD_SECONDS } from "./vitest-shard-metadata.mts";
 
+const DISCORD_VITEST_CONFIG = "test/vitest/vitest.extension-discord.config.ts";
+const RESOURCE_REPORTER_ARGS = [
+  "--reporter=verbose",
+  "--reporter=github-actions",
+  "--reporter=./scripts/lib/vitest-resource-reporter.mts",
+];
+
 type ChangedNodeTestShard = {
   checkName: string;
   configs: string[];
@@ -418,6 +425,19 @@ function createChangedExtensionConfigShards(
       : [{ config, predictedSeconds }];
   });
   return plans.map(({ config, env, includePatterns, predictedSeconds }, index) => {
+    const shardEnv =
+      config === DISCORD_VITEST_CONFIG
+        ? {
+            ...env,
+            OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: JSON.stringify([
+              ...(env?.OPENCLAW_NODE_TEST_VITEST_ARGS_JSON
+                ? (JSON.parse(env.OPENCLAW_NODE_TEST_VITEST_ARGS_JSON) as string[])
+                : []),
+              ...RESOURCE_REPORTER_ARGS,
+            ]),
+            OPENCLAW_VITEST_MAX_WORKERS: "1",
+          }
+        : env;
     const suffix = plans.length === 1 ? "" : `-${index + 1}`;
     const shard: ChangedExtensionConfigShard = {
       checkName: `checks-node-changed-extensions-config${suffix}`,
@@ -439,8 +459,8 @@ function createChangedExtensionConfigShards(
     if (includePatterns) {
       shard.includePatterns = includePatterns;
     }
-    if (env) {
-      shard.env = env;
+    if (shardEnv) {
+      shard.env = shardEnv;
     }
     return shard;
   });

@@ -144,12 +144,21 @@ type SlackQaDirectTransportScenarioRun = {
 export type SlackQaDirectTransportScenarioContext = {
   cfg: OpenClawConfig;
   channelId: string;
+  diagnosticStage?: (stage: SlackQaDirectTransportDiagnosticStage) => void;
   sutAccountId: string;
   sutIdentity: SlackAuthIdentity;
   sutReadClient: WebClient;
   sutWriteClient: WebClient;
   timeoutMs: number;
 };
+
+type SlackQaDirectTransportDiagnosticStage =
+  | "runtime-load:start"
+  | "runtime-load:complete"
+  | "send:start"
+  | "send:complete"
+  | "readback:start"
+  | "readback:complete";
 
 export type SlackQaDirectTransportScenarioResult = {
   details: string;

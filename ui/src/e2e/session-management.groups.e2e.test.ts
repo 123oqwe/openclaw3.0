@@ -852,6 +852,7 @@ suite.define(() => {
       const sessionTen = page.locator(
         '.sidebar-recent-session[data-session-key="agent:main:session-10"]',
       );
+      await sessionTen.scrollIntoViewIfNeeded();
       await sessionTen.hover();
       await sessionTen.getByRole("button", { name: "Open session menu" }).click();
       await openSessionMenuSubmenu(page, "Move to group");

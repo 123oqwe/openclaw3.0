@@ -246,7 +246,8 @@ sys.exit({23 if mode == "qa-api-error" else 0})
                               "credentialPersisted": "extraheader" in local_config.lower(), "requests": requests}))
             raise SystemExit(0)
         policy = root / "policy.py"
-        policy.write_text('''from ci_git_owner import run_git, git_output
+        policy.write_text('''import ci_git_owner as owner
+from ci_git_owner import run_git, git_output
 import json, os, sys
 remote, token, phase = sys.argv[3:]
 if phase == "fetch-only":
@@ -254,7 +255,7 @@ if phase == "fetch-only":
     encoded = base64.b64encode(f"x-access-token:{token}".encode()).decode()
     auth = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": f"http.{remote}.extraHeader",
             "GIT_CONFIG_VALUE_0": f"Authorization: Basic {encoded}"}
-else:
+elif phase != "auto":
     from ci_git_owner import git_auth_environment
     os.environ.update(GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="fixture.inherited",
                       GIT_CONFIG_VALUE_0="retained")
@@ -275,6 +276,30 @@ elif phase == "scope-host":
             env=auth, timeout=15)
 elif phase == "redirect":
     run_git(os.getcwd(), "ls-remote", remote, env=auth, timeout=15)
+elif phase == "auto":
+    # --policy must inject its transient checkout auth before trusted policy code.
+    if os.environ["CHECKOUT_REPO"] != os.environ["GITHUB_REPOSITORY"]:
+        # A foreign repository must not receive checkout auth.  Reuse the
+        # owner's managed Git invocation so its failure is the assertion and
+        # the fixture server still observes the unauthenticated request.
+        assert not owner.checkout_environment
+        assert "CHECKOUT_TOKEN" not in os.environ
+        try:
+            run_git(os.getcwd(), "ls-remote", remote,
+                    env={key: value for key, value in os.environ.items()
+                         if not key.startswith("GIT_CONFIG_")}, timeout=15)
+        except owner.GitFailure:
+            raise SystemExit(0)
+        raise AssertionError("foreign repository unexpectedly authenticated")
+    github_remote = f"https://github.com/{os.environ['CHECKOUT_REPO']}.git"
+    header = git_output(os.getcwd(), "config", "--get-urlmatch", "http.extraheader", github_remote).strip()
+    assert header and token not in header
+    assert "CHECKOUT_TOKEN" not in os.environ
+    # Keep the fixture server local while carrying the exact transient header
+    # produced by owner.py's repository-scoped policy initialization.
+    local_auth = {"GIT_CONFIG_COUNT": "1", "GIT_CONFIG_KEY_0": f"http.{remote}.extraHeader",
+                  "GIT_CONFIG_VALUE_0": header}
+    run_git(os.getcwd(), "ls-remote", remote, env=local_auth, timeout=15)
 ''')
 
         def owned(phase, selected_policy=policy):
@@ -295,6 +320,24 @@ elif phase == "redirect":
                         raise RuntimeError("checkout owner did not finish cancellation cleanup")
                     raise
                 return subprocess.CompletedProcess(child.args, child.returncode, stdout, stderr)
+
+        if mode in ("policy-auto", "policy-auto-cross"):
+            env.update(CHECKOUT_REPO="fixture/repository", GITHUB_REPOSITORY="fixture/repository",
+                       CHECKOUT_TOKEN=token)
+            if mode == "policy-auto-cross":
+                env["GITHUB_REPOSITORY"] = "fixture/other"
+            result = owned("auto")
+            assert result.returncode == 0, result.stderr
+            assert requests
+            if mode == "policy-auto":
+                assert all(item["authenticated"] for item in requests)
+            else:
+                assert all(not item["authenticated"] for item in requests)
+            config = (workspace / ".git/config").read_text()
+            assert "extraheader" not in config.lower()
+            print(json.dumps({"mode": mode, "policyAuthenticated": mode == "policy-auto",
+                              "credentialPersisted": False}))
+            raise SystemExit(0)
 
         if mode in ("historical", "base"):
             env["GIT_CONFIG_GLOBAL"] = str(home / ".gitconfig")

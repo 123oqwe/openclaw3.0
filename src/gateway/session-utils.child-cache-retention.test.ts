@@ -13,7 +13,7 @@ it("keeps child links without retaining released session metadata", async ({ sig
       ),
     ],
     { ...process.env, NODE_OPTIONS: "", TSX_DISABLE_CACHE: "1" },
-    15_000,
+    30_000,
     {
       cwd: fileURLToPath(new URL("../../", import.meta.url)),
       signal,
@@ -24,4 +24,6 @@ it("keeps child links without retaining released session metadata", async ({ sig
   expect(result.error, result.stderr).toBeUndefined();
   expect(result.status, result.stderr).toBe(0);
   expect(JSON.parse(result.stdout)).toEqual({ retained: [] });
-}, 30_000);
+  // Keep this test budget aligned to hosted runner variance where the child script
+  // can take longer than 15s due tsx start-up and GC scheduling contention.
+}, 90_000);

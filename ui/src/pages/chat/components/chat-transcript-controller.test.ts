@@ -279,6 +279,33 @@ describe("chat transcript controller", () => {
     expect(container.textContent).toContain("message 0");
   });
 
+  it.each([
+    ["includes transcript bottom padding in the latest-message target", true],
+    ["refreshes bottom padding at an explicit end-scroll command boundary", false],
+  ])("%s", async (_name, setPaddingBeforeResize) => {
+    const rows: TestContentRow[] = Array.from({ length: 40 }, (_, index) => ({
+      kind: "content",
+      key: `row:${index}`,
+      content: html`<div>row ${index}</div>`,
+    }));
+    const { container, transcript } = await mountTestTranscript("padded-end", rows);
+    container.style.paddingBottom = setPaddingBeforeResize ? "60px" : "0px";
+    Object.defineProperties(container, {
+      clientHeight: { configurable: true, value: 600 },
+      scrollHeight: { configurable: true, value: 4860 },
+    });
+    const scrollTo = vi.fn();
+    container.scrollTo = scrollTo;
+
+    for (const observer of resizeObservers) {
+      observer.emitTarget(container, 800, 600);
+    }
+    container.style.paddingBottom = "60px";
+    transcript.scrollToEnd();
+
+    expect(scrollTo).toHaveBeenLastCalledWith({ top: 4260, behavior: "auto" });
+  });
+
   it("pauses an unmeasurable restore until loading commits an empty transcript", () => {
     const transcript = createTestTranscript();
     const container = document.body.appendChild(document.createElement("div"));

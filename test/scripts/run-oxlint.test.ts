@@ -671,13 +671,23 @@ describe("run-oxlint", () => {
             { name: "alpha", isDirectory: () => true, isFile: () => false },
           ] as never;
         }
+        if (target.endsWith("/src/alpha")) {
+          return [
+            { name: "deep", isDirectory: () => true, isFile: () => false },
+            { name: "notes.md", isDirectory: () => false, isFile: () => true },
+          ] as never;
+        }
+        if (target.endsWith("/src/alpha/deep")) {
+          return [{ name: "nested.ts", isDirectory: () => false, isFile: () => true }] as never;
+        }
         return [];
       },
     });
 
-    expect(shards.slice(0, 4)).toEqual([
-      oxlintShard("core:src:alpha", "core", "src/alpha"),
-      oxlintShard("core:src:root", "core", "src/omega.ts", "src/zeta.ts"),
+    expect(shards.slice(0, 5)).toEqual([
+      oxlintShard("core:src/alpha/deep/nested.ts", "core", "src/alpha/deep/nested.ts"),
+      oxlintShard("core:src/omega.ts", "core", "src/omega.ts"),
+      oxlintShard("core:src/zeta.ts", "core", "src/zeta.ts"),
       oxlintShard("core:ui", "core", "ui"),
       oxlintShard("core:packages", "core", "packages"),
     ]);
@@ -708,25 +718,28 @@ describe("run-oxlint", () => {
     const shards = createOxlintShards({
       cwd: "/repo",
       splitCore: true,
-      readDir: () =>
-        [
-          { name: "alpha", isDirectory: () => true, isFile: () => false },
-          { name: "beta", isDirectory: () => true, isFile: () => false },
-          { name: "gamma", isDirectory: () => true, isFile: () => false },
-        ] as never,
+      readDir: (target: string) =>
+        target.endsWith("/src")
+          ? (Array.from({ length: 24 }, (_, index) => ({
+              name: `source-${String(index).padStart(2, "0")}.ts`,
+              isDirectory: () => false,
+              isFile: () => true,
+            })) as never)
+          : [],
     }).filter((shard) => shard.name.startsWith("core:"));
-    const stripes = [1, 2, 3].map((index) => selectCoreOxlintStripe(shards, { index, total: 3 }));
+    const stripes = Array.from({ length: 12 }, (_, index) =>
+      selectCoreOxlintStripe(shards, { index: index + 1, total: 12 }),
+    );
 
-    expect(stripes.map((stripe) => stripe.map((shard) => shard.name))).toEqual([
-      ["core:stripe:1"],
-      ["core:stripe:2"],
-      ["core:stripe:3"],
-    ]);
+    expect(stripes.every((stripe) => stripe[0]?.name.startsWith("core:stripe:"))).toBe(true);
     const stripeTargets = stripes.flatMap(([stripe]) => stripe?.args.slice(2) ?? []);
     const sourceTargets = shards.flatMap((shard) => shard.args.slice(2));
     expect(stripeTargets.toSorted()).toEqual(sourceTargets.toSorted());
     expect(new Set(stripeTargets)).toHaveProperty("size", sourceTargets.length);
-    expect(selectCoreOxlintStripe(shards, { index: 6, total: 6 })).toEqual([]);
+    expect(stripes.map(([stripe]) => stripe?.args.slice(2).length ?? 0)).toEqual([
+      3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,
+    ]);
+    expect(selectCoreOxlintStripe(shards, { index: 27, total: 27 })).toEqual([]);
     expect(() =>
       selectCoreOxlintStripe(createOxlintShards({ cwd: "/repo" }), { index: 1, total: 2 }),
     ).toThrow("--core-stripe requires a non-empty core-only shard selection");
@@ -867,13 +880,21 @@ describe("run-oxlint", () => {
       createOxlintShards({
         cwd: "/repo",
         splitCore: true,
-        readDir: () => [{ name: "alpha", isDirectory: () => true, isFile: () => false }] as never,
+        readDir: (target: string) => {
+          if (target.endsWith("/src")) {
+            return [{ name: "alpha", isDirectory: () => true, isFile: () => false }] as never;
+          }
+          if (target.endsWith("/src/alpha")) {
+            return [{ name: "nested.ts", isDirectory: () => false, isFile: () => true }] as never;
+          }
+          return [];
+        },
       }),
       new Set(["core"]),
     );
 
     expect(shards.map((shard) => shard.name)).toEqual([
-      "core:src:alpha",
+      "core:src/alpha/nested.ts",
       "core:ui",
       "core:packages",
     ]);

@@ -94,6 +94,7 @@ export async function dispatchTrustedPluginGatewayMethod<T>(
     pluginRuntimeOwnerId: pluginId,
     resolveGatewayContext,
     ...(!scope?.client ? { operatorRoleActor: { kind: "system" as const } } : {}),
+    ...(options?.requireAuthenticatedRequest === true ? { requireAuthenticatedRequest: true } : {}),
     ...(syntheticScopes ? { syntheticScopes } : {}),
     ...(options?.timeoutMs !== undefined ? { timeoutMs: options.timeoutMs } : {}),
   });

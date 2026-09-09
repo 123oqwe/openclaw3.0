@@ -7,6 +7,7 @@ import {
 } from "../plugins/manifest-registry.js";
 import type { OpenClawConfig } from "./config-contracts.js";
 import {
+  loadBundledPluginPublicSurfaceModule,
   loadBundledPluginPublicSurfaceModuleSync,
   tryLoadActivatedBundledPluginPublicSurfaceModuleSync,
 } from "./facade-runtime.js";
@@ -461,6 +462,18 @@ export function loadQaRuntimeModule(): QaRuntimeSurface {
 export function loadQaRunnerBundledPluginTestApi<T extends object>(pluginId: string): T {
   const env = resolvePrivateQaBundledPluginsEnv();
   return loadBundledPluginPublicSurfaceModuleSync<T>({
+    dirName: pluginId,
+    artifactBasename: "test-api.js",
+    ...(env ? { env } : {}),
+  });
+}
+
+/** Asynchronously load a bundled QA runner plugin test API facade by plugin id. */
+export async function loadQaRunnerBundledPluginTestApiAsync<T extends object>(
+  pluginId: string,
+): Promise<T> {
+  const env = resolvePrivateQaBundledPluginsEnv();
+  return await loadBundledPluginPublicSurfaceModule<T>({
     dirName: pluginId,
     artifactBasename: "test-api.js",
     ...(env ? { env } : {}),

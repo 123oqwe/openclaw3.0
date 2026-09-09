@@ -15,7 +15,6 @@ setRuntimeConfigSnapshot(cfg);
 setActivePluginRegistry(createEmptyPluginRegistry());
 const parentKey = "agent:main:parent";
 const childKey = "agent:main:child";
-
 async function populate() {
   const now = Date.now();
   const parent: SessionEntry = { sessionId: "parent", updatedAt: now };

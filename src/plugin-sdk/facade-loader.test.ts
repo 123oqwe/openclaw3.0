@@ -12,7 +12,7 @@ import type { OpenClawConfig } from "./config-contracts.js";
 import {
   listImportedBundledPluginFacadeIds,
   loadFacadeModuleAtLocationSync,
-  loadBundledPluginPublicSurfaceModule,
+  loadBundledPluginPublicSurfaceModuleAsyncCore,
   loadBundledPluginPublicSurfaceModuleSyncCore,
   MissingPublicSurfaceError,
   resetFacadeLoaderStateForTest,
@@ -322,7 +322,7 @@ describe("plugin-sdk facade loader", () => {
 
     let rejection: unknown;
     try {
-      await loadBundledPluginPublicSurfaceModule({
+      await loadBundledPluginPublicSurfaceModuleAsyncCore({
         dirName: "browser",
         artifactBasename: "browser-maintenance.js",
       });
@@ -335,6 +335,55 @@ describe("plugin-sdk facade loader", () => {
       "message",
       "Unable to resolve bundled plugin public surface browser/browser-maintenance.js",
     );
+  });
+
+  it("preserves CommonJS export shape for asynchronous facade loads", async () => {
+    const fixture = createBundledPluginFixture({
+      prefix: "openclaw-facade-loader-async-commonjs-",
+      marker: "async-commonjs",
+    });
+    writeFixturePackageJson(fixture.pluginRoot, fixture.pluginId, "commonjs");
+    fs.writeFileSync(
+      path.join(fixture.pluginRoot, "api.js"),
+      'module.exports = { marker: "async-commonjs" };\n',
+      "utf8",
+    );
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = fixture.bundledPluginsDir;
+
+    const loaded = await loadBundledPluginPublicSurfaceModuleAsyncCore<{ marker: string }>({
+      dirName: fixture.pluginId,
+      artifactBasename: "api.js",
+    });
+
+    expect(loaded).toEqual({ marker: "async-commonjs" });
+    expect(Object.hasOwn(loaded, "default")).toBe(false);
+  });
+
+  it("reloads replaced CommonJS facades after lifecycle invalidation through the async API", async () => {
+    const fixture = createBundledPluginFixture({
+      prefix: "openclaw-facade-loader-async-replacement-",
+      marker: "retired",
+    });
+    writeFixturePackageJson(fixture.pluginRoot, fixture.pluginId, "commonjs");
+    process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = fixture.bundledPluginsDir;
+    const artifactPath = path.join(fixture.pluginRoot, "api.js");
+    fs.writeFileSync(artifactPath, 'module.exports = { marker: "retired" };\n', "utf8");
+
+    const loadMarker = async () =>
+      (
+        await loadBundledPluginPublicSurfaceModuleAsyncCore<{ marker: string }>({
+          dirName: fixture.pluginId,
+          artifactBasename: "api.js",
+        })
+      ).marker;
+
+    expect(await loadMarker()).toBe("retired");
+    fs.writeFileSync(artifactPath, 'module.exports = { marker: "replacement" };\n', "utf8");
+    expect(await loadMarker()).toBe("retired");
+
+    clearPluginMetadataLifecycleCaches();
+
+    expect(await loadMarker()).toBe("replacement");
   });
 
   it("open failures are not classified as MissingPublicSurfaceError", () => {

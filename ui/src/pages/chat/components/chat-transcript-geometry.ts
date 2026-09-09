@@ -9,6 +9,14 @@ function transcriptScrollMargin(element: Element | null): number {
   return Number.isFinite(margin) ? margin : 0;
 }
 
+function transcriptScrollPaddingEnd(element: Element | null): number {
+  if (!(element instanceof HTMLElement) || typeof getComputedStyle !== "function") {
+    return 0;
+  }
+  const padding = Number.parseFloat(getComputedStyle(element).paddingBottom);
+  return Number.isFinite(padding) ? padding : 0;
+}
+
 /** Row offsets start below the scroll padding plus the in-flow history header. */
 export function resolveTranscriptScrollMargin(
   scrollElement: Element | null,
@@ -23,12 +31,19 @@ export function syncScrollMargin(
   headerHeight: number,
 ): void {
   const scrollMargin = resolveTranscriptScrollMargin(scrollElement, headerHeight);
-  if (scrollMargin === virtualizer.options.scrollMargin) {
+  const scrollPaddingEnd = transcriptScrollPaddingEnd(scrollElement);
+  if (
+    scrollMargin === virtualizer.options.scrollMargin &&
+    scrollPaddingEnd === virtualizer.options.scrollPaddingEnd
+  ) {
     return;
   }
   virtualizer.setOptions({
     ...virtualizer.options,
     scrollMargin,
+    // TanStack's row total excludes padding on the scroll element. Without
+    // this, scrollToEnd stops above the DOM maximum by the composer clearance.
+    scrollPaddingEnd,
   });
 }
 

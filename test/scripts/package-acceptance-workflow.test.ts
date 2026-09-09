@@ -4187,6 +4187,11 @@ NODE
     expect(setupPnpmAction).toContain("PACKAGE_MANAGER_FILE: ${{ inputs.package-manager-file }}");
     expect(setupPnpmAction).toContain('case "$package_manager" in');
     expect(setupPnpmAction).toContain('corepack prepare "$package_manager" --activate');
+    expect(setupPnpmAction).toContain('pnpm_version="$(cd "$PROJECT_DIR" && pnpm -v)"');
+    expect(setupPnpmAction).toContain('echo "pnpm-version=$pnpm_version" >> "$GITHUB_OUTPUT"');
+    expect(setupPnpmAction).not.toContain(
+      'echo "pnpm-version=$(cd "$PROJECT_DIR" && pnpm -v)" >> "$GITHUB_OUTPUT"',
+    );
     expect(setupPnpmAction).toContain(
       "if: ${{ inputs.cache-mode != 'off' && runner.os != 'Windows' }}",
     );
@@ -4230,6 +4235,171 @@ NODE
       expect(workflowText, workflowPath).not.toContain("pnpm-version:");
       expect(workflowText, workflowPath).not.toContain("pnpm/action-setup");
     }
+  });
+
+  it("retries the first real pnpm startup from the package manager directory", () => {
+    const root = tempDirs.make("setup-pnpm-startup-retry-");
+    const projectDir = join(root, "tooling");
+    const binDir = join(root, "bin");
+    const callsPath = join(root, "pnpm-calls");
+    mkdirSync(projectDir, { recursive: true });
+    mkdirSync(binDir);
+    writeFileSync(
+      join(projectDir, "package.json"),
+      JSON.stringify({ private: true, packageManager: "pnpm@12.1.0" }),
+    );
+    writeFileSync(join(binDir, "corepack"), "#!/bin/sh\nset -eu\nexit 0\n");
+    writeFileSync(
+      join(binDir, "pnpm"),
+      `#!/bin/sh
+set -eu
+calls=0
+if [ -f "$PNPM_CALLS" ]; then calls="$(cat "$PNPM_CALLS")"; fi
+calls=$((calls + 1))
+printf '%s' "$calls" > "$PNPM_CALLS"
+test "$PWD" = "$EXPECTED_PROJECT_DIR"
+test "$(node -p 'require("./package.json").packageManager')" = "pnpm@12.1.0"
+if [ "$calls" -eq 1 ]; then exit 42; fi
+printf '%s\n' '12.1.0'
+`,
+    );
+    writeFileSync(join(binDir, "sleep"), "#!/bin/sh\nexit 0\n");
+    for (const executable of ["corepack", "pnpm", "sleep"]) {
+      chmodSync(join(binDir, executable), 0o755);
+    }
+
+    const action = parse(readFileSync(SETUP_PNPM_STORE_CACHE_ACTION, "utf8")) as {
+      runs: { steps: Array<{ name?: string; run?: string }> };
+    };
+    const setup = action.runs.steps.find((step) => step.name === "Setup pnpm from packageManager");
+    const result = spawnSync("bash", ["-c", setup?.run ?? ""], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        EXPECTED_PROJECT_DIR: projectDir,
+        GITHUB_ENV: join(root, "github-env"),
+        GITHUB_PATH: join(root, "github-path"),
+        PACKAGE_MANAGER_FILE: join(projectDir, "package.json"),
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        PNPM_CALLS: callsPath,
+        PROJECT_DIR: projectDir,
+      },
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(callsPath, "utf8")).toBe("2");
+  });
+
+  it("does not mask a failed package manager preparation with a successful pnpm probe", () => {
+    const root = tempDirs.make("setup-pnpm-prepare-retry-");
+    const binDir = join(root, "bin");
+    const callsPath = join(root, "corepack-calls");
+    mkdirSync(binDir);
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ private: true, packageManager: "pnpm@12.1.0" }),
+    );
+    writeFileSync(
+      join(binDir, "corepack"),
+      `#!/bin/sh
+set -eu
+if [ "$1" = "enable" ]; then exit 0; fi
+calls=0
+if [ -f "$COREPACK_CALLS" ]; then calls="$(cat "$COREPACK_CALLS")"; fi
+calls=$((calls + 1))
+printf '%s' "$calls" > "$COREPACK_CALLS"
+if [ "$calls" -eq 1 ]; then exit 41; fi
+`,
+    );
+    writeFileSync(join(binDir, "pnpm"), "#!/bin/sh\nprintf '%s\\n' '12.1.0'\n");
+    writeFileSync(join(binDir, "sleep"), "#!/bin/sh\nexit 0\n");
+    for (const executable of ["corepack", "pnpm", "sleep"]) {
+      chmodSync(join(binDir, executable), 0o755);
+    }
+
+    const action = parse(readFileSync(SETUP_PNPM_STORE_CACHE_ACTION, "utf8")) as {
+      runs: { steps: Array<{ name?: string; run?: string }> };
+    };
+    const setup = action.runs.steps.find((step) => step.name === "Setup pnpm from packageManager");
+    const result = spawnSync("bash", ["-c", setup?.run ?? ""], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        COREPACK_CALLS: callsPath,
+        GITHUB_ENV: join(root, "github-env"),
+        GITHUB_PATH: join(root, "github-path"),
+        PACKAGE_MANAGER_FILE: join(root, "package.json"),
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        PROJECT_DIR: root,
+      },
+    });
+
+    expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(callsPath, "utf8")).toBe("2");
+  });
+
+  it("fails when real pnpm startup recovery is exhausted", () => {
+    const root = tempDirs.make("setup-pnpm-startup-exhausted-");
+    const binDir = join(root, "bin");
+    mkdirSync(binDir);
+    writeFileSync(
+      join(root, "package.json"),
+      JSON.stringify({ private: true, packageManager: "pnpm@12.1.0" }),
+    );
+    writeFileSync(join(binDir, "corepack"), "#!/bin/sh\nexit 0\n");
+    writeFileSync(join(binDir, "pnpm"), "#!/bin/sh\nexit 42\n");
+    writeFileSync(join(binDir, "sleep"), "#!/bin/sh\nexit 0\n");
+    for (const executable of ["corepack", "pnpm", "sleep"]) {
+      chmodSync(join(binDir, executable), 0o755);
+    }
+
+    const action = parse(readFileSync(SETUP_PNPM_STORE_CACHE_ACTION, "utf8")) as {
+      runs: { steps: Array<{ name?: string; run?: string }> };
+    };
+    const setup = action.runs.steps.find((step) => step.name === "Setup pnpm from packageManager");
+    const result = spawnSync("bash", ["-c", setup?.run ?? ""], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_ENV: join(root, "github-env"),
+        GITHUB_PATH: join(root, "github-path"),
+        PACKAGE_MANAGER_FILE: join(root, "package.json"),
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        PROJECT_DIR: root,
+      },
+    });
+
+    expect(result.status).toBe(42);
+  });
+
+  it("does not publish a successful pnpm version output when version lookup fails", () => {
+    const root = tempDirs.make("setup-pnpm-version-failure-");
+    const binDir = join(root, "bin");
+    const outputPath = join(root, "github-output");
+    mkdirSync(binDir);
+    writeFileSync(join(binDir, "pnpm"), "#!/bin/sh\nexit 42\n");
+    chmodSync(join(binDir, "pnpm"), 0o755);
+
+    const action = parse(readFileSync(SETUP_PNPM_STORE_CACHE_ACTION, "utf8")) as {
+      runs: { steps: Array<{ name?: string; run?: string }> };
+    };
+    const record = action.runs.steps.find((step) => step.name === "Record pnpm version");
+    const result = spawnSync("bash", ["-c", record?.run ?? ""], {
+      cwd: root,
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        GITHUB_OUTPUT: outputPath,
+        PATH: `${binDir}:${process.env.PATH ?? ""}`,
+        PROJECT_DIR: root,
+      },
+    });
+
+    expect(result.status).toBe(42);
+    expect(existsSync(outputPath) ? readFileSync(outputPath, "utf8") : "").toBe("");
   });
 
   it("runs trusted npm preflight pnpm commands from the tooling checkout", () => {

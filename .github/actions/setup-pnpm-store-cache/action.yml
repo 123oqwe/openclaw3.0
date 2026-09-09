@@ -68,6 +68,7 @@ runs:
       env:
         COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
         PACKAGE_MANAGER_FILE: ${{ inputs.package-manager-file }}
+        PROJECT_DIR: ${{ steps.setup-pnpm.outputs.project-dir }}
       run: |
         set -euo pipefail
         package_manager="$(node -e "const fs = require('node:fs'); const path = require('node:path'); const pkg = JSON.parse(fs.readFileSync(path.resolve(process.argv[1]), 'utf8')); process.stdout.write(pkg.packageManager || '')" "$PACKAGE_MANAGER_FILE")"
@@ -87,12 +88,20 @@ runs:
           corepack enable
         fi
         for attempt in 1 2 3; do
-          if corepack prepare "$package_manager" --activate; then
+          if (
+            cd "$PROJECT_DIR" &&
+            corepack prepare "$package_manager" --activate &&
+            pnpm --version >/dev/null
+          ); then
             exit 0
           fi
           sleep $((attempt * 5))
         done
-        corepack prepare "$package_manager" --activate
+        (
+          cd "$PROJECT_DIR" &&
+          corepack prepare "$package_manager" --activate &&
+          pnpm --version >/dev/null
+        )
 
     - name: Resolve pnpm store path
       id: pnpm-store
@@ -120,4 +129,7 @@ runs:
       shell: bash
       env:
         PROJECT_DIR: ${{ steps.setup-pnpm.outputs.project-dir }}
-      run: echo "pnpm-version=$(cd "$PROJECT_DIR" && pnpm -v)" >> "$GITHUB_OUTPUT"
+      run: |
+        set -euo pipefail
+        pnpm_version="$(cd "$PROJECT_DIR" && pnpm -v)"
+        echo "pnpm-version=$pnpm_version" >> "$GITHUB_OUTPUT"

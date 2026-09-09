@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { resolveBundledPluginsDir } from "../plugins/bundled-dir.js";
 import { shouldRejectHardlinkedPluginFiles } from "../plugins/hardlink-policy.js";
+import { isPluginSourceModulePath } from "../plugins/native-module-require.js";
 import {
   getPluginCacheRoot,
   getPluginCacheSource,
@@ -206,6 +207,44 @@ export function loadFacadeModuleAtLocationSync<T extends object>(params: {
   return loaded as T;
 }
 
+/** Asynchronously load and cache a facade module after verifying its declared boundary. */
+export async function loadFacadeModuleAtLocation<T extends object>(params: {
+  location: FacadeModuleLocation;
+  trackedPluginId: string | (() => string);
+  loadModule?: (modulePath: string) => Promise<T>;
+}): Promise<T> {
+  const location = params.location;
+  const loaded = await loadPluginPublicSurfaceModule({
+    ...location,
+    ...resolveFacadeBoundaryOpenParams(location.boundaryRoot),
+    surfaceLabel: `bundled plugin public surface ${location.modulePath}`,
+    loadModule:
+      params.loadModule ??
+      (async (modulePath) => {
+        if (
+          !isPluginSourceModulePath(modulePath) ||
+          !isPathAtOrInside(location.boundaryRoot, getOpenClawPackageRoot())
+        ) {
+          return loadFacadeModuleAtLocationSync<T>({
+            location,
+            trackedPluginId: params.trackedPluginId,
+          });
+        }
+        try {
+          // Source facades inside this package are immutable for the process lifetime.
+          return (await import(pathToFileURL(modulePath).href)) as T;
+        } catch {
+          return loadFacadeModuleAtLocationSync<T>({
+            location,
+            trackedPluginId: params.trackedPluginId,
+          });
+        }
+      }),
+  });
+  trackFacadeModule(location.modulePath, params.trackedPluginId);
+  return loaded as T;
+}
+
 /** Resolve and synchronously load a bundled plugin public surface by plugin dir and artifact name. */
 // oxlint-disable-next-line typescript/no-unnecessary-type-parameters -- Dynamic facade loaders use caller-supplied module surface types.
 export function loadBundledPluginPublicSurfaceModuleSyncCore<T extends object>(params: {
@@ -227,10 +266,11 @@ export function loadBundledPluginPublicSurfaceModuleSyncCore<T extends object>(p
 }
 
 /** Resolve and asynchronously import a bundled plugin public surface with sync-loader fallback. */
-export async function loadBundledPluginPublicSurfaceModule<T extends object>(params: {
+export async function loadBundledPluginPublicSurfaceModuleAsyncCore<T extends object>(params: {
   dirName: string;
   artifactBasename: string;
   trackedPluginId?: string | (() => string);
+  env?: NodeJS.ProcessEnv;
 }): Promise<T> {
   const location = resolveFacadeModuleLocation(params);
   if (!location) {
@@ -238,24 +278,10 @@ export async function loadBundledPluginPublicSurfaceModule<T extends object>(par
       `Unable to resolve bundled plugin public surface ${params.dirName}/${params.artifactBasename}`,
     );
   }
-  const loaded = await loadPluginPublicSurfaceModule({
-    ...location,
-    ...resolveFacadeBoundaryOpenParams(location.boundaryRoot),
-    surfaceLabel: `bundled plugin public surface ${location.modulePath}`,
-    loadModule: async (modulePath) => {
-      try {
-        // Native ESM imports cannot be evicted; bundled core-dist artifacts change only on restart.
-        return (await import(pathToFileURL(modulePath).href)) as T;
-      } catch {
-        return loadFacadeModuleAtLocationSync<T>({
-          location,
-          trackedPluginId: params.trackedPluginId ?? params.dirName,
-        });
-      }
-    },
+  return await loadFacadeModuleAtLocation<T>({
+    location,
+    trackedPluginId: params.trackedPluginId ?? params.dirName,
   });
-  trackFacadeModule(location.modulePath, params.trackedPluginId ?? params.dirName);
-  return loaded as T;
 }
 
 /** List plugin ids whose public facades have been loaded in this process. */

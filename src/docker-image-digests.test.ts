@@ -151,8 +151,21 @@ describe("docker base image pinning", () => {
     }
   });
 
-  it("keeps Dependabot Docker updates enabled for root Dockerfiles", async () => {
-    const raw = await readFile(resolve(repoRoot, ".github/dependabot.yml"), "utf8");
+  it("requires Docker update automation or an explicit private disablement", async () => {
+    const configPath = resolve(repoRoot, ".github/dependabot.yml");
+    const raw = await readFile(configPath, "utf8").catch(async (error: unknown) => {
+      if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
+        throw error;
+      }
+      const policy = await readFile(resolve(repoRoot, ".github/dependabot.disabled"), "utf8");
+      expect(policy.trim()).toBe(
+        "Private overlay policy: upstream dependency automation is intentionally disabled.",
+      );
+      return undefined;
+    });
+    if (raw === undefined) {
+      return;
+    }
     const config = parse(raw) as DependabotConfig;
     const dockerUpdate = requireDependabotDockerUpdate(config);
     const dockerImagesGroup = requireDockerImageGroup(dockerUpdate);

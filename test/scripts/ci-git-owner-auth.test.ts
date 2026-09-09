@@ -45,6 +45,37 @@ it.skipIf(process.platform === "win32").each(["fetch-only", "checkout"])(
   50_000,
 );
 
+it.skipIf(process.platform === "win32")(
+  "injects CHECKOUT_TOKEN for trusted --policy execution and cleans it up",
+  async () => {
+    await expect(runAuthFixture("policy-auto")).resolves.toMatchObject({
+      mode: "policy-auto",
+      policyAuthenticated: true,
+      credentialPersisted: false,
+    });
+  },
+  50_000,
+);
+
+it.skipIf(process.platform === "win32")(
+  "rejects policy checkout auth for a foreign repository",
+  async () => {
+    await expect(runAuthFixture("policy-auto-cross")).resolves.toMatchObject({
+      mode: "policy-auto-cross",
+      policyAuthenticated: false,
+      credentialPersisted: false,
+    });
+  },
+  50_000,
+);
+
+it("wires repository identity into ensure-base policy execution", () => {
+  const action = readFileSync(".github/actions/ensure-base-commit/action.yml", "utf8");
+  expect(action).toContain("CHECKOUT_TOKEN: ${{ github.token }}");
+  expect(action).toContain("CHECKOUT_REPO: ${{ github.repository }}");
+  expect(action).toContain("GITHUB_REPOSITORY: ${{ github.repository }}");
+});
+
 function workflowScript(file: string, job: string, name: string) {
   const workflow = parse(readFileSync(`.github/workflows/${file}`, "utf8")) as {
     jobs: Record<string, { steps: { name: string; run?: string }[] }>;

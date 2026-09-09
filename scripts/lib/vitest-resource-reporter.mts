@@ -61,7 +61,14 @@ export default class VitestResourceReporter implements Reporter {
   }
 
   onTestModuleQueued(module: TestModule) {
-    this.queued.set(moduleKey(module.toTestSpecification()), performance.now() - this.started);
+    const queuedEventAtMs = performance.now() - this.started;
+    this.queued.set(moduleKey(module.toTestSpecification()), queuedEventAtMs);
+    writeReceipt("module-queued", {
+      project: module.project.name,
+      pool: module.toTestSpecification().pool,
+      file: module.relativeModuleId,
+      queuedEventAtMs,
+    });
   }
 
   onTestModuleEnd(module: TestModule) {
