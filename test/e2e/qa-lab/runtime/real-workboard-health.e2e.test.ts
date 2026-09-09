@@ -4,12 +4,15 @@ import {
   SKILL_LIBRARY_BOB,
   SkillLibraryWireClient,
 } from "./skill-library-wire-fixture.js";
+import { runQaGatewayFixture } from "../../../helpers/qa-gateway-cleanup.js";
 
 describe("Outcome health with the real Workboard plugin", () => {
   it.each([true, false])("reports Workboard availability=%s", async (enabled) => {
     const instance = await createSkillLibraryWireInstance();
-    const connected = await (async () => {
-      await instance.state.writeConfig({
+    let client: SkillLibraryWireClient | undefined;
+    await runQaGatewayFixture(
+      async () => {
+        await instance.state.writeConfig({
         gateway: {
           mode: "local",
           bind: "loopback",
@@ -34,24 +37,28 @@ describe("Outcome health with the real Workboard plugin", () => {
           allow: ["outcomes", "workboard"],
           entries: { outcomes: { enabled: true }, workboard: { enabled } },
         },
-      });
-      await instance.startGateway();
-      return await SkillLibraryWireClient.connect(instance, {
-        email: SKILL_LIBRARY_BOB,
-        scopes: ["operator.read"],
-      });
-    })();
-    const client = connected.client;
-    try {
-      expect(connected.hello.auth?.scopes).toContain("operator.read");
-      const health = await client.request<{ workboard?: { available?: boolean } }>(
-        "outcomes.health",
-        {},
-      );
-      expect(health.workboard?.available).toBe(enabled);
-    } finally {
-      await client.close();
-      await instance.cleanup();
-    }
+        });
+        await instance.startGateway();
+        const connected = await SkillLibraryWireClient.connect(instance, {
+          email: SKILL_LIBRARY_BOB,
+          scopes: ["operator.read"],
+        });
+        client = connected.client;
+        expect(connected.hello.auth?.scopes).toEqual(["operator.read"]);
+        const self = await client.request<{ profile: { id: string } }>("users.self", {});
+        expect(self.profile.id).toEqual(expect.any(String));
+        const health = await client.request<{ workboard?: { available?: boolean } }>(
+          "outcomes.health",
+          {},
+        );
+        expect(health.workboard?.available).toBe(enabled);
+      },
+      async () => {
+        if (client) {
+          await client.close();
+        }
+      },
+      () => instance.cleanup(),
+    );
   });
 });
