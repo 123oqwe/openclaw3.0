@@ -13,30 +13,30 @@ describe("Outcome health with the real Workboard plugin", () => {
     await runQaGatewayFixture(
       async () => {
         await instance.state.writeConfig({
-        gateway: {
-          mode: "local",
-          bind: "loopback",
-          port: instance.port,
-          trustedProxies: ["127.0.0.1", "::1"],
-          auth: {
-            mode: "trusted-proxy",
-            password: instance.gatewayToken,
-            identityScopes: { [SKILL_LIBRARY_BOB]: ["operator.read", "operator.write"] },
-            trustedProxy: {
-              userHeader: "x-forwarded-user",
-              allowLoopback: true,
-              requiredHeaders: ["x-forwarded-proto", "x-forwarded-host"],
-              allowUsers: [SKILL_LIBRARY_BOB],
+          gateway: {
+            mode: "local",
+            bind: "loopback",
+            port: instance.port,
+            trustedProxies: ["127.0.0.1", "::1"],
+            auth: {
+              mode: "trusted-proxy",
+              password: instance.gatewayToken,
+              identityScopes: { [SKILL_LIBRARY_BOB]: ["operator.read", "operator.write"] },
+              trustedProxy: {
+                userHeader: "x-forwarded-user",
+                allowLoopback: true,
+                requiredHeaders: ["x-forwarded-proto", "x-forwarded-host"],
+                allowUsers: [SKILL_LIBRARY_BOB],
+              },
             },
+            controlUi: { enabled: false },
           },
-          controlUi: { enabled: false },
-        },
-        agents: { defaults: { workspace: instance.state.workspaceDir } },
-        plugins: {
-          enabled: true,
-          allow: ["outcomes", "workboard"],
-          entries: { outcomes: { enabled: true }, workboard: { enabled } },
-        },
+          agents: { defaults: { workspace: instance.state.workspaceDir } },
+          plugins: {
+            enabled: true,
+            allow: ["outcomes", "workboard"],
+            entries: { outcomes: { enabled: true }, workboard: { enabled } },
+          },
         });
         await instance.startGateway();
         const connected = await SkillLibraryWireClient.connect(instance, {
