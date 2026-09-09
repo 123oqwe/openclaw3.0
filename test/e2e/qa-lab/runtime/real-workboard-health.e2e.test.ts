@@ -53,10 +53,7 @@ describe("Outcome health with the real Workboard plugin", () => {
         const health = await client.request<{
           gateway?: { available?: boolean; requestScoped?: boolean };
           workboard?: { available?: boolean };
-        }>(
-          "outcomes.health",
-          {},
-        );
+        }>("outcomes.health", {});
         expect(health.gateway?.available).toBe(true);
         expect(health.gateway?.requestScoped).toBe(true);
         expect(health.workboard?.available).toBe(enabled);
