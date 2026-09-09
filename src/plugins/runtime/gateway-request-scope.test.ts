@@ -116,4 +116,35 @@ describe("gateway request scope", () => {
       expect(requireActivePluginRegistry()).toBe(activeRegistry);
     });
   });
+
+  it("preserves the exact authenticated request authority through nested carriers", async () => {
+    const lifetime = new AbortController();
+    const authenticatedRequestAuthority = {
+      profileId: "profile-outcomes-owner",
+      signal: lifetime.signal,
+      assertCurrent: () => lifetime.signal.throwIfAborted(),
+    };
+    const scope = {
+      ...TEST_SCOPE,
+      authenticatedRequestAuthority,
+    } as PluginRuntimeGatewayRequestScope;
+    const runtimeScope = await importGatewayRequestScopeModule();
+    const requestRegistry = createEmptyPluginRegistry();
+
+    await runtimeScope.withPluginRuntimeGatewayRequestScope(scope, async () => {
+      await runtimeScope.withPluginRuntimeRegistryScope(requestRegistry, async () => {
+        await runtimeScope.withPluginRuntimePluginIdScope("outcomes", async () => {
+          expect(
+            (
+              runtimeScope.getPluginRuntimeGatewayRequestScope() as
+                | (PluginRuntimeGatewayRequestScope & {
+                    authenticatedRequestAuthority?: typeof authenticatedRequestAuthority;
+                  })
+                | undefined
+            )?.authenticatedRequestAuthority,
+          ).toBe(authenticatedRequestAuthority);
+        });
+      });
+    });
+  });
 });

@@ -95,6 +95,12 @@ async function main(): Promise<void> {
   if (!command) {
     return;
   }
+  if (process.env.GITHUB_ACTIONS === "true" && process.env.TASK === "test-types") {
+    console.error(`[tsgo] test-types final args=${JSON.stringify(command.args ?? [])}`);
+    for (const key of ["GOMAXPROCS", "GOGC", "GOMEMLIMIT"] as const) {
+      console.error(`[tsgo] test-types ${key}=${command.env[key] ?? "<unset>"}`);
+    }
+  }
   try {
     // Managed cleanup forwards SIGTERM before bounded SIGKILL escalation, then
     // joins the compiler group and output before reporting a timeout.

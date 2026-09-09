@@ -68,6 +68,31 @@ describe("tsgo core test shards", () => {
     ]);
   });
 
+  it("validates extension test roots with the same exact-once guard", () => {
+    const canonical = [
+      "extensions/alpha/src/alpha.test.ts",
+      "extensions/beta/src/beta.test.ts",
+      "extensions/gamma/src/gamma.test.tsx",
+    ];
+    expect(
+      findTsgoCoreTestShardViolations({
+        canonicalRoots: canonical,
+        maxRoots: 2,
+        shards: [
+          { name: "extensions-1", roots: canonical.slice(0, 2) },
+          { name: "extensions-2", roots: canonical.slice(2) },
+        ],
+      }),
+    ).toEqual([]);
+    expect(
+      findTsgoCoreTestShardViolations({
+        canonicalRoots: canonical,
+        maxRoots: 2,
+        shards: [{ name: "extensions-1", roots: canonical.slice(0, 2) }],
+      }),
+    ).toEqual(["unassigned: extensions/gamma/src/gamma.test.tsx"]);
+  });
+
   it.each(["src", "ui", "packages"])(
     "retains shared extension declarations for the %s alias",
     (group) => {

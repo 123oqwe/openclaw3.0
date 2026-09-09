@@ -76,7 +76,7 @@ export async function waitForSlackReaction(params: {
   sutUserId: string;
   timeoutMs: number;
 }) {
-  const { listSlackReactions } = loadSlackQaRuntime();
+  const { listSlackReactions } = await loadSlackQaRuntime();
   const deadline = Date.now() + params.timeoutMs;
   while (true) {
     const reactions = await listSlackReactions(params.channelId, params.messageId, {

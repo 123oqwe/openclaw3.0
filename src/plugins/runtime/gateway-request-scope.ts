@@ -51,6 +51,11 @@ type PluginRuntimeGatewayRequestScope = {
   pluginTrustedOfficialInstall?: boolean;
   gatewayMethodDispatchAllowed?: boolean;
   pluginRegistry?: PluginRegistry;
+  authenticatedRequestAuthority?: {
+    profileId: string;
+    signal: AbortSignal;
+    assertCurrent: () => void;
+  };
 };
 
 type PluginRuntimePluginScope = {

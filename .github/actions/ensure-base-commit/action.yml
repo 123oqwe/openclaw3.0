@@ -16,6 +16,9 @@ runs:
         BASE_ACTION_PATH: ${{ github.action_path }}
         BASE_SHA: ${{ inputs.base-sha }}
         FETCH_REF: ${{ inputs.fetch-ref }}
+        CHECKOUT_TOKEN: ${{ github.token }}
+        CHECKOUT_REPO: ${{ github.repository }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
       run: |
         set -euo pipefail
         python_command=python3

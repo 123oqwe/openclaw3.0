@@ -94,6 +94,14 @@
           - "extensions/workboard/**"
           - "docs/plugins/workboard.md"
           - "docs/plugins/reference/workboard.md"
+"plugin: outcomes":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "extensions/outcomes/**"
+          - "packages/outcomes-contract/**"
+          - "ui/src/pages/outcomes/**"
+          - "ui/src/styles/outcomes.css"
+          - "docs/private/outcomes/**"
 "plugin: beam":
   - changed-files:
       - any-glob-to-any-file:

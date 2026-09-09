@@ -1,0 +1,14 @@
+{
+  "id": "outcomes",
+  "name": "Outcomes",
+  "description": "Outcome responsibility and acceptance layer.",
+  "enabledByDefault": false,
+  "activation": {
+    "onStartup": true
+  },
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {}
+  }
+}

@@ -698,6 +698,14 @@ describe("CI changed Node test plan", () => {
         requiresDist: false,
         runner: "blacksmith-8vcpu-ubuntu-2404",
         shardName: "changed-extensions-config",
+        env: {
+          OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: JSON.stringify([
+            "--reporter=verbose",
+            "--reporter=github-actions",
+            "--reporter=./scripts/lib/vitest-resource-reporter.mts",
+          ]),
+          OPENCLAW_VITEST_MAX_WORKERS: "1",
+        },
       },
     ]);
   });
@@ -814,6 +822,30 @@ describe("CI changed Node test plan", () => {
     );
     expect(sortArgs(broad.map((group) => group.env))).toEqual(sortArgs(directArgs));
   });
+
+  it.each(["extensions/outcomes/index.ts", "extensions/outcomes/src/runtime-capabilities.ts"])(
+    "routes an Outcomes change through the extension catch-all with both behavior tests (%s)",
+    (changedPath) => {
+      const groups = fallbackGroups(createChangedExtensionFallbackShards([changedPath]));
+      const outcomeTests = listExtensionTestFilesForRoots(["extensions/outcomes"]);
+      expect(outcomeTests.toSorted()).toEqual([
+        "extensions/outcomes/index.test.ts",
+        "extensions/outcomes/src/runtime-capabilities.test.ts",
+      ]);
+      expect(
+        groups.every((group) => group.configs[0] === "test/vitest/vitest.extensions.config.ts"),
+      ).toBe(true);
+      expect(groups.length).toBeGreaterThan(1);
+      expect(groups.every((group) => !group.includePatterns)).toBe(true);
+      expect(
+        groups.map((group) => group.env?.OPENCLAW_NODE_TEST_VITEST_ARGS_JSON).toSorted(),
+      ).toEqual(
+        groups
+          .map((_, index) => JSON.stringify([`--shard=${index + 1}/${groups.length}`]))
+          .toSorted(),
+      );
+    },
+  );
 
   it("preserves Matrix process bounds in mixed package fallbacks", () => {
     const shards = createChangedExtensionFallbackShards([

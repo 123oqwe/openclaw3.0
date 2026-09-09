@@ -104,19 +104,19 @@ export function createOxlintShards({
 }
 
 /**
- * Splits core oxlint targets into smaller source/package/UI shards.
+ * Splits core oxlint targets into file-sized shards so explicit hosted stripes
+ * stay bounded even when one source subtree grows much larger than its peers.
  */
 function createCoreOxlintShards({
   cwd = process.cwd(),
   readDir = fs.readdirSync,
 }: DirectoryOptions = {}) {
-  const sourceShards = listSourceRootTargetGroups({ cwd, readDir }).map((targets) => ({
-    name: targets.length === 1 ? `core:${targets.join("").replaceAll("/", ":")}` : "core:src:root",
-    args: ["--tsconfig", CORE_TS_CONFIG, ...targets],
-  }));
-  const sourceEntries = sourceShards.length > 0 ? sourceShards : [createCoreShard("src")];
-
-  return [...sourceEntries, ...CORE_SPLIT_TARGETS.map((target) => createCoreShard(target))];
+  return ["src", ...CORE_SPLIT_TARGETS].flatMap((target) => {
+    const files = listSourceFiles({ cwd, readDir, target });
+    return files.length > 0
+      ? files.map((file) => createCoreShard(file))
+      : [createCoreShard(target)];
+  });
 }
 
 function createCoreShard(target: string) {
@@ -242,19 +242,17 @@ function listExtensionEntries({ cwd, readDir }: DirectoryLookup) {
   };
 }
 
-function listSourceRootTargetGroups({ cwd, readDir }: DirectoryLookup) {
-  const entries = readDirectoryEntries(readDir, path.join(cwd, "src"));
-
-  const dirs = entries
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => `src/${entry.name}`)
-    .toSorted((left, right) => left.localeCompare(right));
-  const rootFiles = entries
-    .filter((entry) => entry.isFile() && OXLINT_SOURCE_FILE_PATTERN.test(entry.name))
-    .map((entry) => `src/${entry.name}`)
-    .toSorted((left, right) => left.localeCompare(right));
-
-  return [...dirs.map((target) => [target]), ...(rootFiles.length > 0 ? [rootFiles] : [])];
+function listSourceFiles({ cwd, readDir, target }: DirectoryLookup & { target: string }): string[] {
+  const entries = readDirectoryEntries(readDir, path.join(cwd, target)).toSorted((left, right) =>
+    left.name.localeCompare(right.name),
+  );
+  return entries.flatMap((entry) => {
+    const child = `${target}/${entry.name}`;
+    if (entry.isDirectory()) {
+      return listSourceFiles({ cwd, readDir, target: child });
+    }
+    return entry.isFile() && OXLINT_SOURCE_FILE_PATTERN.test(entry.name) ? [child] : [];
+  });
 }
 
 /**

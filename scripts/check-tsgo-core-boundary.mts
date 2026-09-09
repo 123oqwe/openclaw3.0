@@ -86,7 +86,7 @@ async function runTsgoQuery(config: string, query: string, label: string): Promi
   return stdout!;
 }
 
-async function readGraphConfig(config: string): Promise<{
+export async function readGraphConfig(config: string): Promise<{
   compilerOptions?: { tsBuildInfoFile?: string };
   files?: string[];
 }> {

@@ -14,6 +14,7 @@ import {
 
 const loadPluginManifestRegistryCore = vi.hoisted(() => vi.fn());
 const loadBundledPluginManifestRegistry = vi.hoisted(() => vi.fn());
+const loadBundledPluginPublicSurfaceModule = vi.hoisted(() => vi.fn());
 const loadBundledPluginPublicSurfaceModuleSync = vi.hoisted(() => vi.fn());
 const tryLoadActivatedBundledPluginPublicSurfaceModuleSync = vi.hoisted(() => vi.fn());
 const resolveOpenClawPackageRootSync = vi.hoisted(() => vi.fn());
@@ -28,6 +29,7 @@ vi.mock("../infra/openclaw-root.js", () => ({
 }));
 
 vi.mock("./facade-runtime.js", () => ({
+  loadBundledPluginPublicSurfaceModule,
   loadBundledPluginPublicSurfaceModuleSync,
   tryLoadActivatedBundledPluginPublicSurfaceModuleSync,
 }));
@@ -63,6 +65,7 @@ describe("plugin-sdk qa-runner-runtime", () => {
       plugins: [],
       diagnostics: [],
     });
+    loadBundledPluginPublicSurfaceModule.mockReset();
     loadBundledPluginPublicSurfaceModuleSync.mockReset();
     tryLoadActivatedBundledPluginPublicSurfaceModuleSync.mockReset();
     resolveOpenClawPackageRootSync.mockReset().mockReturnValue(null);
@@ -122,6 +125,26 @@ describe("plugin-sdk qa-runner-runtime", () => {
     expect(testApiCall?.env?.OPENCLAW_BUNDLED_PLUGINS_DIR).toBe(
       path.join(sourceRoot, "extensions"),
     );
+  });
+
+  it("loads bundled plugin test APIs asynchronously with the private QA source tree override", async () => {
+    const sourceRoot = makePrivateQaSourceRoot(tempDirs, "openclaw-qa-async-test-api-root-");
+    resolveOpenClawPackageRootSync.mockReturnValue(sourceRoot);
+
+    const testApi = { marker: "slack-test-api" };
+    loadBundledPluginPublicSurfaceModule.mockResolvedValue(testApi);
+
+    const module = await import("./qa-runner-runtime.js");
+
+    await expect(module.loadQaRunnerBundledPluginTestApiAsync("slack")).resolves.toBe(testApi);
+    expect(loadBundledPluginPublicSurfaceModule).toHaveBeenCalledExactlyOnceWith({
+      dirName: "slack",
+      artifactBasename: "test-api.js",
+      env: expect.objectContaining({
+        OPENCLAW_ENABLE_PRIVATE_QA_CLI: "1",
+        OPENCLAW_BUNDLED_PLUGINS_DIR: path.join(sourceRoot, "extensions"),
+      }),
+    });
   });
 
   it("reports the qa runtime as unavailable when the qa-lab surface is missing", async () => {

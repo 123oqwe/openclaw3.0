@@ -8,6 +8,8 @@ import { getCachedPluginSourceModuleLoader } from "../plugins/plugin-module-load
 import { resolveLoaderPackageRoot } from "../plugins/sdk-alias.js";
 import {
   loadBundledPluginPublicSurfaceModuleSyncCore as loadBundledPluginPublicSurfaceModuleSyncLight,
+  loadBundledPluginPublicSurfaceModuleAsyncCore as loadBundledPluginPublicSurfaceModuleLight,
+  loadFacadeModuleAtLocation,
   loadFacadeModuleAtLocationSync,
   resetFacadeLoaderStateForTest,
   type FacadeModuleLocation,
@@ -209,6 +211,28 @@ export function loadBundledPluginPublicSurfaceModuleSync<T extends object>(
     });
   }
   return loadFacadeModuleAtLocationSync<T>({
+    location,
+    trackedPluginId,
+  });
+}
+
+/** Asynchronously load a bundled or registry-backed plugin public surface. */
+export async function loadBundledPluginPublicSurfaceModule<T extends object>(
+  params: BundledPluginPublicSurfaceParams,
+): Promise<T> {
+  const activationRuntime = await loadFacadeActivationCheckRuntimeAsync();
+  const location = resolveFacadeModuleLocation(params);
+  const trackedPluginId = () =>
+    activationRuntime.resolveTrackedFacadePluginId(
+      buildFacadeActivationCheckParams(params, location),
+    );
+  if (!location) {
+    return await loadBundledPluginPublicSurfaceModuleLight<T>({
+      ...params,
+      trackedPluginId,
+    });
+  }
+  return await loadFacadeModuleAtLocation<T>({
     location,
     trackedPluginId,
   });

@@ -8,6 +8,7 @@ import {
 } from "../plugins/runtime/gateway-request-scope.js";
 import type { PluginSubagentRequesterContext } from "../plugins/runtime/subagent-requester-context.js";
 import type { RuntimePluginToolGrant } from "../plugins/runtime/tool-grant.js";
+import { roleScopesAllow } from "../shared/operator-scope-compat.js";
 import { readInProcessAgentRuntimeIdentity } from "./in-process-agent-runtime-identity.js";
 import { authorizeGatewaySessionCreation } from "./operator-role-policy.js";
 import { ADMIN_SCOPE, WRITE_SCOPE } from "./operator-scopes.js";
@@ -111,6 +112,7 @@ type DispatchGatewayMethodInProcessOptions = {
   delegatedToolPolicyHandoff?: SubagentCompletionToolHandoffRegistration;
   sessionCreation?: TrustedSessionCreation;
   requireScopedClient?: boolean;
+  requireAuthenticatedRequest?: boolean;
   syntheticScopes?: string[];
   timeoutMs?: number;
   signal?: AbortSignal;
@@ -124,6 +126,7 @@ type ResolvedInProcessGatewayDispatch = {
   context: GatewayRequestContext;
   delegatedToolPolicyHandoffId?: string;
   isWebchatConnect: NonNullable<GatewayRequestOptions["isWebchatConnect"]>;
+  signal?: AbortSignal;
 };
 
 function resolveInProcessGatewayDispatch(
@@ -134,36 +137,62 @@ function resolveInProcessGatewayDispatch(
   inheritedOperatorAuthority?.signal.throwIfAborted();
   const scope = getPluginRuntimeGatewayRequestScope();
   const scopedOperatorProfile = scope?.client?.authenticatedUserProfile;
+  const authenticatedRequestAuthority = scope?.authenticatedRequestAuthority;
+  const requireAuthenticatedRequest = options?.requireAuthenticatedRequest === true;
+  if (requireAuthenticatedRequest) {
+    if (!scope?.client || !scopedOperatorProfile?.profileId || !authenticatedRequestAuthority) {
+      throw new Error(
+        `In-process gateway dispatch requires an authenticated plugin request scope (method: ${method}).`,
+      );
+    }
+    authenticatedRequestAuthority.assertCurrent();
+    if (
+      authenticatedRequestAuthority.profileId !== scopedOperatorProfile.profileId ||
+      (inheritedOperatorAuthority &&
+        inheritedOperatorAuthority.authenticatedUserProfile.profileId !==
+          scopedOperatorProfile.profileId)
+    ) {
+      throw new Error(
+        `In-process gateway dispatch authenticated request principal mismatch (method: ${method}).`,
+      );
+    }
+  }
   const scopedRoleActor = scope?.client?.internal?.operatorRoleActor;
   const explicitSystemActor =
     !scope?.client && !inheritedOperatorAuthority ? options?.operatorRoleActor : undefined;
   const verifiedOperatorAuthority =
-    inheritedOperatorAuthority ??
-    (scopedOperatorProfile?.profileId
+    requireAuthenticatedRequest && scopedOperatorProfile
       ? {
           authenticatedUserProfile: scopedOperatorProfile,
           scopes: scope?.client?.connect.scopes ?? [],
         }
-      : undefined);
+      : (inheritedOperatorAuthority ??
+        (scopedOperatorProfile?.profileId
+          ? {
+              authenticatedUserProfile: scopedOperatorProfile,
+              scopes: scope?.client?.connect.scopes ?? [],
+            }
+          : undefined));
   // Subagent launch ownership stays with the host after its target was checked;
   // retain the verified role actor separately so target policy remains enforced.
   const isHostOwnedAgentRun = method === "agent" && Boolean(options?.agentRunTracking);
   const operatorAuthority = isHostOwnedAgentRun ? undefined : verifiedOperatorAuthority;
-  const operatorRoleActor: GatewayOperatorRoleActor | undefined =
-    inheritedOperatorAuthority?.operatorRoleActor ??
-    (isHostOwnedAgentRun
-      ? inheritedOperatorAuthority
-        ? {
-            kind: "operator",
-            profileId: inheritedOperatorAuthority.authenticatedUserProfile.profileId,
-          }
-        : (scopedRoleActor ??
-          (scopedOperatorProfile?.profileId
-            ? { kind: "operator", profileId: scopedOperatorProfile.profileId }
-            : scope?.client
-              ? undefined
-              : (explicitSystemActor ?? { kind: "system" })))
-      : (scopedRoleActor ?? explicitSystemActor));
+  const operatorRoleActor: GatewayOperatorRoleActor | undefined = requireAuthenticatedRequest
+    ? scopedRoleActor
+    : (inheritedOperatorAuthority?.operatorRoleActor ??
+      (isHostOwnedAgentRun
+        ? inheritedOperatorAuthority
+          ? {
+              kind: "operator",
+              profileId: inheritedOperatorAuthority.authenticatedUserProfile.profileId,
+            }
+          : (scopedRoleActor ??
+            (scopedOperatorProfile?.profileId
+              ? { kind: "operator", profileId: scopedOperatorProfile.profileId }
+              : scope?.client
+                ? undefined
+                : (explicitSystemActor ?? { kind: "system" })))
+        : (scopedRoleActor ?? explicitSystemActor)));
   // The router installs a nested scope; retain the admitted resolver for later commit checks.
   const resolveGatewayContext = options?.resolveGatewayContext ?? scope?.resolveGatewayContext;
   const context = getInProcessGatewayRequestContext(resolveGatewayContext);
@@ -210,10 +239,35 @@ function resolveInProcessGatewayDispatch(
     (operatorRoleActor?.kind === "operator"
       ? (verifiedOperatorAuthority?.scopes ?? scope?.client?.connect.scopes ?? [])
       : undefined);
-  const syntheticScopes = operatorScopes
-    ? requestedSyntheticScopes.filter((requestedScope) => operatorScopes.includes(requestedScope))
-    : options?.syntheticScopes;
-  if (operatorScopes?.includes(ADMIN_SCOPE) && !syntheticScopes?.includes(ADMIN_SCOPE)) {
+  const syntheticScopes = requireAuthenticatedRequest
+    ? requestedSyntheticScopes.filter(
+        (requestedScope) =>
+          roleScopesAllow({
+            role: "operator",
+            requestedScopes: [requestedScope],
+            allowedScopes: scope?.client?.connect.scopes ?? [],
+          }) &&
+          (!inheritedOperatorAuthority ||
+            roleScopesAllow({
+              role: "operator",
+              requestedScopes: [requestedScope],
+              allowedScopes: inheritedOperatorAuthority.scopes,
+            })),
+      )
+    : operatorScopes
+      ? requestedSyntheticScopes.filter((requestedScope) =>
+          roleScopesAllow({
+            role: "operator",
+            requestedScopes: [requestedScope],
+            allowedScopes: operatorScopes,
+          }),
+        )
+      : options?.syntheticScopes;
+  if (
+    !requireAuthenticatedRequest &&
+    operatorScopes?.includes(ADMIN_SCOPE) &&
+    !syntheticScopes?.includes(ADMIN_SCOPE)
+  ) {
     syntheticScopes?.push(ADMIN_SCOPE);
   }
   const baseSyntheticClient = createSyntheticPluginRuntimeClient({
@@ -293,6 +347,10 @@ function resolveInProcessGatewayDispatch(
   }
   return {
     assertContextCurrent: () => {
+      if (requireAuthenticatedRequest) {
+        authenticatedRequestAuthority?.assertCurrent();
+        inheritedOperatorAuthority?.signal.throwIfAborted();
+      }
       if ((resolveGatewayContext ? resolveGatewayContext() : scope?.context) !== context) {
         throw new Error(
           `In-process gateway dispatch requires a current gateway instance binding (method: ${method}).`,
@@ -304,6 +362,16 @@ function resolveInProcessGatewayDispatch(
     context,
     delegatedToolPolicyHandoffId,
     isWebchatConnect,
+    signal:
+      requireAuthenticatedRequest && authenticatedRequestAuthority
+        ? AbortSignal.any(
+            [
+              options?.signal,
+              authenticatedRequestAuthority.signal,
+              inheritedOperatorAuthority?.signal,
+            ].filter((signal): signal is AbortSignal => signal !== undefined),
+          )
+        : options?.signal,
   };
 }
 
@@ -406,7 +474,7 @@ export async function dispatchGatewayMethodInProcessRaw(
         options?.sessionMutationCommitGuard?.();
       },
       timeoutMs: options?.timeoutMs,
-      ...(options?.signal ? { signal: options.signal } : {}),
+      ...(resolved.signal ? { signal: resolved.signal } : {}),
     });
   });
 }
@@ -447,13 +515,13 @@ export async function dispatchGatewayMethodInProcess<T>(
             onAccepted: options?.onAccepted,
             onExecutionStarted: options?.onExecutionStarted,
             onSignalAbort: options?.onSignalAbort,
-            signal: options?.signal,
+            signal: resolved.signal,
             timeoutMs: options?.timeoutMs,
           })
         : await facade.wait<T>(
             params as AgentWaitParams,
             options?.timeoutMs,
-            options?.signal,
+            resolved.signal,
             options?.onSignalAbort,
           );
     });

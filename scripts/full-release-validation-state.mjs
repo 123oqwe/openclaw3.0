@@ -159,14 +159,19 @@ function issue(kind, child, message, extra = {}) {
   };
 }
 
-export function validateChildBinding(child, run, composite) {
+export function validateChildBinding(
+  child,
+  run,
+  composite,
+  repository = process.env.GITHUB_REPOSITORY,
+) {
   const errors = [];
   let provenance = {};
   try {
     provenance = validateReleaseChildRunProvenance(run, {
       ...child,
       plannedRunAttempt: child.runAttempt,
-      repository: process.env.GITHUB_REPOSITORY,
+      repository,
     });
   } catch (error) {
     errors.push(
@@ -201,6 +206,7 @@ export async function readChild(child, previous, signal, options = {}) {
     const error = issue("dispatch_missing", child, `${child.key} omitted its exact run identity`);
     return { ...child, errors: [error], jobs: [], status: "missing" };
   }
+  const repository = options.repository ?? process.env.GITHUB_REPOSITORY;
   try {
     const run = options.readRun
       ? await options.readRun(child.runId, signal)
@@ -208,11 +214,12 @@ export async function readChild(child, previous, signal, options = {}) {
     const currentAttempt = positiveInteger(run.run_attempt, `${child.key} run attempt`);
     const plannedAttempt = positiveInteger(child.runAttempt, `${child.key} planned run attempt`);
     if (currentAttempt < plannedAttempt) {
-      return validateChildBinding(child, run, {
-        jobs: [],
-        observedRunAttempts: [],
-        sha256: "",
-      });
+      return validateChildBinding(
+        child,
+        run,
+        { jobs: [], observedRunAttempts: [], sha256: "" },
+        repository,
+      );
     }
     const attempts = await Promise.all(
       Array.from({ length: currentAttempt - plannedAttempt + 1 }, async (_, index) => {
@@ -229,11 +236,12 @@ export async function readChild(child, previous, signal, options = {}) {
       if (attempts.slice(0, -1).some((attempt) => attempt.jobs.length === 0)) {
         throw new Error(`${child.key} child attempt evidence is gapped`);
       }
-      const partial = validateChildBinding(child, run, {
-        jobs: [],
-        observedRunAttempts: [],
-        sha256: "",
-      });
+      const partial = validateChildBinding(
+        child,
+        run,
+        { jobs: [], observedRunAttempts: [], sha256: "" },
+        repository,
+      );
       return (previous?.compositeJobsSha256 || previous?.transportFailure) &&
         partial.errors.length === 0
         ? {
@@ -248,15 +256,20 @@ export async function readChild(child, previous, signal, options = {}) {
       expected: {
         ...child,
         plannedRunAttempt: plannedAttempt,
-        repository: process.env.GITHUB_REPOSITORY,
+        repository,
       },
       run,
     });
-    return validateChildBinding(child, run, {
-      jobs: evidence.jobs,
-      observedRunAttempts: evidence.observedRunAttempts,
-      sha256: evidence.compositeJobsSha256,
-    });
+    return validateChildBinding(
+      child,
+      run,
+      {
+        jobs: evidence.jobs,
+        observedRunAttempts: evidence.observedRunAttempts,
+        sha256: evidence.compositeJobsSha256,
+      },
+      repository,
+    );
   } catch (error) {
     const degraded = classifyReleaseGhTransportError(error) === "transient";
     const provenanceMismatch =

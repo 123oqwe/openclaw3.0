@@ -21,8 +21,8 @@ import {
 } from "../helpers/full-release-candidate.js";
 import { useAutoCleanupTempDirTracker } from "../helpers/temp-dir.js";
 
-const NOW = Date.parse("2026-08-28T12:00:00Z");
-const EXPIRES_AT = "2026-09-04T12:00:00Z";
+const NOW = Date.now();
+const EXPIRES_AT = new Date(NOW + 7 * 24 * 60 * 60 * 1000).toISOString();
 const REPOSITORY = "openclaw/openclaw";
 const CONTRACT_SCRIPT = resolve("scripts/full-release-candidate-contract.mjs");
 const SCRIPT = resolve("scripts/full-release-candidate-reuse.mjs");
@@ -1031,6 +1031,7 @@ describe("full release candidate binding authority", () => {
 
   it("rejects missing, ambiguous, expired, and wrong-request evidence", () => {
     const binding = fullReleaseCandidateBindingFixture();
+    const bindingExpiresAt = Date.parse(binding.evidenceArtifact.expiresAt);
     expect(() =>
       resolveCandidateBinding({ now: NOW, request: binding.request, required: true }),
     ).toThrow("exactly one");
@@ -1046,7 +1047,7 @@ describe("full release candidate binding authority", () => {
     expect(() =>
       resolveCandidateBinding({
         freshBinding: binding,
-        now: Date.parse(EXPIRES_AT),
+        now: bindingExpiresAt,
         request: binding.request,
         required: true,
       }),
@@ -1054,7 +1055,7 @@ describe("full release candidate binding authority", () => {
     expect(() =>
       resolveCandidateBinding({
         freshBinding: binding,
-        now: Date.parse(EXPIRES_AT) - 90 * 60 * 1000,
+        now: bindingExpiresAt - 90 * 60 * 1000,
         request: binding.request,
         required: true,
       }),

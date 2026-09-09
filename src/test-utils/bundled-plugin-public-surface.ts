@@ -3,7 +3,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { uniqueStrings } from "@openclaw/normalization-core/string-normalization";
-import { loadBundledPluginPublicSurfaceModule } from "../plugin-sdk/facade-loader.js";
+import { loadBundledPluginPublicSurfaceModuleAsyncCore } from "../plugin-sdk/facade-loader.js";
 import { resolveBundledPluginsDir } from "../plugins/bundled-dir.js";
 import { findBundledPluginMetadataById } from "../plugins/bundled-plugin-metadata.js";
 import { normalizeBundledPluginArtifactSubpath } from "../plugins/public-surface-runtime.js";
@@ -72,7 +72,7 @@ type AsyncBundledPluginPublicSurfaceLoader = <T extends object>(params: {
 
 export const loadBundledPluginFacade: AsyncBundledPluginPublicSurfaceLoader = (params) => {
   const metadata = findBundledPluginMetadata(params.pluginId);
-  return loadBundledPluginPublicSurfaceModule({
+  return loadBundledPluginPublicSurfaceModuleAsyncCore({
     dirName: metadata.dirName,
     artifactBasename: normalizeBundledPluginArtifactSubpath(params.artifactBasename),
   });

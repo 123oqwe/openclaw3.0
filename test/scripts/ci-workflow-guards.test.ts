@@ -142,6 +142,7 @@ function evaluateWorkflowExpression(
     runCheck?: boolean;
     runnerBackend?: "" | "blacksmith" | "github" | "hybrid";
     runnerEnvironment?: "" | "github-hosted" | "self-hosted";
+    runnerOs?: "Linux" | "macOS" | "Windows";
     runnerProfile?: "blacksmith" | "github" | "hybrid";
     runAttempt: number;
     steps?: Record<string, { outputs: Record<string, string> }>;
@@ -203,7 +204,10 @@ function evaluateWorkflowExpression(
       use_github_hosted_runners: context.useGithubHostedRunners ?? false,
     },
     matrix: context.matrix ?? {},
-    runner: { environment: context.runnerEnvironment ?? "" },
+    runner: {
+      environment: context.runnerEnvironment ?? "",
+      os: context.runnerOs ?? "Linux",
+    },
     steps: context.steps ?? {},
     needs: {
       resolve_target: { outputs: context.resolveTargetOutputs ?? {} },
@@ -1637,12 +1641,19 @@ function runCheckShardFixture(options: {
     stripeSupport?: boolean;
     hostedContract?: boolean;
     failStripe?: string;
+    emptyExtensionInventory?: boolean;
+    failExtensionShard?: string;
   };
 }): {
   calls: string[];
   output: string;
   status: number | null;
-  typeCalls: { row: string; command: string; localCheck: string | null }[];
+  typeCalls: {
+    row: string;
+    command: string;
+    localCheck: string | null;
+    localCheckMode: string | null;
+  }[];
   rows: { name: string; status: number | null }[];
 } {
   const root = tempDirs.make("openclaw-ci-guards-");
@@ -1653,6 +1664,18 @@ function runCheckShardFixture(options: {
   mkdirSync(fakeBin);
   if (typeCheck) {
     mkdirSync(path.join(root, "scripts"));
+    if (!options.types?.emptyExtensionInventory) {
+      mkdirSync(path.join(root, "test/tsconfig/generated-extensions"), { recursive: true });
+      for (const index of [1, 2, 3, 4, 5]) {
+        writeFileSync(
+          path.join(
+            root,
+            `test/tsconfig/generated-extensions/tsconfig.extensions.test.${index}.json`,
+          ),
+          "{}\n",
+        );
+      }
+    }
     writeFileSync(
       path.join(root, "scripts/run-tsgo-core-test-shards.mts"),
       options.types?.stripeSupport === false ? "// legacy runner\n" : "// --stripe\n",
@@ -1661,8 +1684,16 @@ function runCheckShardFixture(options: {
       path.join(root, "scripts/run-tsgo-core-test-shards.mjs"),
       `import { appendFileSync } from "node:fs";
 const args = process.argv.slice(2);
-appendFileSync(process.env.TYPE_CALLS, [process.env.TYPE_ROW, process.env.OPENCLAW_LOCAL_CHECK ?? "<unset>", "node " + args.join(" ")].join("\\t") + "\\n");
+appendFileSync(process.env.TYPE_CALLS, [process.env.TYPE_ROW, process.env.OPENCLAW_LOCAL_CHECK ?? "<unset>", process.env.OPENCLAW_LOCAL_CHECK_MODE ?? "<unset>", "node " + args.join(" ")].join("\\t") + "\\n");
 if (args[args.indexOf("--stripe") + 1] === process.env.FAIL_TYPE_STRIPE) process.exit(17);
+`,
+    );
+    writeFileSync(
+      path.join(root, "scripts/run-tsgo.mjs"),
+      `import { appendFileSync } from "node:fs";
+const args = process.argv.slice(2);
+appendFileSync(process.env.TYPE_CALLS, [process.env.TYPE_ROW, process.env.OPENCLAW_LOCAL_CHECK ?? "<unset>", process.env.OPENCLAW_LOCAL_CHECK_MODE ?? "<unset>", "node " + args.join(" ")].join("\\t") + "\\n");
+if (process.env.FAIL_EXTENSION_SHARD && args.join(" ").includes(process.env.FAIL_EXTENSION_SHARD)) process.exit(17);
 `,
     );
   }
@@ -1681,7 +1712,7 @@ if (args[args.indexOf("--stripe") + 1] === process.env.FAIL_TYPE_STRIPE) process
     'printf "%s\\n" "$*" >> "$PNPM_CALLS"',
     ...(typeCheck
       ? [
-          'printf "%s\\t%s\\tpnpm %s\\n" "$TYPE_ROW" "${OPENCLAW_LOCAL_CHECK-<unset>}" "$*" >> "$TYPE_CALLS"',
+          'printf "%s\\t%s\\t%s\\tpnpm %s\\n" "$TYPE_ROW" "${OPENCLAW_LOCAL_CHECK-<unset>}" "${OPENCLAW_LOCAL_CHECK_MODE-<unset>}" "$*" >> "$TYPE_CALLS"',
         ]
       : []),
   ]);
@@ -1747,6 +1778,7 @@ if (args[args.indexOf("--stripe") + 1] === process.env.FAIL_TYPE_STRIPE) process
                 TYPE_ROW: row.name,
                 TYPE_CALLS: typeCallsPath,
                 FAIL_TYPE_STRIPE: options.types?.failStripe,
+                FAIL_EXTENSION_SHARD: options.types?.failExtensionShard,
                 ...Object.fromEntries(
                   Object.entries(row.step.env ?? {}).map(([key, value]) => [
                     key,
@@ -1773,11 +1805,12 @@ if (args[args.indexOf("--stripe") + 1] === process.env.FAIL_TYPE_STRIPE) process
           .split("\n")
           .filter(Boolean)
           .map((line) => {
-            const [row, localCheck, command] = line.split("\t");
+            const [row, localCheck, localCheckMode, command] = line.split("\t");
             return {
               row: row!,
               command: command!,
               localCheck: localCheck === "<unset>" ? null : localCheck!,
+              localCheckMode: localCheckMode === "<unset>" ? null : localCheckMode!,
             };
           })
       : [],
@@ -5471,6 +5504,7 @@ setImmediate(() => {
       "check-additional-shard",
       "check-docs",
       "check-lint-hosted-core-shard",
+      "check-lint-hosted-extension-shard",
       "check-shard",
       "check-test-types-hosted-core-shard",
       "checks-fast-channel-contracts-shard",
@@ -6987,6 +7021,10 @@ server.listen(0, "127.0.0.1", () => {
     const additionalJob = workflow.jobs["check-additional-shard"];
     const checkShardJob = workflow.jobs["check-shard"];
     const hostedCoreJob = workflow.jobs["check-lint-hosted-core-shard"];
+    const hostedExtensionJob = expectDefined(
+      workflow.jobs["check-lint-hosted-extension-shard"],
+      "hosted extension lint job",
+    );
 
     // Cold SDK preparation and plugin compilation need CPU and memory headroom.
     expect(readFrozenAdditionalCheckRows()).toContainEqual({
@@ -6997,7 +7035,9 @@ server.listen(0, "127.0.0.1", () => {
     const runStep = additionalJob.steps.find(
       (step: WorkflowStep) => step.name === "Run additional check shard",
     );
-    expect(runStep.env.OPENCLAW_EXTENSION_BOUNDARY_CONCURRENCY).toBe(16);
+    expect(runStep.env.OPENCLAW_EXTENSION_BOUNDARY_CONCURRENCY).toBe(
+      "${{ (needs.preflight.outputs.runner_profile == 'blacksmith' || (needs.preflight.outputs.runner_profile == 'hybrid' && github.run_attempt == 1 && github.event_name != 'workflow_dispatch')) && '16' || '' }}",
+    );
 
     // O(1) disks: Blacksmith caps sticky disks per installation, and the old
     // per-PR/per-config keys minted new disks until every mount 429-failed
@@ -7021,12 +7061,12 @@ server.listen(0, "127.0.0.1", () => {
       ),
       "hosted lint extension package boundary cache",
     );
-    const hostedCoreCache = expectDefined(
-      hostedCoreJob.steps.find(
+    const hostedExtensionCache = expectDefined(
+      hostedExtensionJob.steps.find(
         (step: WorkflowStep) =>
-          step.name === "Cache extension package boundary artifacts for hosted core lint",
+          step.name === "Cache extension package boundary artifacts for hosted extension lint",
       ),
-      "hosted core extension package boundary cache",
+      "hosted extension package boundary cache",
     );
     expect(boundaryMount.with.key).toBe("${{ github.repository }}-ext-boundary-v2");
     expect(lintMount.with.key).toBe(boundaryMount.with.key);
@@ -7039,10 +7079,10 @@ server.listen(0, "127.0.0.1", () => {
     expect(boundaryCache.if).toBe(
       "needs.preflight.outputs.cache_mode != 'off' && matrix.group == 'extension-package-boundary' && steps.extension-boundary-inputs.outputs.enabled == 'true'",
     );
-    expect(hostedCoreCache.if).toBe(
+    expect(hostedExtensionCache.if).toBe(
       "needs.preflight.outputs.cache_mode != 'off' && needs.preflight.outputs.runner_profile == 'github' && !inputs.release_gate && steps.extension-boundary-inputs.outputs.enabled == 'true'",
     );
-    for (const cache of [hostedLintCache, hostedCoreCache]) {
+    for (const cache of [hostedLintCache, hostedExtensionCache]) {
       expect(cache.uses).toBe(CACHE_V5);
       expect(cache.with).toEqual(boundaryCache.with);
     }
@@ -7056,7 +7096,7 @@ server.listen(0, "127.0.0.1", () => {
       ".artifacts/extension-package-boundary/*.json",
       ".artifacts/extension-package-boundary/compile",
     ]);
-    const fingerprintSteps = [additionalJob, checkShardJob, hostedCoreJob].map((job) =>
+    const fingerprintSteps = [additionalJob, checkShardJob, hostedExtensionJob].map((job) =>
       expectDefined(
         job.steps.find(
           (step: WorkflowStep) => step.name === "Compute extension boundary input fingerprint",
@@ -7074,17 +7114,24 @@ server.listen(0, "127.0.0.1", () => {
     expect(fingerprintSteps[2]?.if).toBe(
       "needs.preflight.outputs.runner_profile == 'github' && !inputs.release_gate",
     );
-    expect(hostedCoreJob.steps.indexOf(fingerprintSteps[2])).toBeLessThan(
-      hostedCoreJob.steps.indexOf(hostedCoreCache),
+    expect(hostedExtensionJob.steps.indexOf(fingerprintSteps[2])).toBeLessThan(
+      hostedExtensionJob.steps.indexOf(hostedExtensionCache),
     );
-    expect(hostedCoreJob.steps.indexOf(hostedCoreCache)).toBeLessThan(
-      hostedCoreJob.steps.findIndex(
-        (step: WorkflowStep) => step.name === "Run hosted core lint stripe",
+    expect(hostedExtensionJob.steps.indexOf(hostedExtensionCache)).toBeLessThan(
+      hostedExtensionJob.steps.findIndex(
+        (step: WorkflowStep) => step.name === "Run hosted extension lint stripe",
       ),
     );
     expect(
-      hostedCoreJob.steps.some((step: WorkflowStep) =>
+      hostedExtensionJob.steps.some((step: WorkflowStep) =>
         step.uses?.startsWith("actions/cache/save@"),
+      ),
+    ).toBe(false);
+    expect(
+      hostedCoreJob.steps.some(
+        (step: WorkflowStep) =>
+          step.name?.includes("extension boundary") ||
+          step.name?.includes("extension package boundary"),
       ),
     ).toBe(false);
     const warmerBoundaryRestore = expectDefined(
@@ -9608,31 +9655,31 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       scripts: ["tsgo:scripts", "tsgo:test:root"],
       frozenTarget: false,
       status: 0,
-      calls: ["tsgo:extensions:test", "tsgo:scripts", "tsgo:test:root"],
+      calls: ["tsgo:scripts", "tsgo:test:root"],
     },
     {
       scripts: ["tsgo:scripts"],
       frozenTarget: false,
       status: 1,
-      calls: ["tsgo:extensions:test", "tsgo:scripts"],
+      calls: ["tsgo:scripts"],
     },
     {
       scripts: [],
       frozenTarget: false,
       status: 1,
-      calls: ["tsgo:extensions:test"],
+      calls: [],
     },
     {
       scripts: [],
       frozenTarget: true,
       status: 0,
-      calls: ["tsgo:extensions:test"],
+      calls: [],
     },
     {
       scripts: ["tsgo:test:root"],
       frozenTarget: true,
       status: 0,
-      calls: ["tsgo:extensions:test", "tsgo:test:root"],
+      calls: ["tsgo:test:root"],
     },
   ])(
     "runs declared typechecks for scripts=$scripts frozen=$frozenTarget",
@@ -9660,24 +9707,44 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
         types: { compose: true, profile, eventName, hostedContract, stripeSupport },
       });
       expect(result.status, result.output).toBe(0);
-      const stripes = result.typeCalls.filter((call) => call.command.startsWith("node "));
+      const stripes = result.typeCalls.filter((call) => call.command.startsWith("node --stripe"));
+      const extensionShards = result.typeCalls.filter(
+        (call) => call.command.startsWith("node ") && !call.command.startsWith("node --stripe"),
+      );
       const packages = result.typeCalls.filter((call) => call.command.startsWith("pnpm "));
-      expect(packages.map((call) => call.localCheck)).toEqual(packages.map(() => "0"));
+      expect(packages.map((call) => [call.localCheck, call.localCheckMode])).toEqual(
+        packages.map(() => ["1", "throttled"]),
+      );
       if (striped) {
-        expect(result.rows).toHaveLength(3);
+        expect(readCiWorkflow().jobs["check-test-types-hosted-core-shard"].strategy).toEqual({
+          "fail-fast": false,
+          "max-parallel": 5,
+          matrix: { stripe: [1, 2, 3, 4, 5] },
+        });
+        expect(result.rows).toHaveLength(6);
         expect(
           result.rows.map((row) =>
             stripes
               .filter((call) => call.row === row.name)
               .map((call) => call.command.split(" ")[2]),
           ),
-        ).toEqual([["1/5", "2/5"], ["3/5", "4/5"], ["5/5"]]);
+        ).toEqual([["1/5"], ["2/5"], ["3/5"], ["4/5"], ["5/5"], []]);
         for (const call of stripes) {
           const args = call.command.split(" ").slice(1);
           expect(args).toEqual(["--stripe", expect.any(String), "--concurrency", "2"]);
           expect(call.localCheck).toBeNull();
         }
-        expect(result.calls).toEqual(["tsgo:extensions:test", "tsgo:scripts", "tsgo:test:root"]);
+        expect(extensionShards).toHaveLength(5);
+        expect(extensionShards.map((call) => call.command)).toEqual(
+          [1, 2, 3, 4, 5].map(
+            (index) =>
+              `node -p test/tsconfig/generated-extensions/tsconfig.extensions.test.${index}.json --incremental`,
+          ),
+        );
+        expect(extensionShards.map((call) => [call.localCheck, call.localCheckMode])).toEqual(
+          extensionShards.map(() => ["1", "throttled"]),
+        );
+        expect(result.calls).toEqual(["tsgo:scripts", "tsgo:test:root"]);
       } else {
         expect(stripes).toEqual([]);
         expect(result.calls).toEqual(["check:test-types", "tsgo:scripts"]);
@@ -9685,7 +9752,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     },
   );
 
-  it.each(["1/5", "5/5"])("halts only the type row whose first stripe %s fails", (failStripe) => {
+  it.each(["1/5", "5/5"])("halts only the type row whose stripe %s fails", (failStripe) => {
     const result = runCheckShardFixture({
       task: "test-types",
       scripts: ["tsgo:scripts", "tsgo:test:root"],
@@ -9698,7 +9765,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     );
     const failed = result.rows.filter((row) => row.status !== 0);
     expect(failed).toHaveLength(1);
-    expect(result.rows.filter((row) => row.status === 0)).toHaveLength(2);
+    expect(result.rows.filter((row) => row.status === 0)).toHaveLength(5);
     expect(
       result.typeCalls.filter((call) => call.row === failed[0]!.name).map((call) => call.command),
     ).toEqual([`node --stripe ${failStripe} --concurrency 2`]);
@@ -9959,6 +10026,10 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     );
     const checkShardRun = checkShardStep.run;
     const hostedCoreLint = workflow.jobs["check-lint-hosted-core-shard"];
+    const hostedExtensionLint = expectDefined(
+      workflow.jobs["check-lint-hosted-extension-shard"],
+      "hosted extension lint job",
+    );
     const hostedCoreTypes = workflow.jobs["check-test-types-hosted-core-shard"];
     expect(manifestStep.env.OPENCLAW_CI_RUNNER_PROFILE).toBe(
       "${{ steps.runner_profile.outputs.runner_profile }}",
@@ -10021,17 +10092,37 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
         ).toBe(expected);
       }
     }
+    expect(hostedExtensionLint.if).toBe(
+      "${{ needs.preflight.outputs.run_check == 'true' && needs.preflight.outputs.runner_profile == 'github' && !inputs.release_gate && (needs.preflight.outputs.frozen_target != 'true' || needs.preflight.outputs.hosted_runner_profile_contract == 'true') }}",
+    );
     expect(hostedCoreLint["runs-on"]).toBe("ubuntu-24.04");
     expect(hostedCoreLint.strategy).toEqual({
       "fail-fast": false,
-      "max-parallel": 5,
-      matrix: { stripe: [1, 2, 3, 4, 5] },
+      "max-parallel": 4,
+      matrix: {
+        stripe: [
+          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+        ],
+      },
+    });
+    expect(hostedExtensionLint["runs-on"]).toBe("ubuntu-24.04");
+    expect(hostedExtensionLint.strategy).toEqual({
+      "fail-fast": false,
+      "max-parallel": 2,
+      matrix: { stripe: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12] },
     });
     const coreLintStep = hostedCoreLint.steps.find(
       (step: WorkflowStep) => step.name === "Run hosted core lint stripe",
     );
+    const extensionLintStep = hostedExtensionLint.steps.find(
+      (step: WorkflowStep) => step.name === "Run hosted extension lint stripe",
+    );
     expect(coreLintStep.run).toContain(
-      "--only=core --split-core --core-stripe=${{ matrix.stripe }}/5 --threads=1",
+      "--only=core --split-core --core-stripe=${{ matrix.stripe }}/24 --threads=1",
+    );
+    expect(coreLintStep.run).not.toContain("--only=extensions");
+    expect(extensionLintStep.run).toContain(
+      "--only=extensions --extension-stripe=${{ matrix.stripe }}/12 --threads=1",
     );
 
     type GoEnv = Partial<Pick<NodeJS.ProcessEnv, "GOMAXPROCS" | "GOGC" | "GOMEMLIMIT">>;
@@ -10051,7 +10142,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       frozenTarget?: boolean;
       goEnv?: GoEnv;
       expectedGoEnv?: GoEnv;
-      lane: "check" | "core";
+      lane: "check" | "core" | "extensions";
       profile: "blacksmith" | "github" | "hybrid";
       releaseGate?: boolean;
     }) => {
@@ -10077,9 +10168,10 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
         "#!/usr/bin/env bash",
         `printf '${cpuCount}\\n'`,
       ]);
-      const coreRun = coreLintStep.run.replaceAll("${{ matrix.stripe }}", "1");
-      const stepEnv = lane === "check" ? checkShardStep.env : coreLintStep.env;
-      const result = spawnSync("bash", ["-c", lane === "check" ? checkShardRun : coreRun], {
+      const hostedStep = lane === "extensions" ? extensionLintStep : coreLintStep;
+      const hostedRun = hostedStep.run.replaceAll("${{ matrix.stripe }}", "1");
+      const stepEnv = lane === "check" ? checkShardStep.env : hostedStep.env;
+      const result = spawnSync("bash", ["-c", lane === "check" ? checkShardRun : hostedRun], {
         cwd: root,
         encoding: "utf8",
         env: {
@@ -10118,12 +10210,13 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     };
 
     expect(runLintOwner({ capability: true, lane: "check", profile: "github" })).toEqual([
-      "node --import tsx scripts/run-oxlint-shards.mts --only=extensions --extension-stripe=6/6 --threads=1",
       "node --import tsx scripts/run-oxlint-shards.mts --only=scripts --threads=1",
     ]);
     expect(runLintOwner({ capability: true, lane: "core", profile: "github" })).toEqual([
-      "node --import tsx scripts/run-oxlint-shards.mts --only=core --split-core --core-stripe=1/5 --threads=1",
-      "node --import tsx scripts/run-oxlint-shards.mts --only=extensions --extension-stripe=1/6 --threads=1",
+      "node --import tsx scripts/run-oxlint-shards.mts --only=core --split-core --core-stripe=1/24 --threads=1",
+    ]);
+    expect(runLintOwner({ capability: true, lane: "extensions", profile: "github" })).toEqual([
+      "node --import tsx scripts/run-oxlint-shards.mts --only=extensions --extension-stripe=1/12 --threads=1",
     ]);
     for (const scenario of [
       {
@@ -10160,7 +10253,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       },
     ]) {
       expect(runLintOwner(scenario)).toEqual([
-        "node --import tsx scripts/run-oxlint-shards.mts --only=core --split-core --core-stripe=1/5 --threads=1",
+        "node --import tsx scripts/run-oxlint-shards.mts --only=core --split-core --core-stripe=1/24 --threads=1",
       ]);
     }
 
@@ -10194,6 +10287,9 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       profile: "blacksmith",
     });
     expect(coreLintStep.env.FROZEN_TARGET).toBe("${{ needs.preflight.outputs.frozen_target }}");
+    expect(extensionLintStep.env.FROZEN_TARGET).toBe(
+      "${{ needs.preflight.outputs.frozen_target }}",
+    );
   });
 
   it.skipIf(process.platform === "win32").each(
@@ -10893,6 +10989,30 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     },
   );
 
+  it("fails when generated extension shard inventory is empty", () => {
+    const result = runCheckShardFixture({
+      task: "test-types",
+      scripts: ["tsgo:scripts", "tsgo:test:root"],
+      frozenTarget: false,
+      types: { emptyExtensionInventory: true },
+    });
+    expect(result.status, result.output).toBe(1);
+    expect(result.calls).toEqual([]);
+    expect(result.output).toContain("generated extension shard inventory is empty");
+  });
+
+  it("fails after attempting all managed extension shards", () => {
+    const result = runCheckShardFixture({
+      task: "test-types",
+      scripts: ["tsgo:scripts", "tsgo:test:root"],
+      frozenTarget: false,
+      types: { failExtensionShard: "extensions.test.3.json" },
+    });
+    expect(result.status, result.output).toBe(1);
+    expect(result.calls).toEqual([]);
+    expect(result.typeCalls.filter((call) => call.command.startsWith("node "))).toHaveLength(5);
+  });
+
   it.each([
     ["pull_request", "openclaw/openclaw", true],
     ["pull_request", "example/openclaw", false],
@@ -11200,6 +11320,28 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(changedPullRequest.outputs.run_sqlite_session_lifecycle).toBe("false");
     expect(changedPullRequest.outputs.run_docker_seed_e2e).toBe("true");
     expect(changedPullRequest.outputs.docker_seed_lanes).toBe("mcp-channels cron-mcp-cleanup");
+
+    for (const changedPath of ["extensions/outcomes/index.ts", "extensions/codex/src/focused.ts"]) {
+      const privatePullRequest = runCiManifestFixture({
+        bundledPlanner: true,
+        changedPaths: [changedPath],
+        eventName: "pull_request",
+        repository: "123oqwe/openclaw-private",
+      });
+      expect(privatePullRequest.status, privatePullRequest.output).toBe(0);
+      expect(
+        JSON.parse(
+          expectDefined(
+            privatePullRequest.outputs.checks_node_core_nondist_matrix,
+            "private changed-extension PR matrix output",
+          ),
+        ).include,
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ check_name: "changed-extension-fallback-plan" }),
+        ]),
+      );
+    }
 
     const mixedFallbackPullRequest = runCiManifestFixture({
       bundledPlanner: true,
@@ -13285,6 +13427,48 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     );
   });
 
+  it("reclaims only the unused Android SDK for hosted worktree-capacity shards", () => {
+    const nodeTestJob = readCiWorkflow().jobs["checks-node-core-test-nondist-shard"];
+    const reclaimStep = nodeTestJob.steps.find(
+      (step: WorkflowStep) => step.name === "Reclaim hosted disk for worktree capacity tests",
+    );
+
+    expect(reclaimStep.if).toContain("runner.environment == 'github-hosted'");
+    expect(reclaimStep.if).toContain("runner.os == 'Linux'");
+    expect(reclaimStep.if).toContain("agentic-control-plane-agent-chat");
+    expect(reclaimStep.if).toContain("agentic-agents-support");
+    expect(reclaimStep.run).toContain("df -h /tmp");
+    expect(reclaimStep.run).toContain("android_sdk=/usr/local/lib/android");
+    expect(reclaimStep.run).toContain('sudo rm -rf --one-file-system "$android_sdk"');
+    expect(reclaimStep.run).not.toMatch(/dotnet|hostedtoolcache|docker|swap/iu);
+
+    const context = {
+      eventName: "pull_request" as const,
+      matrix: { shard_name: "agentic-control-plane-agent-chat" },
+      repository: "123oqwe/openclaw-private",
+      runnerOs: "Linux" as const,
+      runAttempt: 1,
+    };
+    expect(
+      evaluateWorkflowExpression(reclaimStep.if, {
+        ...context,
+        runnerEnvironment: "github-hosted",
+      }),
+    ).toBe(true);
+    for (const runnerEnvironment of ["", "self-hosted"] as const) {
+      expect(evaluateWorkflowExpression(reclaimStep.if, { ...context, runnerEnvironment })).toBe(
+        false,
+      );
+    }
+    expect(
+      evaluateWorkflowExpression(reclaimStep.if, {
+        ...context,
+        matrix: { shard_name: "core-tooling-1" },
+        runnerEnvironment: "github-hosted",
+      }),
+    ).toBe(false);
+  });
+
   it("uses candidate-owned script interfaces for frozen target CI", () => {
     const workflow = readCiWorkflow();
     const buildChecks = workflow.jobs["build-artifacts"].steps.find(
@@ -13377,6 +13561,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     const gate = workflow.jobs["ci-gate"];
     const requiredJobs = ["preflight", "security-fast"];
     const selectedJobs = [
+      "prepare-outcome-artifacts",
       "pnpm-store-warmup",
       "build-artifacts",
       "control-ui-performance",
@@ -13393,6 +13578,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       "checks-node-core-test-nondist-shard",
       "check-shard",
       "check-lint-hosted-core-shard",
+      "check-lint-hosted-extension-shard",
       "check-test-types-hosted-core-shard",
       "check-additional-shard",
       "check-docs",
@@ -13432,7 +13618,28 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     for (const job of selectedJobs) {
       expect(verifyStep.env.JOB_RESULTS).toContain(`${job}=\${{ needs.${job}.result }}|`);
     }
+    expect(verifyStep.env.JOB_RESULTS).toContain(
+      "prepare-outcome-artifacts=${{ needs.prepare-outcome-artifacts.result }}|${{ github.repository == '123oqwe/openclaw-private' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}",
+    );
     expect(resultRows).toHaveLength(gate.needs.length);
+  });
+
+  it("removes the trusted Outcome artifact harness before candidate path admission", () => {
+    const steps = readCiWorkflow().jobs["prepare-outcome-artifacts"].steps;
+    const setupIndex = steps.findIndex(
+      (step: WorkflowStep) => step.name === "Setup Outcome artifact Node",
+    );
+    const removeIndex = steps.findIndex(
+      (step: WorkflowStep) => step.name === "Remove trusted CI harness from artifact workspace",
+    );
+    const prepareIndex = steps.findIndex(
+      (step: WorkflowStep) => step.name === "Prepare bounded Outcome artifacts",
+    );
+
+    expect(steps[removeIndex]?.run).toBe("rm -rf --one-file-system .ci-harness");
+    expect(setupIndex).toBeGreaterThanOrEqual(0);
+    expect(removeIndex).toBeGreaterThan(setupIndex);
+    expect(prepareIndex).toBeGreaterThan(removeIndex);
   });
 
   it("does not admit the final gate for cancelled workflows or draft pull requests", () => {
@@ -13537,19 +13744,25 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       expected: {
         "pnpm-store-warmup": true,
         "check-lint-hosted-core-shard": true,
+        "check-lint-hosted-extension-shard": true,
         "check-test-types-hosted-core-shard": true,
       },
     },
     {
       label: "hybrid PR",
       context: { eventName: "pull_request", runnerProfile: "hybrid" },
-      expected: { "pnpm-store-warmup": true, "check-lint-hosted-core-shard": true },
+      expected: {
+        "pnpm-store-warmup": true,
+        "check-lint-hosted-core-shard": true,
+        "check-lint-hosted-extension-shard": false,
+      },
     },
     {
       label: "Blacksmith has no hosted stripes",
       context: { frozenTarget: true },
       expected: {
         "check-lint-hosted-core-shard": false,
+        "check-lint-hosted-extension-shard": false,
         "check-test-types-hosted-core-shard": false,
       },
     },
@@ -13558,6 +13771,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       context: { frozenTarget: true, hostedRunnerProfileContract: false, runnerProfile: "github" },
       expected: {
         "check-lint-hosted-core-shard": false,
+        "check-lint-hosted-extension-shard": false,
         "check-test-types-hosted-core-shard": false,
       },
     },
@@ -13566,13 +13780,34 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       context: { frozenTarget: true, runnerProfile: "hybrid" },
       expected: {
         "check-lint-hosted-core-shard": true,
+        "check-lint-hosted-extension-shard": false,
+        "check-test-types-hosted-core-shard": true,
+      },
+    },
+    {
+      label: "frozen GitHub target with hosted capability",
+      context: { frozenTarget: true, runnerProfile: "github" },
+      expected: {
+        "check-lint-hosted-core-shard": true,
+        "check-lint-hosted-extension-shard": true,
         "check-test-types-hosted-core-shard": true,
       },
     },
     {
       label: "current target needs no capability fallback",
       context: { hostedRunnerProfileContract: false, runnerProfile: "github" },
-      expected: { "check-lint-hosted-core-shard": true },
+      expected: {
+        "check-lint-hosted-core-shard": true,
+        "check-lint-hosted-extension-shard": true,
+      },
+    },
+    {
+      label: "GitHub release gate skips extension stripes",
+      context: { eventName: "workflow_dispatch", releaseGate: true, runnerProfile: "github" },
+      expected: {
+        "check-lint-hosted-core-shard": true,
+        "check-lint-hosted-extension-shard": false,
+      },
     },
     {
       label: "hosted checks out of scope",
@@ -13580,6 +13815,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       expected: {
         "check-shard": false,
         "check-lint-hosted-core-shard": false,
+        "check-lint-hosted-extension-shard": false,
         "check-test-types-hosted-core-shard": false,
       },
     },
@@ -13744,10 +13980,19 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       const outcome = runCiGateFixture(jobResults);
       expect(outcome.status, `${outcome.stdout}\n${outcome.stderr}`).toBe(exit);
       for (const job of jobs) {
-        expect(jobResults).toContain(`${job}=${result}|${selected}\n`);
-        expect(outcome.stdout).toContain(`${job}: ${result} (selected=${selected})`);
-        if (exit !== 0) {
-          expect(outcome.stdout).toContain(`${job} finished with ${result} (selected=${selected})`);
+        // The review-only artifact lane remains unselected in these ordinary
+        // dispatch/PR fixtures because its explicit dispatch input defaults off.
+        const jobSelected = job === "prepare-outcome-artifacts" ? false : selected;
+        expect(jobResults).toContain(`${job}=${result}|${jobSelected}\n`);
+        expect(outcome.stdout).toContain(`${job}: ${result} (selected=${jobSelected})`);
+        const diagnostic = `${job} finished with ${result} (selected=${jobSelected})`;
+        const jobFails = jobSelected
+          ? result !== "success"
+          : result !== "success" && result !== "skipped";
+        if (jobFails) {
+          expect(outcome.stdout).toContain(diagnostic);
+        } else {
+          expect(outcome.stdout).not.toContain(diagnostic);
         }
       }
     },
@@ -15877,5 +16122,54 @@ it("pins every Performance Git owner before checkout and preserves Git deadlines
     group:
       "${{ github.event_name == 'workflow_dispatch' && format('{0}-{1}', github.workflow, github.run_id) || format('{0}-{1}', github.workflow, github.ref) }}",
     "cancel-in-progress": false,
+  });
+});
+
+it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () => {
+  const workflow = readCiWorkflow();
+  expect(workflow.on.workflow_dispatch.inputs.prepare_outcome_artifacts).toEqual({
+    description: "Generate the bounded P-00 Outcome artifact patch for review.",
+    required: false,
+    default: false,
+    type: "boolean",
+  });
+
+  const job = workflow.jobs["prepare-outcome-artifacts"];
+  expect(job.permissions).toEqual({ contents: "read" });
+  expect(job.needs).toBeUndefined();
+  expect(job["runs-on"]).toBe("ubuntu-24.04");
+  expect(job.if).toContain("github.repository == '123oqwe/openclaw-private'");
+  expect(job.if).toContain("github.event_name == 'workflow_dispatch'");
+  expect(job.if).toContain("inputs.prepare_outcome_artifacts");
+  expect(workflow.jobs.preflight.if).toContain("!inputs.prepare_outcome_artifacts");
+  expect(workflow.jobs["security-fast"].if).toContain("!inputs.prepare_outcome_artifacts");
+
+  const steps = job.steps as WorkflowStep[];
+  const setup = expectDefined(
+    steps.find(({ name }) => name === "Setup Outcome artifact Node"),
+    "Outcome artifact setup",
+  );
+  expect(setup.uses).toBe("./.ci-harness/.github/actions/setup-node-env");
+  expect(setup.with).toMatchObject({ "install-deps": "false", "install-bun": "false" });
+
+  const bodies = steps.map(({ run }) => run ?? "").join("\n");
+  expect(bodies).toContain("scripts/outcome-artifact-policy.mjs admission");
+  expect(bodies).toContain("pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile");
+  expect(bodies).toContain("pnpm install --frozen-lockfile --ignore-scripts");
+  expect(bodies).toContain("pnpm config:docs:gen");
+  expect(bodies).toContain("pnpm plugins:inventory:gen");
+  expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
+  expect(bodies).toContain("git ls-files --others --exclude-standard -z");
+  expect(bodies).toContain("git add -N -- docs/plugins/reference/outcomes.md");
+  expect(bodies).not.toMatch(/(?:^|\s)git push(?:\s|$)/mu);
+
+  const upload = expectDefined(
+    steps.find(({ name }) => name === "Upload Outcome artifact patch"),
+    "Outcome artifact upload",
+  );
+  expect(upload.uses).toBe("actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a");
+  expect(upload.with).toMatchObject({
+    path: "outcome-artifacts",
+    "if-no-files-found": "error",
   });
 });

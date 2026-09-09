@@ -64,6 +64,8 @@ function runChangedPathsWorkflow(repo: string, base: string, env: NodeJS.Process
   const values = new Map([
     ["github.event.pull_request.base.sha", base],
     ["github.event.pull_request.base.ref", "main"],
+    ["github.token", "test-token"],
+    ["github.repository", "fixture/repository"],
   ]);
   const output = path.join(repo, "step-output.txt");
   const interpolate = (value: string) =>

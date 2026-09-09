@@ -8,6 +8,7 @@ import {
   resetPluginRuntimeStateForTest,
   setActivePluginRegistry,
 } from "../plugins/runtime.js";
+import { getPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
 import { createPluginGatewayMethodDescriptor } from "./methods/descriptor.js";
 import { createGatewayMethodRegistry } from "./methods/registry.js";
 import { WRITE_SCOPE } from "./operator-scopes.js";
@@ -143,5 +144,198 @@ describe("handleGatewayRequest plugin gateway dispatch", () => {
     expect(handler).not.toHaveBeenCalled();
     const [ok] = respond.mock.calls.at(-1) ?? [];
     expect(ok).toBe(false);
+  });
+
+  it.each(["success", "failure"] as const)(
+    "expires authenticated request authority after host request envelope %s",
+    async (completion) => {
+      type AuthenticatedRequestAuthority = {
+        profileId: string;
+        signal: AbortSignal;
+        assertCurrent: () => void;
+      };
+      let authority: AuthenticatedRequestAuthority | undefined;
+      const handler = vi.fn<GatewayRequestHandler>(({ respond }) => {
+        authority = (
+          getPluginRuntimeGatewayRequestScope() as
+            | { authenticatedRequestAuthority?: AuthenticatedRequestAuthority }
+            | undefined
+        )?.authenticatedRequestAuthority;
+        authority?.assertCurrent();
+        if (completion === "failure") {
+          throw new Error("handler failed after authority capture");
+        }
+        respond(true, { ok: true });
+      });
+      const activeRegistry = createEmptyPluginRegistry();
+      activeRegistry.gatewayHandlers["demo.authenticated"] = handler;
+      activeRegistry.gatewayMethodDescriptors.push(
+        createPluginGatewayMethodDescriptor({
+          pluginId: "demo",
+          name: "demo.authenticated",
+          handler,
+          scope: WRITE_SCOPE,
+        }),
+      );
+      setActivePluginRegistry(activeRegistry);
+      const respond = vi.fn();
+
+      const request = handleGatewayRequest({
+        req: { type: "req", id: "proof-authenticated-lifetime", method: "demo.authenticated" },
+        respond,
+        client: {
+          connId: "conn-authenticated-lifetime",
+          authenticatedUserProfile: {
+            profileId: "profile-outcomes-owner",
+            displayName: "Outcome Owner",
+            hasAvatar: false,
+            updatedAt: 1,
+          },
+          connect: {
+            role: "operator",
+            scopes: [WRITE_SCOPE],
+            client: { id: "cli", version: "test", platform: "linux", mode: "cli" },
+            minProtocol: 1,
+            maxProtocol: 1,
+          },
+        },
+        isWebchatConnect: () => false,
+        context: { logGateway: { warn: vi.fn() } } as unknown as Parameters<
+          typeof handleGatewayRequest
+        >[0]["context"],
+      });
+
+      if (completion === "failure") {
+        await expect(request).rejects.toThrow("handler failed after authority capture");
+      } else {
+        await expect(request).resolves.toBeUndefined();
+      }
+
+      expect(authority).toBeDefined();
+      expect(authority?.profileId).toBe("profile-outcomes-owner");
+      expect(authority?.signal.aborted).toBe(true);
+      expect(() => authority?.assertCurrent()).toThrow("authenticated gateway request expired");
+    },
+  );
+
+  it("composes host cancellation into authenticated request authority", async () => {
+    type AuthenticatedRequestAuthority = {
+      signal: AbortSignal;
+      assertCurrent: () => void;
+    };
+    const hostLifetime = new AbortController();
+    let authority: AuthenticatedRequestAuthority | undefined;
+    let observedAborted = false;
+    let observedCurrentError: unknown;
+    const handler = vi.fn<GatewayRequestHandler>(({ respond }) => {
+      authority = (
+        getPluginRuntimeGatewayRequestScope() as
+          | { authenticatedRequestAuthority?: AuthenticatedRequestAuthority }
+          | undefined
+      )?.authenticatedRequestAuthority;
+      hostLifetime.abort(new Error("host request cancelled"));
+      observedAborted = authority?.signal.aborted === true;
+      try {
+        authority?.assertCurrent();
+      } catch (error) {
+        observedCurrentError = error;
+      }
+      respond(true, { ok: true });
+    });
+    const activeRegistry = createEmptyPluginRegistry();
+    activeRegistry.gatewayHandlers["demo.cancelled"] = handler;
+    activeRegistry.gatewayMethodDescriptors.push(
+      createPluginGatewayMethodDescriptor({
+        pluginId: "demo",
+        name: "demo.cancelled",
+        handler,
+        scope: WRITE_SCOPE,
+      }),
+    );
+    setActivePluginRegistry(activeRegistry);
+
+    const outcome = await handleGatewayRequest({
+      req: { type: "req", id: "proof-authenticated-cancellation", method: "demo.cancelled" },
+      respond: vi.fn(),
+      client: {
+        connId: "conn-authenticated-cancellation",
+        authenticatedUserProfile: {
+          profileId: "profile-outcomes-owner",
+          displayName: "Outcome Owner",
+          hasAvatar: false,
+          updatedAt: 1,
+        },
+        connect: {
+          role: "operator",
+          scopes: [WRITE_SCOPE],
+          client: { id: "cli", version: "test", platform: "linux", mode: "cli" },
+          minProtocol: 1,
+          maxProtocol: 1,
+        },
+      },
+      isWebchatConnect: () => false,
+      context: { logGateway: { warn: vi.fn() } } as unknown as Parameters<
+        typeof handleGatewayRequest
+      >[0]["context"],
+      signal: hostLifetime.signal,
+    }).then(
+      () => ({ ok: true as const }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect(observedAborted).toBe(true);
+    expect(observedCurrentError).toMatchObject({ message: "host request cancelled" });
+    if (!outcome.ok) {
+      expect(outcome.error).toMatchObject({ message: "host request cancelled" });
+    }
+  });
+
+  it("does not mint authenticated request authority for a profile-bearing synthetic client", async () => {
+    let observedAuthority: unknown;
+    const handler = vi.fn<GatewayRequestHandler>(({ respond }) => {
+      observedAuthority = getPluginRuntimeGatewayRequestScope()?.authenticatedRequestAuthority;
+      respond(true, { ok: true });
+    });
+    const activeRegistry = createEmptyPluginRegistry();
+    activeRegistry.gatewayHandlers["demo.synthetic"] = handler;
+    activeRegistry.gatewayMethodDescriptors.push(
+      createPluginGatewayMethodDescriptor({
+        pluginId: "demo",
+        name: "demo.synthetic",
+        handler,
+        scope: WRITE_SCOPE,
+      }),
+    );
+    setActivePluginRegistry(activeRegistry);
+
+    await handleGatewayRequest({
+      req: { type: "req", id: "proof-synthetic-no-mint", method: "demo.synthetic" },
+      respond: vi.fn(),
+      client: {
+        connId: "conn-synthetic-no-mint",
+        authenticatedUserProfile: {
+          profileId: "synthetic-profile",
+          displayName: "Synthetic Profile",
+          hasAvatar: false,
+          updatedAt: 1,
+        },
+        connect: {
+          role: "operator",
+          scopes: [WRITE_SCOPE],
+          client: { id: "cli", version: "test", platform: "linux", mode: "cli" },
+          minProtocol: 1,
+          maxProtocol: 1,
+        },
+        internal: { syntheticClient: true },
+      },
+      isWebchatConnect: () => false,
+      context: { logGateway: { warn: vi.fn() } } as unknown as Parameters<
+        typeof handleGatewayRequest
+      >[0]["context"],
+    });
+
+    expect(handler).toHaveBeenCalledOnce();
+    expect(observedAuthority).toBeUndefined();
   });
 });

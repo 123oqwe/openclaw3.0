@@ -41,6 +41,15 @@ import {
   parseCompactSplitTimingKey,
 } from "./vitest-shard-metadata.mts";
 
+const GATEWAY_METHODS_DIAGNOSTIC_ENV = {
+  OPENCLAW_NODE_TEST_VITEST_ARGS_JSON: JSON.stringify([
+    "--reporter=verbose",
+    "--reporter=github-actions",
+    "--reporter=./scripts/lib/vitest-resource-reporter.mts",
+  ]),
+  OPENCLAW_VITEST_MAX_WORKERS: "1",
+};
+
 export type NodeTestShardGroup = {
   shard_name: string;
   timing_key?: string;
@@ -1959,6 +1968,7 @@ const SPLIT_NODE_SHARDS = new Map<string, NodeTestSplitShard[]>([
           "test/vitest/vitest.gateway-methods.config.ts",
           "test/vitest/vitest.gateway-methods-isolated.config.ts",
         ],
+        env: GATEWAY_METHODS_DIAGNOSTIC_ENV,
         requiresDist: false,
       },
       {

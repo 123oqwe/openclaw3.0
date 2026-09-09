@@ -14,6 +14,12 @@ function requireGc() {
 }
 
 const gc = requireGc();
+const startedAt = performance.now();
+
+function diagnostic(stage: string): void {
+  const elapsedMs = Math.round(performance.now() - startedAt);
+  process.stderr.write(`[sessions-list-cache-retention] ${stage} +${elapsedMs}ms\n`);
+}
 
 function result(key: string, hasActiveRun = false): SessionsListResult {
   return {
@@ -26,6 +32,7 @@ function result(key: string, hasActiveRun = false): SessionsListResult {
 }
 
 async function retainedAfterRotation(rotation: "fence" | "config" | "catalog" | "expiry") {
+  diagnostic(`${rotation}:start`);
   const context = {} as GatewayRequestContext;
   let config: OpenClawConfig = {};
   const retired: WeakRef<SessionsListResult>[] = [];
@@ -100,10 +107,15 @@ async function retainedAfterRotation(rotation: "fence" | "config" | "catalog" | 
     await refreshStarted.promise;
     // An old in-flight call keeps its state alive. It must not also keep pages
     // that no request can reuse, including while an invalid-page refresh awaits.
+    diagnostic(`${rotation}:started`);
     const whileRefreshing = await collect();
+    diagnostic(`${rotation}:collected-while-refreshing`);
     releaseRefresh.resolve();
     await refresh;
-    return { whileRefreshing, afterActiveResult: await collect() };
+    diagnostic(`${rotation}:refresh-complete`);
+    const afterActiveResult = await collect();
+    diagnostic(`${rotation}:collected-after-active`);
+    return { whileRefreshing, afterActiveResult };
   } finally {
     Date.now = readNow;
     releaseRefresh.resolve();

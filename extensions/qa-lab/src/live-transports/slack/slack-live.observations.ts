@@ -27,7 +27,7 @@ import { buildSlackInvalidBlocksTableProbe } from "./slack-live.invalid-blocks.j
 import { loadSlackQaRuntime } from "./slack-plugin.runtime.js";
 
 export async function getSlackIdentity(token: string): Promise<SlackAuthIdentity> {
-  const { createSlackWebClient } = loadSlackQaRuntime();
+  const { createSlackWebClient } = await loadSlackQaRuntime();
   const client = createSlackWebClient(token, { timeout: SLACK_QA_WEB_API_TIMEOUT_MS });
   const auth = slackAuthTestSchema.parse(await client.auth.test());
   if (!auth.user_id) {
@@ -347,7 +347,9 @@ export function isExpectedSlackNativeTableMessage(
 export async function runSlackTableInvalidBlocksFallbackScenario(
   context: SlackQaDirectTransportScenarioContext,
 ): Promise<SlackQaDirectTransportScenarioResult> {
-  const { sendSlackMessage } = loadSlackQaRuntime();
+  context.diagnosticStage?.("runtime-load:start");
+  const { sendSlackMessage } = await loadSlackQaRuntime();
+  context.diagnosticStage?.("runtime-load:complete");
   const probe = buildSlackInvalidBlocksTableProbe();
   const oldestTs = ((Date.now() - 5_000) / 1_000).toFixed(6);
   const originalPostMessage = context.sutWriteClient.chat.postMessage;
@@ -366,6 +368,7 @@ export async function runSlackTableInvalidBlocksFallbackScenario(
   let sent: Awaited<ReturnType<typeof sendSlackMessage>>;
   try {
     try {
+      context.diagnosticStage?.("send:start");
       sent = await sendSlackMessage(`channel:${context.channelId}`, probe.summaryText, {
         accountId: context.sutAccountId,
         blocks: [probe.block] as never,
@@ -373,6 +376,7 @@ export async function runSlackTableInvalidBlocksFallbackScenario(
         client: context.sutWriteClient,
         nativeDataFallbackBaseText: probe.summaryText,
       });
+      context.diagnosticStage?.("send:complete");
     } catch {
       const [nativeAttempt, ...fallbackAttempts] = instrumentation.attempts;
       if (nativeAttempt?.failureCode !== "invalid_blocks") {
@@ -439,6 +443,7 @@ export async function runSlackTableInvalidBlocksFallbackScenario(
     );
   }
 
+  context.diagnosticStage?.("readback:start");
   const messages = await waitForSlackStoredMessages({
     channelId: context.channelId,
     client: context.sutReadClient,
@@ -448,6 +453,7 @@ export async function runSlackTableInvalidBlocksFallbackScenario(
     sutIdentity: context.sutIdentity,
     timeoutMs: context.timeoutMs,
   });
+  context.diagnosticStage?.("readback:complete");
   if (messages.some((message) => countSlackNativeDataBlocks(message.blocks) !== 0)) {
     throw new Error("stored Slack fallback retained a native data block");
   }

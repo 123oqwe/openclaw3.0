@@ -31,6 +31,20 @@ import { listBundledPluginBuildEntries } from "../../scripts/lib/bundled-plugin-
 import { TSDOWN_UNIFIED_CONFIG_GROUP } from "../../scripts/lib/tsdown-config-groups.mts";
 import { runNodeMain } from "../../scripts/run-node.mts";
 
+const GiB = 1024 ** 3;
+
+function fixedLinuxMemoryLimit(gibibytes: number) {
+  const bytes = gibibytes * GiB;
+  return {
+    availableMemoryBytes: bytes,
+    cgroupMemoryLimitBytes: bytes,
+    physicalMemoryBytes: bytes,
+    platform: "linux" as const,
+    processResidentMemoryBytes: 0,
+    procMemTotalBytes: bytes,
+  };
+}
+
 function getBuildAllStep(label: string) {
   const step = BUILD_ALL_STEPS.find((entry) => entry.label === label);
   if (!step) {
@@ -440,7 +454,7 @@ describe("resolveBuildAllSteps", () => {
         env: {},
         finalizeCache: vi.fn(() => true),
         logger: { error: vi.fn(), warn: vi.fn() },
-        memoryLimit: { cgroupMemoryLimitBytes: 5 * 1024 * 1024 * 1024 },
+        memoryLimit: fixedLinuxMemoryLimit(5),
         now: () => 0,
         resolveCacheState(step) {
           executionOrder.push(`cache:${step.label}`);
@@ -493,7 +507,7 @@ describe("resolveBuildAllSteps", () => {
       const cacheDisabledRunner = vi.fn(() => ({ status: 0 }));
       await runBuildAllSteps("ciArtifacts", {
         env: { OPENCLAW_BUILD_CACHE: "0" },
-        memoryLimit: { cgroupMemoryLimitBytes: 5 * 1024 * 1024 * 1024 },
+        memoryLimit: fixedLinuxMemoryLimit(5),
         finalizeCache: vi.fn(() => true),
         logger: { error: vi.fn(), warn: vi.fn() },
         now: () => 0,
@@ -940,7 +954,7 @@ describe("resolveBuildAllSteps", () => {
           cacheEnabled: false,
           env,
           logger: { error: vi.fn(), warn: vi.fn() },
-          memoryLimit: { cgroupMemoryLimitBytes: 5 * 1024 * 1024 * 1024 },
+          memoryLimit: fixedLinuxMemoryLimit(5),
           now: () => 0,
           resolveCacheState: () => ({ cacheable: false, fresh: false, reason: "no-cache" }),
           runStep(invocation) {

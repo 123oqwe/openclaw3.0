@@ -49,37 +49,42 @@ describe("execCommand process-tree cleanup", () => {
     const descendantScript = [
       "process.on('SIGTERM', () => {});",
       "setInterval(() => {}, 1000);",
+      "process.send('ready');",
     ].join("\n");
     const parentScript = [
       'const { spawn } = require("node:child_process");',
       'const fs = require("node:fs");',
-      `const child = spawn(process.execPath, ["-e", ${JSON.stringify(descendantScript)}], { stdio: "ignore", windowsHide: true });`,
-      `child.once("spawn", () => fs.writeFileSync(${JSON.stringify(readyPath)}, JSON.stringify({ parentPid: process.pid, childPid: child.pid })));`,
+      `const child = spawn(process.execPath, ["-e", ${JSON.stringify(descendantScript)}], { stdio: ["ignore", "ignore", "ignore", "ipc"], windowsHide: true });`,
+      `child.once("message", () => fs.writeFileSync(${JSON.stringify(readyPath)}, JSON.stringify({ parentPid: process.pid, childPid: child.pid })));`,
       "child.once('error', () => process.exit(1));",
       "setInterval(() => {}, 1000);",
     ].join("\n");
 
     const resultPromise = execCommand(process.execPath, ["-e", parentScript], process.cwd(), {
-      timeout: 1_000,
+      timeout: 5_000,
     });
-    const { parentPid, childPid } = await vi.waitFor(
-      () =>
-        JSON.parse(readFileSync(readyPath, "utf8")) as {
-          parentPid: number;
-          childPid: number;
-        },
-      { timeout: 3_000, interval: 25 },
-    );
-    cleanupPids.add(parentPid);
-    cleanupPids.add(childPid);
+    try {
+      const { parentPid, childPid } = await vi.waitFor(
+        () =>
+          JSON.parse(readFileSync(readyPath, "utf8")) as {
+            parentPid: number;
+            childPid: number;
+          },
+        { timeout: 3_000, interval: 25 },
+      );
+      cleanupPids.add(parentPid);
+      cleanupPids.add(childPid);
 
-    await expect(resultPromise).resolves.toMatchObject({ killed: true });
-    await vi.waitFor(
-      () => {
-        expect(isProcessAlive(parentPid)).toBe(false);
-        expect(isProcessAlive(childPid)).toBe(false);
-      },
-      { timeout: 500, interval: 25 },
-    );
+      await expect(resultPromise).resolves.toMatchObject({ killed: true });
+      await vi.waitFor(
+        () => {
+          expect(isProcessAlive(parentPid)).toBe(false);
+          expect(isProcessAlive(childPid)).toBe(false);
+        },
+        { timeout: 500, interval: 25 },
+      );
+    } finally {
+      await resultPromise.catch(() => undefined);
+    }
   }, 12_000);
 });

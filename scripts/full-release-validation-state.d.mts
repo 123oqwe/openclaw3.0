@@ -4,12 +4,14 @@ export function validateChildBinding(
   child: ReleaseRecord,
   run: ReleaseRecord,
   composite: ReleaseRecord,
+  repository?: string,
 ): ReleaseRecord;
 export function readChild(
   child: ReleaseRecord,
   previous: ReleaseRecord | undefined,
   signal?: AbortSignal,
   options?: {
+    repository?: string;
     readAttemptJobs?: (
       runId: string,
       runAttempt: number,

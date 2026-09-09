@@ -458,6 +458,13 @@ snapshots; OpenClaw owns all persistence and lifecycle coordination.
     `details`, retry metadata, and the Gateway error code for recovery flows. Use `isAvailable()`
     before choosing this path from tools that can also run in standalone agent processes.
 
+    Trusted plugins that must act only on behalf of the current authenticated operator can pass
+    `{ requireAuthenticatedRequest: true }`. The request then fails closed unless the current
+    Gateway request carries an authenticated profile, inherits that profile, and limits requested
+    scopes to the caller's effective scopes. The default remains available for trusted background
+    and system dispatch. `isAvailable()` reports only whether an in-process Gateway context exists;
+    it does not assert that an authenticated request is active.
+
   </Accordion>
   <Accordion title="api.runtime.hooks">
     Dispatch isolated agent turns for untrusted external-content triggers, such

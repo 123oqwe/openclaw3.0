@@ -128,6 +128,8 @@ export type RuntimeGatewayRequestOptions = {
   timeoutMs?: number;
   /** Requested Gateway scopes. Honored only for bundled or trusted official plugins. */
   scopes?: OperatorScope[];
+  /** Require this dispatch to inherit an authenticated Gateway request identity and authority. */
+  requireAuthenticatedRequest?: boolean;
 };
 
 /** Trusted in-process runtime surface injected into native plugins. */

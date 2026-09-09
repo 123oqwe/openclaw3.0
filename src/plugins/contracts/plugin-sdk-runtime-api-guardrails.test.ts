@@ -44,6 +44,11 @@ const UNGUARDED_RUNTIME_API_PLUGIN_IDS = [
 const RUNTIME_API_EXPORT_GUARDS: Record<string, readonly string[]> = {
   [contractPluginPath({
     rootDir: ROOT_DIR,
+    pluginId: "outcomes",
+    relativePath: "runtime-api.ts",
+  })]: ['export { registerOutcomeGatewayMethods } from "./src/gateway/health.js";'],
+  [contractPluginPath({
+    rootDir: ROOT_DIR,
     pluginId: "diagnostics-otel",
     relativePath: "runtime-api.ts",
   })]: [
