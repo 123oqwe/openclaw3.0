@@ -114,6 +114,7 @@ function createStrictOutcomeRepository(
   if (typeof store.deleteIf !== "function") {
     throw new Error("Outcome repository requires atomic keyed-store deleteIf");
   }
+  const deleteIf = store.deleteIf;
   const base = createLegacyOutcomeRepository(store);
   const strict = (value: OutcomeRecord | undefined) => (value === undefined ? undefined : parseOutcomeRecord(value));
   return {
@@ -149,11 +150,11 @@ function createStrictOutcomeRepository(
       const decision = decide(parseOutcomeRecord(current));
       return { result: decision.result, next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next) };
     }),
-    deleteIf: async (id, predicate) => store.deleteIf(id, (current) => {
+    deleteIf: async (id, predicate) => deleteIf(id, (current) => {
       const parsed = parseOutcomeRecord(current);
       return predicate(parsed);
     }),
-    deleteOwnedIf: async (owner, id, predicate) => store.deleteIf(id, (current) => {
+    deleteOwnedIf: async (owner, id, predicate) => deleteIf(id, (current) => {
       const parsed = parseOutcomeRecord(current);
       return parsed.managerProfileId === owner && predicate(parsed);
     }),

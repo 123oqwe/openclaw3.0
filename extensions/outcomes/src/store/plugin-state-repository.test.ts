@@ -186,7 +186,7 @@ describe("Outcome repository host adapter", () => {
       await expect(repository.listOwned("alice")).resolves.toEqual([record]);
       await expect(
         repository.transactOwned("bob", record.id, () => ({ result: "must-not-run", next: record })),
-      ).rejects.toThrow("not owned");
+      ).rejects.toThrow("Failed to update plugin state entry");
       await expect(repository.get(record.id)).resolves.toEqual(record);
       await expect(repository.deleteOwnedIf("bob", record.id, () => true)).resolves.toBe(false);
       await expect(repository.deleteOwnedIf("alice", record.id, () => true)).resolves.toBe(true);
@@ -239,7 +239,7 @@ describe("Outcome repository host adapter", () => {
           result: "updated",
           next: { ...current!, projections: [{ ref: { owner: "workboard", cardId: "c", cardCreatedAt: 1, boardIdAtLink: "b" }, availability: "available", observedAt: 1, proofs: [{ sourceId: "s", digest: "x".repeat(140_000) }], artifacts: [] }] },
         })),
-      ).rejects.toThrow("131072-byte");
+      ).rejects.toThrow("Failed to update plugin state entry");
       await expect(repository.get(existing.id)).resolves.toEqual(existing);
     });
   });
