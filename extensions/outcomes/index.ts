@@ -84,8 +84,14 @@ export default definePluginEntry({
         respond(false, { error: "id must be a non-empty string" });
         return;
       }
-      const deleted = await repository.deleteIf(id, (record) => record.phase !== "accepted");
-      respond(true, { cancelled: deleted });
+      const result = await repository.transact(id, (current) => {
+        if (!current || current.phase === "accepted" || current.phase === "cancelled") {
+          return { result: { cancelled: false, record: current } };
+        }
+        const record = { ...current, phase: "cancelled" as const, revision: current.revision + 1, updatedAt: Date.now() };
+        return { result: { cancelled: true, record }, next: record };
+      });
+      respond(true, result);
     }, { scope: "operator.write" });
   },
 });
