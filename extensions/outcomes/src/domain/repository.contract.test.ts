@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createOutcomeRepository, type OutcomeRecord } from "./outcome-repository.js";
+import { createOutcomeRepository } from "../store/plugin-state-repository.js";
+import type { OutcomeRecord } from "../store/outcome-repository.js";
 
 // P-01 contract cases are intentionally staged before the domain repository
 // exists. They name the required observable behavior without treating a
