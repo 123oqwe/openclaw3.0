@@ -38,7 +38,7 @@ const projectionSchema = z.strictObject({
   sourceUpdatedAt: z.number().finite().optional(),
   upstreamStale: z.boolean().optional(),
   sourceFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
-  errorCode: z.enum(["owner-unavailable", "not-found", "identity-conflict", "upstream-error"]).optional(),
+  errorCode: z.enum(["workboard-disabled", "not-found", "forbidden", "timeout", "invalid-response", "identity-conflict"]).optional(),
 });
 
 const evidenceSchema = z.strictObject({
@@ -91,7 +91,7 @@ const operationSchema = z.strictObject({
 
 const acceptanceSchema = z.strictObject({
   id: z.string().min(1),
-  requestHash: z.string().length(64),
+  requestHash: z.string().regex(/^[0-9a-f]{64}$/),
   acceptedRevision: z.number().int().positive(),
   profileId: z.string().min(1),
   acceptedAt: z.number().finite(),
@@ -110,6 +110,14 @@ const acceptanceSchema = z.strictObject({
 });
 
 /** Strict persisted aggregate contract; adapters should parse before exposing records. */
+function safePlanHash(input: CanonicalPlan): string | null {
+  try {
+    return planHash(input);
+  } catch {
+    return null;
+  }
+}
+
 export const outcomeRecordSchema = z.strictObject({
   schemaVersion: z.literal(1),
   id: z.string().min(1).max(160),
@@ -131,6 +139,9 @@ export const outcomeRecordSchema = z.strictObject({
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
 }).superRefine((record, ctx) => {
+  if (!record.criteria.some((criterion) => criterion.required)) {
+    ctx.addIssue({ code: "custom", message: "at least one criterion must be required" });
+  }
   if (record.phase === "draft" && (record.planGeneration !== 0 || record.planHash !== null)) {
     ctx.addIssue({ code: "custom", message: "draft records must have generation 0 and null planHash" });
   }
@@ -138,8 +149,7 @@ export const outcomeRecordSchema = z.strictObject({
     if (record.planGeneration < 1 || record.planHash === null) {
       ctx.addIssue({ code: "custom", message: "active and accepted records require a plan" });
     } else if (
-      record.planHash !==
-      planHash({
+      record.planHash !== safePlanHash({
         outcomeId: record.id,
         objective: record.objective,
         contractRevision: record.contractRevision,
@@ -150,6 +160,15 @@ export const outcomeRecordSchema = z.strictObject({
       ctx.addIssue({ code: "custom", message: "record planHash does not match its canonical plan" });
     }
   }
+  if (record.phase === "cancelled" && record.planGeneration > 0 && record.planHash !== null && record.planHash !== safePlanHash({
+    outcomeId: record.id,
+    objective: record.objective,
+    contractRevision: record.contractRevision,
+    planGeneration: record.planGeneration,
+    criteria: record.criteria,
+  })) {
+    ctx.addIssue({ code: "custom", message: "cancelled record planHash does not match its preserved plan" });
+  }
   for (const decision of record.decisions) {
     if (decision.decidedPlan.outcomeId !== record.id || decision.decidedPlan.planGeneration !== decision.planGeneration) {
       ctx.addIssue({ code: "custom", message: "decision snapshot does not match its outcome/generation" });
@@ -157,7 +176,7 @@ export const outcomeRecordSchema = z.strictObject({
     if (!decision.decidedPlan.criteria.some((criterion) => criterion.id === decision.criterionId)) {
       ctx.addIssue({ code: "custom", message: "decision criterion is absent from its plan snapshot" });
     }
-    if (decision.planHash !== planHash(decision.decidedPlan)) {
+    if (decision.planHash !== safePlanHash(decision.decidedPlan)) {
       ctx.addIssue({ code: "custom", message: "decision planHash does not match its snapshot" });
     }
   }
@@ -165,7 +184,7 @@ export const outcomeRecordSchema = z.strictObject({
     if (acceptance.acceptedPlan.outcomeId !== record.id || acceptance.acceptedPlan.planGeneration !== acceptance.planGeneration) {
       ctx.addIssue({ code: "custom", message: "acceptance snapshot does not match its outcome/generation" });
     }
-    if (acceptance.planHash !== planHash(acceptance.acceptedPlan)) {
+    if (acceptance.planHash !== safePlanHash(acceptance.acceptedPlan)) {
       ctx.addIssue({ code: "custom", message: "acceptance planHash does not match its snapshot" });
     }
   }
