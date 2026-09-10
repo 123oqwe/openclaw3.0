@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
+import { createRequestHash } from "./schema.js";
 import {
   reduceOutcomeCancel,
   reduceOutcomeTitle,
@@ -11,6 +12,28 @@ import {
 // exists. They name the required observable behavior without treating a
 // missing production module as a RED result.
 describe("Outcome repository atomic contract", () => {
+  const validRecord = (id = "o-1"): OutcomeRecord => ({
+    schemaVersion: 1,
+    id,
+    createRequestHash: createRequestHash({ id, title: "title" }),
+    managerProfileId: "manager-1",
+    title: "title",
+    objective: "objective",
+    phase: "draft",
+    revision: 1,
+    contractRevision: 1,
+    planGeneration: 0,
+    planHash: null,
+    criteria: [{ id: "c-1", text: "criterion", required: true, workRefs: [] }],
+    projections: [],
+    evidence: [],
+    decisions: [],
+    operations: [],
+    acceptances: [],
+    createdAt: 1,
+    updatedAt: 1,
+  });
+
   function fixture() {
     const records = new Map<string, OutcomeRecord>();
     let writes = 0;
@@ -50,7 +73,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("creates once and reads the persisted record", async () => {
     const { repository, writes } = fixture();
-    const record = { id: "o-1", revision: 1 };
+    const record = validRecord();
     await expect(repository.create(record)).resolves.toEqual({ created: true });
     await expect(repository.get(record.id)).resolves.toEqual(record);
     expect(writes()).toBe(1);
@@ -58,7 +81,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("rejects a duplicate create without a second write", async () => {
     const { repository, writes } = fixture();
-    const record = { id: "o-1", revision: 1 };
+    const record = validRecord();
     await repository.create(record);
     await expect(repository.create(record)).resolves.toEqual({ created: false });
     expect(writes()).toBe(1);

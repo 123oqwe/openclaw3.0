@@ -7,8 +7,13 @@ import {
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
+import { createRequestHash, safePlanHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import { createOutcomeRepository } from "./plugin-state-repository.js";
+
+function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
+  return { schemaVersion: 1, id, createRequestHash: createRequestHash({ id, title: "same" }), managerProfileId, title: "same", objective: "objective", phase: "draft", revision: 1, contractRevision: 1, planGeneration: 0, planHash: null, criteria: [{ id: "c-1", text: "criterion", required: true, workRefs: [] }], projections: [], evidence: [], decisions: [], operations: [], acceptances: [], createdAt: 1, updatedAt: 1 };
+}
 
 afterEach(() => resetPluginStateStoreForTests());
 
@@ -105,7 +110,8 @@ describe("Outcome repository host adapter", () => {
           return next;
         }),
       });
-      const record = { id: "o-1", revision: 2, title: "same", phase: "cancelled" as const, planGeneration: 1 };
+      const draft = draftRecord("o-1");
+      const record = { ...draft, revision: 2, phase: "cancelled" as const, planGeneration: 1, planHash: safePlanHash({ outcomeId: draft.id, objective: draft.objective, contractRevision: draft.contractRevision, planGeneration: 1, criteria: draft.criteria }) };
       await repository.create(record);
       const result = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
         const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
@@ -170,13 +176,7 @@ describe("Outcome repository host adapter", () => {
         env: state.env,
       });
       const repository = createOutcomeRepository(store);
-      const record = {
-        id: "owned",
-        managerProfileId: "alice",
-        revision: 1,
-        phase: "draft" as const,
-        planGeneration: 0,
-      };
+      const record = draftRecord("owned");
       await repository.create(record);
       await expect(repository.getOwned("bob", record.id)).resolves.toBeUndefined();
       await expect(repository.listOwned("bob")).resolves.toEqual([]);
@@ -201,14 +201,7 @@ describe("Outcome repository host adapter", () => {
         env: state.env,
       });
       const repository = createOutcomeRepository(store);
-      const record = {
-        id: "replay",
-        managerProfileId: "alice",
-        createRequestHash: "hash-a",
-        revision: 1,
-        phase: "draft" as const,
-        planGeneration: 0,
-      };
+      const record = { ...draftRecord("replay"), createRequestHash: "a".repeat(64) };
       await expect(repository.createOwned("alice", record)).resolves.toMatchObject({
         created: true,
         replayed: false,
