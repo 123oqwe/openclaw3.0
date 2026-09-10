@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 import type { OutcomeRecord } from "./types.js";
+import { parseOutcomeRecord, planHash } from "./schema.js";
 
 const record = (): OutcomeRecord => ({
   schemaVersion: 1,
@@ -13,7 +14,13 @@ const record = (): OutcomeRecord => ({
   revision: 2,
   contractRevision: 1,
   planGeneration: 1,
-  planHash: "b".repeat(64),
+  planHash: planHash({
+    outcomeId: "outcome-1",
+    objective: "Ship safely",
+    contractRevision: 1,
+    planGeneration: 1,
+    criteria: [{ id: "c-1", text: "Done", required: true, workRefs: [] }],
+  }),
   criteria: [{ id: "c-1", text: "Done", required: true, workRefs: [] }],
   projections: [],
   evidence: [],
@@ -68,21 +75,35 @@ describe("Outcome P-01 read model", () => {
 
   it("never treats historical decisions as current readiness", () => {
     const input = record();
+    input.planGeneration = 2;
+    input.planHash = planHash({
+      outcomeId: input.id,
+      objective: input.objective,
+      contractRevision: input.contractRevision,
+      planGeneration: 2,
+      criteria: input.criteria,
+    });
     input.decisions = [
       {
         id: "decision-old",
         criterionId: "c-1",
-        planGeneration: 0,
+        planGeneration: 1,
         decidedRevision: 1,
         status: "verified",
         requestHash: "c".repeat(64),
         profileId: "manager-1",
-        planHash: "d".repeat(64),
+        planHash: planHash({
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: 1,
+          planGeneration: 1,
+          criteria: input.criteria,
+        }),
         decidedPlan: {
           outcomeId: input.id,
           objective: input.objective,
           contractRevision: 1,
-          planGeneration: 0,
+          planGeneration: 1,
           criteria: input.criteria,
         },
         evidenceSetHash: "e".repeat(64),
@@ -192,7 +213,7 @@ describe("Outcome P-01 read model", () => {
         profileId: "manager-1",
         acceptedAt: 2,
         planGeneration: 1,
-        planHash: input.planHash,
+        planHash: input.planHash!,
         closureHash: "e".repeat(64),
         acceptedPlan: {
           outcomeId: input.id,
@@ -203,6 +224,7 @@ describe("Outcome P-01 read model", () => {
         },
       },
     ];
+    expect(() => parseOutcomeRecord(input)).not.toThrow();
     expect(toOutcomeSummary(input, 10).acceptanceValidity).toBe("needs-review");
   });
 });
