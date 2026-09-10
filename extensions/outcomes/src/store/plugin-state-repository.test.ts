@@ -6,7 +6,7 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
-import { reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
+import { reduceOutcomeActivate, reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
 import { createRequestHash, planHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import { OutcomeRepositoryConflictError, createOutcomeRepository } from "./plugin-state-repository.js";
@@ -92,6 +92,31 @@ describe("Outcome repository host adapter", () => {
       expect(updates.filter((next) => next !== undefined)).toHaveLength(1);
       expect(winner?.record.phase).toBe("active");
       expect(winner?.record.planGeneration).toBe(1);
+    });
+  });
+
+  it("persists activation atomically and performs no write for rejected activation", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-activate", applyEnv: false }, async (state) => {
+      const namespace = `outcomes-v1-${randomUUID()}`;
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace, maxEntries: 500, overflowPolicy: "reject-new", env: state.env,
+      });
+      const repository = createOutcomeRepository(store);
+      const draft = draftRecord("activate-host");
+      const linked = { ...draft, criteria: [{ ...draft.criteria[0]!, workRefs: [{ owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }] }] };
+      await repository.create(linked);
+      const activated = await repository.transact<ReturnType<typeof reduceOutcomeActivate>>(linked.id, (current) => {
+        const decision = reduceOutcomeActivate(current!, current!.revision, 42);
+        return decision.kind === "updated" ? { result: decision, next: decision.record } : { result: decision };
+      });
+      expect(activated.kind).toBe("updated");
+      await expect(repository.get(linked.id)).resolves.toMatchObject({ phase: "active", planGeneration: 1, updatedAt: 42, revision: 2 });
+      const rejected = await repository.transact<ReturnType<typeof reduceOutcomeActivate>>(linked.id, (current) => {
+        const decision = reduceOutcomeActivate(current!, current!.revision, 99);
+        return decision.kind === "updated" ? { result: decision, next: decision.record } : { result: decision };
+      });
+      expect(rejected.kind).toBe("rejected");
+      await expect(repository.get(linked.id)).resolves.toMatchObject({ phase: "active", updatedAt: 42, revision: 2 });
     });
   });
 
