@@ -1,6 +1,5 @@
-import type { OutcomeRecord } from "./types.js";
+import type { Criterion, OutcomeRecord } from "./types.js";
 import { planHash } from "./schema.js";
-import type { Criterion } from "./types.js";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 
 export type OutcomeMutation = {
@@ -39,11 +38,18 @@ function hasInFlightOperation(current: OutcomeRecord): boolean {
   ) ?? false;
 }
 
+function assertServerTime(serverTime: number): void {
+  if (!Number.isFinite(serverTime)) {
+    throw new Error("serverTime must be finite");
+  }
+}
+
 /** Update the contract with an ABA-safe CAS and a new plan generation. */
 export function reduceOutcomeContract(
   current: OutcomeRecord,
   mutation: OutcomeContractMutation,
 ): OutcomeMutationResult {
+  assertServerTime(mutation.serverTime);
   if (current.phase === "cancelled") {
     return { kind: "rejected", record: current };
   }
@@ -59,14 +65,14 @@ export function reduceOutcomeContract(
         ...criterion,
         workRefs: criterion.workRefs
           .map((ref) => ({ ...ref }))
-          .sort(
+          .toSorted(
             (a, b) =>
               (a.cardId < b.cardId ? -1 : a.cardId > b.cardId ? 1 : 0) ||
               a.cardCreatedAt - b.cardCreatedAt ||
               (a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0),
           ),
       }))
-      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+      .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   if (
     current.objective === mutation.objective &&
     stableStringify(canonicalCriteria(current.criteria)) ===
@@ -105,6 +111,7 @@ export function reduceOutcomeActivate(
   expectedRevision: number,
   serverTime: number,
 ): OutcomeActivateResult {
+  assertServerTime(serverTime);
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }
@@ -138,6 +145,7 @@ export function reduceOutcomeTitle(
   current: OutcomeRecord,
   mutation: OutcomeMutation,
 ): OutcomeMutationResult {
+  assertServerTime(mutation.serverTime);
   if (current.phase === "cancelled") {
     return { kind: "rejected", record: current };
   }
@@ -163,6 +171,7 @@ export function reduceOutcomeCancel(
   expectedRevision: number,
   serverTime: number,
 ): OutcomeCancelResult {
+  assertServerTime(serverTime);
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }
