@@ -295,4 +295,35 @@ describe("Outcome repository host adapter", () => {
       );
     });
   });
+
+  it("fails closed on corrupt persisted records without mutation or deletion", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-corrupt", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const corrupt = { id: "corrupt", schemaVersion: 99 } as unknown as OutcomeRecord;
+      await store.registerIfAbsent(corrupt.id, corrupt);
+      const repository = createOutcomeRepository(store);
+      await expect(repository.get(corrupt.id)).rejects.toThrow();
+      let called = false;
+      await expect(
+        repository.transact(corrupt.id, () => {
+          called = true;
+          return { result: "unexpected" };
+        }),
+      ).rejects.toThrow();
+      expect(called).toBe(false);
+      await expect(
+        repository.deleteIf(corrupt.id, () => {
+          called = true;
+          return true;
+        }),
+      ).rejects.toThrow();
+      expect(called).toBe(false);
+      await expect(store.lookup(corrupt.id)).resolves.toEqual(corrupt);
+    });
+  });
 });
