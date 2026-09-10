@@ -53,7 +53,7 @@ describe("Outcome create schema and canonical hash", () => {
       objective: "Ship safely",
       contractRevision: 1,
       planGeneration: 1,
-      criteria: [],
+      criteria: [base.criteria[0]],
     };
     expect(planHash(plan)).toHaveLength(64);
     expect(planHash(plan)).not.toBe(planHash({ ...plan, planGeneration: 2 }));

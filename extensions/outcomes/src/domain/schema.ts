@@ -60,13 +60,24 @@ export type CanonicalPlan = {
   criteria: Criterion[];
 };
 
+const canonicalPlanSchema = z.strictObject({
+  outcomeId: z.string().min(1).max(160),
+  objective: z.string().min(1).max(4000),
+  contractRevision: z.number().int().positive(),
+  planGeneration: z.number().int().positive(),
+  criteria: z.array(criterionSchema).min(1).max(5),
+}).refine((plan) => plan.criteria.some((criterion) => criterion.required), {
+  message: "at least one criterion must be required",
+});
+
 export function planHash(input: CanonicalPlan): string {
+  const plan = canonicalPlanSchema.parse(input);
   const canonical = {
-    outcomeId: input.outcomeId,
-    objective: input.objective,
-    contractRevision: input.contractRevision,
-    planGeneration: input.planGeneration,
-    criteria: [...input.criteria]
+    outcomeId: plan.outcomeId,
+    objective: plan.objective,
+    contractRevision: plan.contractRevision,
+    planGeneration: plan.planGeneration,
+    criteria: [...plan.criteria]
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((criterion) => ({
         id: criterion.id,
