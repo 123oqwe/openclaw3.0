@@ -170,24 +170,35 @@ describe("Outcome create schema and canonical hash", () => {
       createdAt: 1,
       updatedAt: 1,
     };
+    const decision = {
+      id: "decision-1",
+      criterionId: "c-1",
+      planGeneration: 1,
+      decidedRevision: 2,
+      status: "verified" as const,
+      requestHash: "b".repeat(64),
+      profileId: "manager-1",
+      planHash: planHash(plan),
+      decidedPlan: plan,
+      evidenceSetHash: "d".repeat(64),
+      decidedAt: 2,
+    };
+    const valid = { ...record, decisions: [decision] };
+    expect(outcomeRecordSchema.safeParse(valid).success).toBe(true);
     const malformed = {
       ...record,
-      decisions: [{
-        id: "decision-1",
-        criterionId: "missing",
-        planGeneration: 1,
-        decidedRevision: 2,
-        status: "verified" as const,
-        requestHash: "b".repeat(64),
-        profileId: "manager-1",
-        planHash: "c".repeat(64),
-        decidedPlan: plan,
-        evidenceSetHash: "d".repeat(64),
-        decidedAt: 2,
-      }],
+      decisions: [{ ...decision, criterionId: "missing" }],
     };
     expect(() => outcomeRecordSchema.safeParse(malformed)).not.toThrow();
     expect(outcomeRecordSchema.safeParse(malformed).success).toBe(false);
+    expect(outcomeRecordSchema.safeParse({ ...record, decisions: [{ ...decision, planHash: "c".repeat(64) }] }).success).toBe(false);
+    expect(outcomeRecordSchema.safeParse({
+      ...record,
+      decisions: [{
+        ...decision,
+        decidedPlan: { ...plan, criteria: [{ ...plan.criteria[0], required: false }] },
+      }],
+    }).success).toBe(false);
   });
 
   it("preserves only coherent cancelled plan state", () => {
