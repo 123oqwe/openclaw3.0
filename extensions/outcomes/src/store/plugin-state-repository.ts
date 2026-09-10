@@ -135,7 +135,12 @@ function createStrictOutcomeRepository(
       try {
         return await base.create(parseOutcomeRecord(record));
       } catch (error) {
-        if (error && typeof error === "object" && "code" in error && error.code === "PLUGIN_STATE_LIMIT_EXCEEDED") {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "PLUGIN_STATE_LIMIT_EXCEEDED"
+        ) {
           throw new OutcomeRepositoryCapacityError();
         }
         throw error;
@@ -150,7 +155,12 @@ function createStrictOutcomeRepository(
       try {
         created = await store.registerIfAbsent(parsed.id, parsed);
       } catch (error) {
-        if (error && typeof error === "object" && "code" in error && error.code === "PLUGIN_STATE_LIMIT_EXCEEDED") {
+        if (
+          error &&
+          typeof error === "object" &&
+          "code" in error &&
+          error.code === "PLUGIN_STATE_LIMIT_EXCEEDED"
+        ) {
           throw new OutcomeRepositoryCapacityError();
         }
         throw error;
@@ -159,7 +169,9 @@ function createStrictOutcomeRepository(
         return { created: true, replayed: false, record: parsed };
       }
       const rawExisting = await store.lookup(parsed.id);
-      if (!rawExisting) throw new Error("Outcome create lost its registration race");
+      if (!rawExisting) {
+        throw new Error("Outcome create lost its registration race");
+      }
       const existing = parseOutcomeRecord(rawExisting);
       if (existing.managerProfileId !== owner) {
         throw new Error("Outcome is not owned by the requested manager");
