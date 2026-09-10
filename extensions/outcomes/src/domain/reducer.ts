@@ -11,6 +11,11 @@ export type OutcomeMutationResult =
   | { kind: "updated"; record: OutcomeRecord }
   | { kind: "rejected"; record: OutcomeRecord };
 
+export type OutcomeCancelResult =
+  | { kind: "conflict"; record: OutcomeRecord }
+  | { kind: "rejected"; record: OutcomeRecord }
+  | { kind: "updated"; record: OutcomeRecord };
+
 export function reduceOutcomeTitle(
   current: OutcomeRecord,
   mutation: OutcomeMutation,
@@ -27,5 +32,32 @@ export function reduceOutcomeTitle(
   return {
     kind: "updated",
     record: { ...current, title: mutation.title, revision: current.revision + 1 },
+  };
+}
+
+export function reduceOutcomeCancel(
+  current: OutcomeRecord,
+  expectedRevision: number,
+): OutcomeCancelResult {
+  if (expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current };
+  }
+  if (current.phase === "accepted" || current.phase === "cancelled") {
+    return { kind: "rejected", record: current };
+  }
+  if (
+    current.operations?.some((operation) =>
+      ["prepared", "unknown", "may-have-crossed"].includes(operation.state),
+    )
+  ) {
+    return { kind: "rejected", record: current };
+  }
+  return {
+    kind: "updated",
+    record: {
+      ...current,
+      phase: "cancelled",
+      revision: current.revision + 1,
+    },
   };
 }

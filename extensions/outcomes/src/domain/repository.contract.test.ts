@@ -1,7 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
-import { reduceOutcomeTitle, type OutcomeMutationResult } from "./reducer.js";
+import {
+  reduceOutcomeCancel,
+  reduceOutcomeTitle,
+  type OutcomeMutationResult,
+} from "./reducer.js";
 
 // P-01 contract cases are intentionally staged before the domain repository
 // exists. They name the required observable behavior without treating a
@@ -117,6 +121,36 @@ describe("Outcome repository atomic contract", () => {
   it("rejects title updates for cancelled outcomes", () => {
     const record = { id: "o-1", revision: 2, title: "same", phase: "cancelled" as const };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({ kind: "rejected", record });
+  });
+
+  it("cancels only with the current revision and no in-flight operation", () => {
+    const record = { id: "o-1", revision: 2, phase: "active" as const };
+    expect(reduceOutcomeCancel(record, 1)).toEqual({ kind: "conflict", record });
+    expect(reduceOutcomeCancel(record, 2)).toEqual({
+      kind: "updated",
+      record: { ...record, phase: "cancelled", revision: 3 },
+    });
+    const busy = {
+      ...record,
+      operations: [
+        {
+          id: "op-1",
+          kind: "workboard-card-start" as const,
+          criterionId: "c-1",
+          planGeneration: 1,
+          createdRevision: 2,
+          requestHash: "hash",
+          state: "prepared" as const,
+          target: {
+            owner: "workboard" as const,
+            cardId: "c",
+            cardCreatedAt: 1,
+            boardIdAtLink: "b",
+          },
+        },
+      ],
+    };
+    expect(reduceOutcomeCancel(busy, 2)).toEqual({ kind: "rejected", record: busy });
   });
 
   it.todo("replays an idempotent mutation before checking expected revision");
