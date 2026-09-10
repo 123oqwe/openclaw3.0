@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
-import type { OutcomeRecord } from "../store/outcome-repository.js";
+import type { OutcomeRecord } from "./types.js";
 import { reduceOutcomeTitle } from "./reducer.js";
 
 // P-01 contract cases are intentionally staged before the domain repository
@@ -40,19 +40,25 @@ describe("Outcome repository atomic contract", () => {
     expect(writes()).toBe(1);
   });
 
-  it("replays before checking an obsolete revision", () => {
-    const record = { id: "o-1", revision: 2, title: "old", lastRequestHash: "r-1" };
-    expect(reduceOutcomeTitle(record, { requestHash: "r-1", expectedRevision: 1, title: "new" })).toEqual({
-      kind: "replay",
-      record,
+  it("rejects an obsolete revision before applying a title change", () => {
+    const record = { id: "o-1", revision: 2, title: "old" };
+    expect(reduceOutcomeTitle(record, { expectedRevision: 1, title: "new" })).toEqual({
+      kind: "conflict", record,
     });
   });
 
   it("returns no-op without incrementing revision for unchanged title", () => {
     const record = { id: "o-1", revision: 2, title: "same" };
-    expect(reduceOutcomeTitle(record, { requestHash: "r-2", expectedRevision: 2, title: "same" })).toEqual({
+    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "same" })).toEqual({
       kind: "noop",
       record,
+    });
+  });
+
+  it("rejects title updates for cancelled outcomes", () => {
+    const record = { id: "o-1", revision: 2, title: "same", phase: "cancelled" as const };
+    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
+      kind: "rejected", record,
     });
   });
 

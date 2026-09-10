@@ -1,10 +1,5 @@
-export type OutcomeRecord = {
-  id: string;
-  revision: number;
-  title?: string;
-  lastRequestHash?: string;
-  [key: string]: unknown;
-};
+import type { OutcomeRecord } from "../domain/types.js";
+export type { OutcomeRecord } from "../domain/types.js";
 
 export type OutcomeRepository = {
   create(record: OutcomeRecord): Promise<{ created: boolean }>;
