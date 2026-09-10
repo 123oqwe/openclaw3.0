@@ -22,7 +22,9 @@ describe("Outcome repository atomic contract", () => {
       lookup: async (id) => records.get(id),
       update: async (id, decide) => {
         const next = decide(records.get(id));
-        if (next === undefined) return false;
+        if (next === undefined) {
+          return false;
+        }
         records.set(id, next);
         writes += 1;
         return true;
