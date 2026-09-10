@@ -125,10 +125,16 @@ function createStrictOutcomeRepository(
       }
       const parsed = parseOutcomeRecord(record);
       const created = await store.registerIfAbsent(parsed.id, parsed);
-      if (created) return { created: true, replayed: false, record: parsed };
+      if (created) {
+        return { created: true, replayed: false, record: parsed };
+      }
       const existing = parseOutcomeRecord(await store.lookup(parsed.id));
-      if (existing.managerProfileId !== owner) throw new Error("Outcome is not owned by the requested manager");
-      if (existing.createRequestHash !== parsed.createRequestHash) throw new Error("Outcome create request conflicts with existing record");
+      if (existing.managerProfileId !== owner) {
+        throw new Error("Outcome is not owned by the requested manager");
+      }
+      if (existing.createRequestHash !== parsed.createRequestHash) {
+        throw new Error("Outcome create request conflicts with existing record");
+      }
       return { created: false, replayed: true, record: existing };
     },
     get: async (id) => strict(await base.get(id)),
