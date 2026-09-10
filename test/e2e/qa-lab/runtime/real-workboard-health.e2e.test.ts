@@ -9,7 +9,7 @@ import {
 describe("Outcome health with the real Workboard plugin", () => {
   it.each([true, false])("reports Workboard availability=%s", async (enabled) => {
     const instance = await createSkillLibraryWireInstance();
-    let client: SkillLibraryWireClient | undefined;
+    const clients: SkillLibraryWireClient[] = [];
     await runQaGatewayFixture(
       async () => {
         await instance.state.writeConfig({
@@ -42,11 +42,15 @@ describe("Outcome health with the real Workboard plugin", () => {
           },
         });
         await instance.startGateway();
+        const bootstrap = await SkillLibraryWireClient.connect(instance);
+        clients.push(bootstrap.client);
         const connected = await SkillLibraryWireClient.connect(instance, {
           email: SKILL_LIBRARY_BOB,
           scopes: ["operator.read"],
+          buildId: bootstrap.hello.server.buildId,
         });
-        client = connected.client;
+        clients.push(connected.client);
+        const client = connected.client;
         expect(connected.hello.auth?.scopes).toEqual(["operator.read"]);
         const self = await client.request<{ profile: { id: string } }>("users.self", {});
         expect(self.profile.id).toEqual(expect.any(String));
@@ -59,7 +63,7 @@ describe("Outcome health with the real Workboard plugin", () => {
         expect(health.workboard?.available).toBe(enabled);
       },
       async () => {
-        if (client) {
+        for (const client of clients) {
           await client.close();
         }
       },
