@@ -40,7 +40,7 @@ describe("Outcome plugin shell", () => {
     expect(packageManifest.dependencies).toEqual({ zod: "4.4.3" });
   });
 
-  it("registers only the content-free operator.read health method", async () => {
+  it("registers health plus operator-scoped persistence methods", async () => {
     const registerGatewayMethod = vi.fn();
     const registerTool = vi.fn();
     const registerCli = vi.fn();
@@ -70,7 +70,7 @@ describe("Outcome plugin shell", () => {
       }),
     );
 
-    expect(registerGatewayMethod).toHaveBeenCalledOnce();
+    expect(registerGatewayMethod).toHaveBeenCalledTimes(3);
     const [method, handler, options] = registerGatewayMethod.mock.calls[0] ?? [];
     expect(method).toBe("outcomes.health");
     expect(options).toEqual({ scope: "operator.read" });
@@ -101,6 +101,10 @@ describe("Outcome plugin shell", () => {
     expect(registerCli).not.toHaveBeenCalled();
     expect(registerService).not.toHaveBeenCalled();
     expect(registerControlUiDescriptor).not.toHaveBeenCalled();
+    expect(registerGatewayMethod.mock.calls.slice(1).map(([name]) => name)).toEqual([
+      "outcomes.create",
+      "outcomes.get",
+    ]);
   });
 
   it("reports Workboard separately when its method is unavailable", async () => {
