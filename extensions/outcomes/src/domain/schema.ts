@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
-import { stableStringify } from "@openclaw/normalization-core/stable-stringify";
+import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 
 export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
