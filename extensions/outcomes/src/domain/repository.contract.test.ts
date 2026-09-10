@@ -115,14 +115,14 @@ describe("Outcome repository atomic contract", () => {
     expect(activated.record.contractRevision).toBe(linked.contractRevision);
     expect(activated.record.revision).toBe(linked.revision + 1);
     expect(activated.record.updatedAt).toBe(42);
-    expect(reduceOutcomeActivate(draft, draft.revision).kind).toBe("rejected");
-    expect(reduceOutcomeActivate(linked, linked.revision - 1).kind).toBe("conflict");
+    expect(reduceOutcomeActivate(draft, draft.revision, 42).kind).toBe("rejected");
+    expect(reduceOutcomeActivate(linked, linked.revision - 1, 42).kind).toBe("conflict");
     const optionalOnly = {
       ...draft,
       criteria: [{ ...draft.criteria[0]!, required: false, workRefs: [] }, { id: "c-2", text: "optional", required: true, workRefs: linked.criteria[0]!.workRefs }],
     };
-    expect(reduceOutcomeActivate(optionalOnly, optionalOnly.revision).kind).toBe("updated");
-    expect(reduceOutcomeActivate(activeRecord("active-1"), 1).kind).toBe("rejected");
+    expect(reduceOutcomeActivate(optionalOnly, optionalOnly.revision, 42).kind).toBe("updated");
+    expect(reduceOutcomeActivate(activeRecord("active-1"), 1, 42).kind).toBe("rejected");
 
     for (const state of ["prepared", "unknown", "may-have-crossed"] as const) {
       const withOperation = { ...activeRecord(`active-${state}`), criteria: linked.criteria, operations: [{ id: state, kind: "workboard-card-start" as const, criterionId: "c-1", planGeneration: 1, createdRevision: 1, requestHash: "a".repeat(64), state, target: linked.criteria[0]!.workRefs[0]! }] };
