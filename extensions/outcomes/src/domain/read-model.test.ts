@@ -65,4 +65,30 @@ describe("Outcome P-01 read model", () => {
     expect(JSON.stringify(detail)).not.toContain("secret-card");
     expect(input.criteria[0].workRefs[0].cardId).toBe("secret-card");
   });
+
+  it("never treats historical decisions as current readiness", () => {
+    const input = record();
+    input.decisions = [
+      {
+        id: "decision-old",
+        criterionId: "c-1",
+        planGeneration: 0,
+        decidedRevision: 1,
+        status: "verified",
+        requestHash: "c".repeat(64),
+        profileId: "manager-1",
+        planHash: "d".repeat(64),
+        decidedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: 1,
+          planGeneration: 0,
+          criteria: input.criteria,
+        },
+        evidenceSetHash: "e".repeat(64),
+        decidedAt: 1,
+      },
+    ];
+    expect(toOutcomeSummary(input).readiness).toBe("incomplete");
+  });
 });

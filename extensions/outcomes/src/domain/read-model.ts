@@ -6,8 +6,7 @@ import type {
 import type { OutcomeRecord } from "./types.js";
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
-export function toOutcomeSummary(record: OutcomeRecord): OutcomeSummary {
-  const required = record.criteria.filter((criterion) => criterion.required);
+export function toOutcomeSummary(record: OutcomeRecord, observedAt = record.updatedAt): OutcomeSummary {
   const hasUnavailableSource = record.projections.some(
     (projection) =>
       projection.availability !== "available" ||
@@ -15,7 +14,20 @@ export function toOutcomeSummary(record: OutcomeRecord): OutcomeSummary {
         projection.errorCode ?? "",
       ),
   );
-  const hasStaleSource = record.projections.some((projection) => projection.upstreamStale === true);
+  const currentRefs = new Set(
+    record.criteria.flatMap((criterion) =>
+      criterion.workRefs.map((ref) => `${ref.cardId}:${ref.cardCreatedAt}:${ref.boardIdAtLink}`),
+    ),
+  );
+  const currentProjections = record.projections.filter((projection) =>
+    currentRefs.has(
+      `${projection.ref.cardId}:${projection.ref.cardCreatedAt}:${projection.ref.boardIdAtLink}`,
+    ),
+  );
+  const hasStaleSource = currentProjections.some(
+    (projection) =>
+      projection.upstreamStale === true || observedAt - projection.observedAt > 24 * 60 * 60 * 1000,
+  );
   const readiness = hasUnavailableSource
     ? "unavailable"
     : hasStaleSource
@@ -26,9 +38,7 @@ export function toOutcomeSummary(record: OutcomeRecord): OutcomeSummary {
   const acceptanceValidity =
     record.acceptances.length === 0
       ? "none"
-      : record.phase === "accepted" && record.acceptances.at(-1)?.planHash === record.planHash
-        ? "current"
-        : "needs-review";
+      : "needs-review";
   return {
     id: record.id,
     title: record.title,
@@ -42,7 +52,7 @@ export function toOutcomeSummary(record: OutcomeRecord): OutcomeSummary {
 
 /** Build the public detail view; identity, request hashes, and internal history stay private. */
 export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): OutcomeDetail {
-  const summary = toOutcomeSummary(record);
+  const summary = toOutcomeSummary(record, observedAt);
   const criteria = record.criteria.map((criterion) => ({
     id: criterion.id,
     text: criterion.text,
@@ -55,8 +65,18 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
   // refs/evidence or invent source timestamps; P-02 supplies these inputs.
   const work: OutcomeDetail["work"] = [];
   const evidence: OutcomeDetail["evidence"] = [];
-  const sourceIssues = record.projections.flatMap((projection) => {
-    const criterion = record.criteria.find((item) =>
+  const currentRefs = new Set(
+    record.criteria.flatMap((criterion) =>
+      criterion.workRefs.map((ref) => `${ref.cardId}:${ref.cardCreatedAt}:${ref.boardIdAtLink}`),
+    ),
+  );
+  const currentProjections = record.projections.filter((projection) =>
+    currentRefs.has(
+      `${projection.ref.cardId}:${projection.ref.cardCreatedAt}:${projection.ref.boardIdAtLink}`,
+    ),
+  );
+  const sourceIssues = currentProjections.flatMap((projection) => {
+    const criteria = record.criteria.filter((item) =>
       item.workRefs.some(
         (ref) =>
           ref.cardId === projection.ref.cardId &&
@@ -65,7 +85,7 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
       ),
     );
     const reason = projection.errorCode;
-    return criterion && reason ? [{ criterionId: criterion.id, reason }] : [];
+    return reason ? criteria.map((criterion) => ({ criterionId: criterion.id, reason })) : [];
   }).filter(
     (issue, index, issues) =>
       issues.findIndex(

@@ -46,6 +46,7 @@ describe("Outcome repository host adapter", () => {
       await expect(repository.create(record)).resolves.toEqual({ created: true });
       await expect(repository.get(record.id)).resolves.toEqual(record);
       const sparse = { ...record, id: "strict-sparse", managerProfileId: undefined };
+      // @ts-expect-error negative contract: persisted records require an owner identity.
       await expect(repository.create(sparse)).rejects.toThrow();
       await expect(store.lookup(sparse.id)).resolves.toBeUndefined();
       const foreign = { ...record, id: "strict-foreign" };
