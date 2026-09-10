@@ -42,7 +42,7 @@ function createLegacyOutcomeRepository(
       }
       const existing = await store.lookup(record.id);
       if (!existing) {
-        throw new OutcomeRepositoryCapacityError();
+        throw new Error("Outcome is not owned by the requested manager");
       }
       if (existing.managerProfileId !== managerProfileId) {
         throw new Error("Outcome is not owned by the requested manager");
@@ -131,24 +131,35 @@ function createStrictOutcomeRepository(
   const strict = (value: OutcomeRecord | undefined) => (value === undefined ? undefined : parseOutcomeRecord(value));
   return {
     ...base,
-    create: async (record) => base.create(parseOutcomeRecord(record)),
+    create: async (record) => {
+      try {
+        return await base.create(parseOutcomeRecord(record));
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "PLUGIN_STATE_LIMIT_EXCEEDED") {
+          throw new OutcomeRepositoryCapacityError();
+        }
+        throw error;
+      }
+    },
     createOwned: async (owner, record) => {
       if (!owner.trim() || record.managerProfileId !== owner) {
         throw new Error("Outcome manager profile does not match authenticated owner");
       }
       const parsed = parseOutcomeRecord(record);
-      const created = await store.registerIfAbsent(parsed.id, parsed);
+      let created: boolean;
+      try {
+        created = await store.registerIfAbsent(parsed.id, parsed);
+      } catch (error) {
+        if (error && typeof error === "object" && "code" in error && error.code === "PLUGIN_STATE_LIMIT_EXCEEDED") {
+          throw new OutcomeRepositoryCapacityError();
+        }
+        throw error;
+      }
       if (created) {
         return { created: true, replayed: false, record: parsed };
       }
       const rawExisting = await store.lookup(parsed.id);
-      if (!rawExisting) {
-        const entries = await store.entries();
-        if (entries.length >= 500) {
-          throw new OutcomeRepositoryCapacityError();
-        }
-        throw new Error("Outcome create lost its registration race");
-      }
+      if (!rawExisting) throw new Error("Outcome create lost its registration race");
       const existing = parseOutcomeRecord(rawExisting);
       if (existing.managerProfileId !== owner) {
         throw new Error("Outcome is not owned by the requested manager");

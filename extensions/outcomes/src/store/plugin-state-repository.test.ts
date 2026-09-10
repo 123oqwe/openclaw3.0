@@ -279,8 +279,8 @@ describe("Outcome repository host adapter", () => {
           created: true,
         });
       }
-      await expect(repository.create(draftRecord("capacity-overflow"))).resolves.toEqual({
-        created: false,
+      await expect(repository.create(draftRecord("capacity-overflow"))).rejects.toMatchObject({
+        code: "outcome-capacity-exceeded",
       });
       await expect(
         repository.createOwned("alice", draftRecord("capacity-owned-overflow")),
