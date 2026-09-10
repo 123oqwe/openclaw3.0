@@ -87,7 +87,7 @@ export type HumanDecision = {
   decidedAt: number;
 };
 
-export type OutcomeRecord = {
+export type OutcomeRecordDraft = {
   schemaVersion?: 1;
   id: string;
   createRequestHash?: string;
@@ -110,7 +110,7 @@ export type OutcomeRecord = {
 };
 
 /** Fully materialized aggregate accepted at the persistence boundary. */
-export type PersistedOutcomeRecord = OutcomeRecord & {
+export type PersistedOutcomeRecord = OutcomeRecordDraft & {
   schemaVersion: 1;
   createRequestHash: string;
   managerProfileId: string;
@@ -129,3 +129,6 @@ export type PersistedOutcomeRecord = OutcomeRecord & {
   createdAt: number;
   updatedAt: number;
 };
+
+/** The formal record type is always fully materialized. */
+export type OutcomeRecord = PersistedOutcomeRecord;
