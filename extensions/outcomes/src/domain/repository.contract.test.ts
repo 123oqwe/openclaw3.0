@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
-import { createRequestHash, parseOutcomeRecord, planHash } from "./schema.js";
+import { parseOutcomeRecord } from "./schema.js";
+import { createRequestHash, planHash } from "./hash.js";
 import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,

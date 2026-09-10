@@ -1,5 +1,5 @@
 import type { Criterion, OutcomeRecord } from "./types.js";
-import { planHash } from "./schema.js";
+import { planHash } from "./canonical-plan.js";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 
 export type OutcomeMutation = {
