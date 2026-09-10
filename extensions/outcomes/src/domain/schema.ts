@@ -67,6 +67,8 @@ const decisionSchema = z.strictObject({
     contractRevision: z.number().int().positive(),
     planGeneration: z.number().int().positive(),
     criteria: z.array(criterionSchema).min(1).max(5),
+  }).refine((plan) => plan.criteria.some((criterion) => criterion.required), {
+    message: "at least one criterion must be required",
   }),
   evidenceSetHash: z.string().regex(/^[0-9a-f]{64}$/),
   note: z.string().max(2000).optional(),
@@ -102,6 +104,8 @@ const acceptanceSchema = z.strictObject({
     contractRevision: z.number().int().positive(),
     planGeneration: z.number().int().positive(),
     criteria: z.array(criterionSchema).min(1).max(5),
+  }).refine((plan) => plan.criteria.some((criterion) => criterion.required), {
+    message: "at least one criterion must be required",
   }),
 });
 
