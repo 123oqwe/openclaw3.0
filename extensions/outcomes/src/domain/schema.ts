@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
+import type { Criterion } from "./types.js";
 
 export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
@@ -48,6 +49,38 @@ export function createRequestHash(input: unknown): string {
   };
   return createHash("sha256")
     .update(`openclaw:outcome-create:v1\0${stableStringify(canonical)}`, "utf8")
+    .digest("hex");
+}
+
+export type CanonicalPlan = {
+  outcomeId: string;
+  objective: string;
+  contractRevision: number;
+  planGeneration: number;
+  criteria: Criterion[];
+};
+
+export function planHash(input: CanonicalPlan): string {
+  const canonical = {
+    outcomeId: input.outcomeId,
+    objective: input.objective,
+    contractRevision: input.contractRevision,
+    planGeneration: input.planGeneration,
+    criteria: [...input.criteria]
+      .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
+      .map((criterion) => ({
+        id: criterion.id,
+        text: criterion.text,
+        required: criterion.required,
+        workRefs: [...criterion.workRefs].toSorted((a, b) => {
+          if (a.cardId !== b.cardId) return a.cardId < b.cardId ? -1 : 1;
+          if (a.cardCreatedAt !== b.cardCreatedAt) return a.cardCreatedAt - b.cardCreatedAt;
+          return a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0;
+        }),
+      })),
+  };
+  return createHash("sha256")
+    .update(`openclaw:outcome-plan:v1\0${stableStringify(canonical)}`, "utf8")
     .digest("hex");
 }
 

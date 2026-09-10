@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assertOutcomeRecordSize, createRequestHash, createRequestSchema } from "./schema.js";
+import { assertOutcomeRecordSize, createRequestHash, createRequestSchema, planHash } from "./schema.js";
 
 describe("Outcome create schema and canonical hash", () => {
   it("accepts at most five criteria and produces order-independent hashes", () => {
@@ -45,5 +45,18 @@ describe("Outcome create schema and canonical hash", () => {
     expect(() => assertOutcomeRecordSize({ text: "ok" })).not.toThrow();
     expect(() => assertOutcomeRecordSize({ text: "🙂".repeat(32765) + "a" })).not.toThrow();
     expect(() => assertOutcomeRecordSize({ text: "🙂".repeat(32765) + "aa" })).toThrow();
+  });
+
+  it("binds plan hashes to generation and contract revision", () => {
+    const plan = {
+      outcomeId: "o-1",
+      objective: "Ship safely",
+      contractRevision: 1,
+      planGeneration: 1,
+      criteria: [],
+    };
+    expect(planHash(plan)).toHaveLength(64);
+    expect(planHash(plan)).not.toBe(planHash({ ...plan, planGeneration: 2 }));
+    expect(planHash(plan)).not.toBe(planHash({ ...plan, contractRevision: 2 }));
   });
 });
