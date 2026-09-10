@@ -8,9 +8,8 @@ import {
   type OutcomeMutationResult,
 } from "./reducer.js";
 
-// P-01 contract cases are intentionally staged before the domain repository
-// exists. They name the required observable behavior without treating a
-// missing production module as a RED result.
+// P-01 contract cases exercise the repository boundary through the formal
+// strict adapter and keep reducer behavior independently observable.
 describe("Outcome repository atomic contract", () => {
   const validRecord = (id = "o-1"): OutcomeRecord => ({
     schemaVersion: 1,
