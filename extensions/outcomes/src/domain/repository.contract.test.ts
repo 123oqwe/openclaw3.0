@@ -75,10 +75,26 @@ describe("Outcome repository atomic contract", () => {
     const record = { id: "o-1", revision: 2, title: "same", phase: "active" as const };
     await repository.create(record);
     const before = writes();
-    await repository.transact(record.id, (current) => ({
-      result: reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" }),
-    }));
+    const decision = await repository.transact(record.id, (current) => {
+      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
+      return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
+    });
+    expect(decision.kind).toBe("noop");
     expect(writes()).toBe(before);
+    await expect(repository.get(record.id)).resolves.toEqual(record);
+  });
+
+  it("persists only an updated reducer decision", async () => {
+    const { repository, writes } = fixture();
+    const record = { id: "o-1", revision: 2, title: "old", phase: "active" as const };
+    await repository.create(record);
+    const decision = await repository.transact(record.id, (current) => {
+      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "new" });
+      return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
+    });
+    expect(decision.kind).toBe("updated");
+    expect(writes()).toBe(2);
+    await expect(repository.get(record.id)).resolves.toMatchObject({ title: "new", revision: 3 });
   });
 
   it("rejects title updates for cancelled outcomes", () => {
