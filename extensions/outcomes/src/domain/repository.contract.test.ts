@@ -151,6 +151,10 @@ describe("Outcome repository atomic contract", () => {
       ],
     };
     expect(reduceOutcomeCancel(busy, 2)).toEqual({ kind: "rejected", record: busy });
+    const accepted = { ...record, phase: "accepted" as const };
+    expect(reduceOutcomeCancel(accepted, 2)).toEqual({ kind: "rejected", record: accepted });
+    const cancelled = { ...record, phase: "cancelled" as const };
+    expect(reduceOutcomeCancel(cancelled, 2)).toEqual({ kind: "rejected", record: cancelled });
   });
 
   it.todo("replays an idempotent mutation before checking expected revision");
