@@ -74,11 +74,15 @@ export function createOutcomeRepository(
         .map((entry) => entry.value)
         .filter((record) => record.managerProfileId === managerProfileId);
     },
-    transactOwned: async (managerProfileId, id, decide) => {
+    transactOwned: async <T>(
+      managerProfileId: string,
+      id: string,
+      decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord },
+    ) => {
       requireManager(managerProfileId);
       let result!: T;
       await store.update!(id, (current) => {
-        if (current?.managerProfileId !== managerProfileId) {
+        if (!current || current.managerProfileId !== managerProfileId) {
           throw new Error("Outcome is not owned by the requested manager");
         }
         const decision = decide(current);
