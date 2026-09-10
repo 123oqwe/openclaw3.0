@@ -141,6 +141,8 @@ describe("Outcome repository host adapter", () => {
       };
       await repository.create(record);
       await expect(repository.getOwned("bob", record.id)).resolves.toBeUndefined();
+      await expect(repository.listOwned("bob")).resolves.toEqual([]);
+      await expect(repository.listOwned("alice")).resolves.toEqual([record]);
       await expect(
         repository.transactOwned("bob", record.id, () => ({ result: "must-not-run", next: record })),
       ).rejects.toThrow("not owned");
