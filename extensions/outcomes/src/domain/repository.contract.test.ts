@@ -87,12 +87,12 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("rejects an obsolete revision before applying a title change", () => {
-    const record = { id: "o-1", revision: 2, title: "old" };
+    const record = { ...validRecord(), revision: 2, title: "old" };
     expect(reduceOutcomeTitle(record, { expectedRevision: 1, title: "new" })).toEqual({ kind: "conflict", record });
   });
 
   it("returns no-op without incrementing revision for unchanged title", () => {
-    const record = { id: "o-1", revision: 2, title: "same" };
+    const record = { ...validRecord(), revision: 2, title: "same" };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "same" })).toEqual({
       kind: "noop",
       record,
@@ -115,7 +115,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("does not write when the reducer rejects or is a no-op", async () => {
     const { repository, writes } = fixture();
-    const record = { id: "o-1", revision: 2, title: "same", phase: "active" as const };
+    const record = { ...validRecord(), revision: 2, title: "same", phase: "active" as const, planGeneration: 1, planHash: "0".repeat(64) };
     await repository.create(record);
     const before = writes();
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
@@ -129,7 +129,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("persists only an updated reducer decision", async () => {
     const { repository, writes } = fixture();
-    const record = { id: "o-1", revision: 2, title: "old", phase: "active" as const };
+    const record = { ...validRecord(), revision: 2, title: "old", phase: "active" as const, planGeneration: 1, planHash: "0".repeat(64) };
     await repository.create(record);
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
       const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "new" });
@@ -141,7 +141,7 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("rejects title updates for cancelled outcomes", () => {
-    const record = { id: "o-1", revision: 2, title: "same", phase: "cancelled" as const };
+    const record = { ...validRecord(), revision: 2, title: "same", phase: "cancelled" as const };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({ kind: "rejected", record });
   });
 

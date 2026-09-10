@@ -7,12 +7,13 @@ import {
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
-import { createRequestHash, safePlanHash } from "../domain/schema.js";
+import { createRequestHash, planHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import { createOutcomeRepository } from "./plugin-state-repository.js";
 
 function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
-  return { schemaVersion: 1, id, createRequestHash: createRequestHash({ id, title: "same" }), managerProfileId, title: "same", objective: "objective", phase: "draft", revision: 1, contractRevision: 1, planGeneration: 0, planHash: null, criteria: [{ id: "c-1", text: "criterion", required: true, workRefs: [] }], projections: [], evidence: [], decisions: [], operations: [], acceptances: [], createdAt: 1, updatedAt: 1 };
+  const request = { id, title: "same", objective: "objective", criteria: [{ id: "c-1", text: "criterion", required: true, workRefs: [] }] };
+  return { schemaVersion: 1, id, createRequestHash: createRequestHash(request), managerProfileId, title: "same", objective: "objective", phase: "draft", revision: 1, contractRevision: 1, planGeneration: 0, planHash: null, criteria: request.criteria, projections: [], evidence: [], decisions: [], operations: [], acceptances: [], createdAt: 1, updatedAt: 1 };
 }
 
 afterEach(() => resetPluginStateStoreForTests());
@@ -111,7 +112,7 @@ describe("Outcome repository host adapter", () => {
         }),
       });
       const draft = draftRecord("o-1");
-      const record = { ...draft, revision: 2, phase: "cancelled" as const, planGeneration: 1, planHash: safePlanHash({ outcomeId: draft.id, objective: draft.objective, contractRevision: draft.contractRevision, planGeneration: 1, criteria: draft.criteria }) };
+      const record = { ...draft, revision: 2, phase: "cancelled" as const, planGeneration: 1, planHash: planHash({ outcomeId: draft.id, objective: draft.objective, contractRevision: draft.contractRevision, planGeneration: 1, criteria: draft.criteria }) };
       await repository.create(record);
       const result = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
         const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
