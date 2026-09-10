@@ -14,7 +14,12 @@ describe("Outcome repository atomic contract", () => {
   const validRecord = (id = "o-1"): OutcomeRecord => ({
     schemaVersion: 1,
     id,
-    createRequestHash: createRequestHash({ id, title: "title" }),
+    createRequestHash: createRequestHash({
+      id,
+      title: "title",
+      objective: "objective",
+      criteria: [{ id: "c-1", text: "criterion", required: true, workRefs: [] }],
+    }),
     managerProfileId: "manager-1",
     title: "title",
     objective: "objective",
