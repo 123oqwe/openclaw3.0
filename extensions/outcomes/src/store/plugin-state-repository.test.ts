@@ -42,6 +42,7 @@ describe("Outcome repository host adapter", () => {
       const winner = results.find((result) => result.kind === "updated");
       expect(winner?.kind).toBe("updated");
       await expect(repository.get(initial.id)).resolves.toEqual(winner?.record);
+      await expect(repository.list()).resolves.toEqual([winner?.record]);
       expect(updates.filter((next) => next !== undefined)).toHaveLength(1);
       expect(winner?.record.phase).toBe("active");
       expect(winner?.record.planGeneration).toBe(1);
@@ -95,6 +96,14 @@ describe("Outcome repository host adapter", () => {
       });
       await expect(reopened.lookup(record.id)).resolves.toEqual(record);
       await expect(reopened.lookup(active.id)).resolves.toEqual(active);
+      const reopenedRepository = createOutcomeRepository(reopened);
+      await expect(reopenedRepository.deleteIf(record.id, (current) => current.phase === "active")).resolves.toBe(
+        false,
+      );
+      await expect(reopenedRepository.deleteIf(record.id, (current) => current.phase === "cancelled")).resolves.toBe(
+        true,
+      );
+      await expect(reopenedRepository.get(record.id)).resolves.toBeUndefined();
       const child = spawnSync(
         process.execPath,
         ["--import", "tsx", "--input-type=module", "--eval", `
