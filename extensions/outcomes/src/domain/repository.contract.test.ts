@@ -131,7 +131,19 @@ describe("Outcome repository atomic contract", () => {
   it("moves contract changes to a new generation with a new canonical plan hash", () => {
     const record = activeRecord();
     const nextCriteria = [
-      { id: "c-2", text: "New criterion", required: true, workRefs: [] },
+      {
+        id: "c-2",
+        text: "New criterion",
+        required: true,
+        workRefs: [
+          {
+            owner: "workboard" as const,
+            cardId: "card",
+            cardCreatedAt: 1,
+            boardIdAtLink: "board",
+          },
+        ],
+      },
     ];
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
@@ -145,6 +157,8 @@ describe("Outcome repository atomic contract", () => {
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
     expect(result.record.planHash).not.toBe(record.planHash);
     expect(result.record.criteria).not.toBe(nextCriteria);
+    nextCriteria[0].workRefs[0].cardId = "mutated";
+    expect(result.record.criteria[0].workRefs[0].cardId).toBe("card");
     expect(() => parseOutcomeRecord(result.record)).not.toThrow();
   });
 
@@ -173,6 +187,7 @@ describe("Outcome repository atomic contract", () => {
         },
       ],
     };
+    const acceptedPlanBefore = structuredClone(record.acceptances[0].acceptedPlan);
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
       objective: "Revised objective",
@@ -183,7 +198,8 @@ describe("Outcome repository atomic contract", () => {
     expect(result.record.phase).toBe("active");
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
     expect(result.record.acceptances).toEqual(record.acceptances);
-    expect(result.record.acceptances[0].acceptedPlan).toEqual(record.acceptances[0].acceptedPlan);
+    expect(record.acceptances[0].acceptedPlan).toEqual(acceptedPlanBefore);
+    expect(result.record.acceptances[0].acceptedPlan).toEqual(acceptedPlanBefore);
   });
 
   it("keeps draft contracts unplanned while applying a revision CAS", () => {
