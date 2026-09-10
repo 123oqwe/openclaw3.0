@@ -140,4 +140,53 @@ describe("Outcome create schema and canonical hash", () => {
     expect(() => outcomeRecordSchema.parse(record)).not.toThrow();
     expect(() => parseOutcomeRecord(record)).toThrow("131072-byte");
   });
+
+  it("reports malformed historical snapshots through safeParse", () => {
+    const plan = {
+      outcomeId: "o-history",
+      objective: "Keep history",
+      contractRevision: 1,
+      planGeneration: 1,
+      criteria: [{ id: "c-1", text: "done", required: true, workRefs: [] }],
+    };
+    const record = {
+      schemaVersion: 1,
+      id: "o-history",
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "manager-1",
+      title: "History",
+      objective: "Keep history",
+      phase: "active" as const,
+      revision: 2,
+      contractRevision: 1,
+      planGeneration: 1,
+      planHash: planHash(plan),
+      criteria: plan.criteria,
+      projections: [],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    const malformed = {
+      ...record,
+      decisions: [{
+        id: "decision-1",
+        criterionId: "missing",
+        planGeneration: 1,
+        decidedRevision: 2,
+        status: "verified" as const,
+        requestHash: "b".repeat(64),
+        profileId: "manager-1",
+        planHash: "c".repeat(64),
+        decidedPlan: plan,
+        evidenceSetHash: "d".repeat(64),
+        decidedAt: 2,
+      }],
+    };
+    expect(() => outcomeRecordSchema.safeParse(malformed)).not.toThrow();
+    expect(outcomeRecordSchema.safeParse(malformed).success).toBe(false);
+  });
 });
