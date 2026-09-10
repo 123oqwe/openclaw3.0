@@ -8,7 +8,10 @@ import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
 import type { OutcomeRecord } from "../domain/types.js";
-import { createOutcomeRepository, createStrictOutcomeRepository } from "./plugin-state-repository.js";
+import {
+  createLegacyOutcomeRepository as createOutcomeRepository,
+  createStrictOutcomeRepository,
+} from "./plugin-state-repository.js";
 
 afterEach(() => resetPluginStateStoreForTests());
 

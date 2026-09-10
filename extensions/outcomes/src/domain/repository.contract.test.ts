@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createOutcomeRepository } from "../store/plugin-state-repository.js";
+import { createLegacyOutcomeRepository as createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
 import {
   reduceOutcomeCancel,

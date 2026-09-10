@@ -2,7 +2,7 @@ import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-run
 import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
 import { assertOutcomeRecordSize, parseOutcomeRecord } from "../domain/schema.js";
 
-export function createOutcomeRepository(
+export function createLegacyOutcomeRepository(
   store: Pick<
     PluginStateKeyedStore<OutcomeRecord>,
     "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf"
@@ -111,7 +111,7 @@ export function createOutcomeRepository(
 export function createStrictOutcomeRepository(
   store: Pick<PluginStateKeyedStore<OutcomeRecord>, "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf">,
 ): OutcomeRepository {
-  const base = createOutcomeRepository(store);
+  const base = createLegacyOutcomeRepository(store);
   const strict = (value: OutcomeRecord | undefined) => (value === undefined ? undefined : parseOutcomeRecord(value));
   return {
     ...base,
@@ -147,3 +147,6 @@ export function createStrictOutcomeRepository(
     }),
   };
 }
+
+/** Formal production repository entry point. */
+export const createOutcomeRepository = createStrictOutcomeRepository;
