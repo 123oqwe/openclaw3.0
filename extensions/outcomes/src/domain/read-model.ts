@@ -1,7 +1,9 @@
+import {
+  OUTCOME_PROJECTION_MAX_AGE_MS,
+} from "@openclaw/outcomes-contract";
 import type {
   OutcomeDetail,
   OutcomeSummary,
-  OUTCOME_PROJECTION_MAX_AGE_MS,
   WorkboardRef as PublicWorkboardRef,
 } from "@openclaw/outcomes-contract";
 import type { OutcomeRecord } from "./types.js";

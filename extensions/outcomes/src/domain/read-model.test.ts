@@ -148,6 +148,14 @@ describe("Outcome P-01 read model", () => {
         proofs: [],
         artifacts: [],
       },
+      {
+        ref: current,
+        availability: "identity-conflict",
+        errorCode: "identity-conflict",
+        observedAt: 2,
+        proofs: [],
+        artifacts: [],
+      },
     ];
     const detail = toOutcomeDetail(input, 10);
     expect(detail.sourceIssues).toEqual([
@@ -155,5 +163,46 @@ describe("Outcome P-01 read model", () => {
       { criterionId: "c-2", reason: "identity-conflict" },
     ]);
     expect(detail.sourceIssues.map((issue) => issue.criterionId)).not.toContain("old");
+    expect(detail.sourceIssues).toHaveLength(2);
+  });
+
+  it("ignores an old failed projection after its link is removed", () => {
+    const input = record();
+    input.projections = [
+      {
+        ref: { owner: "workboard", cardId: "old", cardCreatedAt: 1, boardIdAtLink: "board" },
+        availability: "identity-conflict",
+        errorCode: "identity-conflict",
+        observedAt: 1,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
+    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
+  });
+
+  it("keeps a valid historical acceptance reviewable until observed again", () => {
+    const input = record();
+    input.phase = "accepted";
+    input.acceptances = [
+      {
+        id: "accept-1",
+        requestHash: "f".repeat(64),
+        acceptedRevision: 2,
+        profileId: "manager-1",
+        acceptedAt: 2,
+        planGeneration: 1,
+        planHash: input.planHash,
+        closureHash: "e".repeat(64),
+        acceptedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: 1,
+          planGeneration: 1,
+          criteria: input.criteria,
+        },
+      },
+    ];
+    expect(toOutcomeSummary(input, 10).acceptanceValidity).toBe("needs-review");
   });
 });
