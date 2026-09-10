@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
-import { reduceOutcomeTitle } from "./reducer.js";
+import { reduceOutcomeTitle, type OutcomeMutationResult } from "./reducer.js";
 
 // P-01 contract cases are intentionally staged before the domain repository
 // exists. They name the required observable behavior without treating a
@@ -75,7 +75,7 @@ describe("Outcome repository atomic contract", () => {
     const record = { id: "o-1", revision: 2, title: "same", phase: "active" as const };
     await repository.create(record);
     const before = writes();
-    const decision = await repository.transact(record.id, (current) => {
+    const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
       const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
       return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
     });
@@ -88,7 +88,7 @@ describe("Outcome repository atomic contract", () => {
     const { repository, writes } = fixture();
     const record = { id: "o-1", revision: 2, title: "old", phase: "active" as const };
     await repository.create(record);
-    const decision = await repository.transact(record.id, (current) => {
+    const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
       const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "new" });
       return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
     });
