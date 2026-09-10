@@ -45,6 +45,8 @@ describe("Outcome repository host adapter", () => {
       const sparse = { ...record, id: "strict-sparse", managerProfileId: undefined };
       await expect(repository.create(sparse)).rejects.toThrow();
       await expect(store.lookup(sparse.id)).resolves.toBeUndefined();
+      await expect(repository.createOwned("bob", record)).rejects.toThrow("authenticated owner");
+      await expect(repository.createOwned("   ", record)).rejects.toThrow("authenticated owner");
     });
   });
 
