@@ -124,7 +124,13 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("cancels only with the current revision and no in-flight operation", () => {
-    const record = { id: "o-1", revision: 2, phase: "active" as const };
+    const record = {
+      id: "o-1",
+      revision: 2,
+      phase: "active" as const,
+      planGeneration: 3,
+      planHash: "plan-hash",
+    };
     expect(reduceOutcomeCancel(record, 1)).toEqual({ kind: "conflict", record });
     expect(reduceOutcomeCancel(record, 2)).toEqual({
       kind: "updated",
