@@ -340,7 +340,7 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       // +1: Gateway caller ownership for standalone browser routing.
       // +1: canonical temporal context renderer for plugin-owned agent harnesses.
       // +1: canonical user-turn operational metadata restoration for native harnesses.
-      4371,
+      4372,
       env,
     ),
     publicFunctionExports: readPluginSdkSurfaceBudgetEnv(
@@ -455,7 +455,7 @@ export function readPluginSdkSurfaceBudgets(env: NodeJS.ProcessEnv = process.env
       // +1: Gateway caller ownership for standalone browser routing.
       // +1: canonical temporal context renderer for plugin-owned agent harnesses.
       // +1: canonical user-turn operational metadata restoration for native harnesses.
-      2605,
+      2606,
       env,
     ),
     publicDeprecatedExports: readPluginSdkSurfaceBudgetEnv(
