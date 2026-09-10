@@ -251,4 +251,29 @@ describe("Outcome create schema and canonical hash", () => {
     };
     expect(outcomeRecordSchema.safeParse(planned).success).toBe(true);
   });
+
+  it("rejects unknown future schema versions", () => {
+    const future = {
+      schemaVersion: 2,
+      id: "future",
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "manager-1",
+      title: "Future",
+      objective: "Future",
+      phase: "draft" as const,
+      revision: 1,
+      contractRevision: 1,
+      planGeneration: 0,
+      planHash: null,
+      criteria: [{ id: "c", text: "criterion", required: true, workRefs: [] }],
+      projections: [],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    expect(outcomeRecordSchema.safeParse(future).success).toBe(false);
+  });
 });
