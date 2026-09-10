@@ -3,7 +3,9 @@ import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 
 function first<T>(items: T[]): T {
   const item = items[0];
-  if (item === undefined) throw new Error("fixture item missing");
+  if (item === undefined) {
+    throw new Error("fixture item missing");
+  }
   return item;
 }
 import type { OutcomeRecord } from "./types.js";

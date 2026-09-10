@@ -15,7 +15,9 @@ import {
 describe("Outcome repository atomic contract", () => {
   function first<T>(items: T[]): T {
     const item = items[0];
-    if (item === undefined) throw new Error("fixture item missing");
+    if (item === undefined) {
+      throw new Error("fixture item missing");
+    }
     return item;
   }
   const validRecord = (id = "o-1"): OutcomeRecord => ({
@@ -239,7 +241,7 @@ describe("Outcome repository atomic contract", () => {
         },
       ],
     };
-    const acceptedPlanBefore = structuredClone(record.acceptances[0].acceptedPlan);
+    const acceptedPlanBefore = structuredClone(first(record.acceptances).acceptedPlan);
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
       serverTime: 42,
@@ -251,8 +253,8 @@ describe("Outcome repository atomic contract", () => {
     expect(result.record.phase).toBe("active");
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
     expect(result.record.acceptances).toEqual(record.acceptances);
-    expect(record.acceptances[0].acceptedPlan).toEqual(acceptedPlanBefore);
-    expect(result.record.acceptances[0].acceptedPlan).toEqual(acceptedPlanBefore);
+    expect(first(record.acceptances).acceptedPlan).toEqual(acceptedPlanBefore);
+    expect(first(result.record.acceptances).acceptedPlan).toEqual(acceptedPlanBefore);
   });
 
   it("keeps draft contracts unplanned while applying a revision CAS", () => {
