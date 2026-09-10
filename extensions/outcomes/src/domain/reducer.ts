@@ -94,7 +94,7 @@ export function reduceOutcomeContract(
         criteria,
       }),
       revision: current.revision + 1,
-      updatedAt: mutation.serverTime ?? current.updatedAt,
+      updatedAt: mutation.serverTime,
     },
   };
 }
@@ -129,7 +129,7 @@ export function reduceOutcomeActivate(
         criteria: current.criteria,
       }),
       revision: current.revision + 1,
-      updatedAt: serverTime ?? current.updatedAt,
+      updatedAt: serverTime,
     },
   };
 }
@@ -153,7 +153,7 @@ export function reduceOutcomeTitle(
       ...current,
       title: mutation.title,
       revision: current.revision + 1,
-      updatedAt: mutation.serverTime ?? current.updatedAt,
+      updatedAt: mutation.serverTime,
     },
   };
 }
@@ -161,7 +161,7 @@ export function reduceOutcomeTitle(
 export function reduceOutcomeCancel(
   current: OutcomeRecord,
   expectedRevision: number,
-  serverTime?: number,
+  serverTime: number,
 ): OutcomeCancelResult {
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
@@ -182,7 +182,7 @@ export function reduceOutcomeCancel(
       ...current,
       phase: "cancelled",
       revision: current.revision + 1,
-      updatedAt: serverTime ?? current.updatedAt,
+      updatedAt: serverTime,
     },
   };
 }

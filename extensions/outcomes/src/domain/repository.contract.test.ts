@@ -352,8 +352,8 @@ describe("Outcome repository atomic contract", () => {
 
   it("cancels only with the current revision and no in-flight operation", () => {
     const record = { ...activeRecord(), revision: 2 };
-    expect(reduceOutcomeCancel(record, 1)).toEqual({ kind: "conflict", record });
-    expect(reduceOutcomeCancel(record, 2)).toEqual({
+    expect(reduceOutcomeCancel(record, 1, 42)).toEqual({ kind: "conflict", record });
+    expect(reduceOutcomeCancel(record, 2, 42)).toEqual({
       kind: "updated",
       record: { ...record, phase: "cancelled", revision: 3 },
     });
@@ -378,7 +378,7 @@ describe("Outcome repository atomic contract", () => {
           },
         ],
       };
-      expect(reduceOutcomeCancel(busy, 2)).toEqual({ kind: "rejected", record: busy });
+      expect(reduceOutcomeCancel(busy, 2, 42)).toEqual({ kind: "rejected", record: busy });
     }
     for (const state of ["succeeded", "failed"] as const) {
       const settled = {
@@ -406,12 +406,12 @@ describe("Outcome repository atomic contract", () => {
     if (cancelled.kind === "updated") expect(cancelled.record.updatedAt).toBe(42);
     }
     const accepted = { ...record, phase: "accepted" as const };
-    expect(reduceOutcomeCancel(accepted, 2)).toEqual({
+    expect(reduceOutcomeCancel(accepted, 2, 42)).toEqual({
       kind: "rejected",
       record: accepted,
     });
     const cancelled = { ...record, phase: "cancelled" as const };
-    expect(reduceOutcomeCancel(cancelled, 2)).toEqual({
+    expect(reduceOutcomeCancel(cancelled, 2, 42)).toEqual({
       kind: "rejected",
       record: cancelled,
     });
