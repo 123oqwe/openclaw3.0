@@ -4,6 +4,7 @@ import {
   createRequestHash,
   createRequestSchema,
   outcomeRecordSchema,
+  parseOutcomeRecord,
   planHash,
 } from "./schema.js";
 
@@ -101,5 +102,42 @@ describe("Outcome create schema and canonical hash", () => {
     };
     expect(outcomeRecordSchema.parse(record)).toEqual(record);
     expect(() => outcomeRecordSchema.parse({ ...record, managerProfileId: undefined })).toThrow();
+  });
+
+  it("applies the aggregate byte limit at the strict parse boundary", () => {
+    const criterion = {
+      id: "c-1",
+      text: "done",
+      required: true,
+      workRefs: Array.from({ length: 2000 }, (_, index) => ({
+        owner: "workboard" as const,
+        cardId: `card-${index}-${"x".repeat(80)}`,
+        cardCreatedAt: index,
+        boardIdAtLink: "board",
+      })),
+    };
+    const record = {
+      schemaVersion: 1,
+      id: "o-large",
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "manager-1",
+      title: "Ship",
+      objective: "Ship safely",
+      phase: "draft" as const,
+      revision: 1,
+      contractRevision: 1,
+      planGeneration: 0,
+      planHash: null,
+      criteria: [criterion],
+      projections: [],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    expect(() => outcomeRecordSchema.parse(record)).not.toThrow();
+    expect(() => parseOutcomeRecord(record)).toThrow("128");
   });
 });

@@ -146,7 +146,9 @@ export const outcomeRecordSchema = z.strictObject({
 });
 
 export function parseOutcomeRecord(input: unknown) {
-  return outcomeRecordSchema.parse(input);
+  const record = outcomeRecordSchema.parse(input);
+  assertOutcomeRecordSize(record);
+  return record;
 }
 
 export function createRequestHash(input: unknown): string {
