@@ -13,12 +13,47 @@ export type Criterion = {
 };
 
 export type WorkProjection = {
+  ref?: WorkboardRef;
   criterionId: string;
   availability: "available" | "unavailable" | "identity-conflict";
   sourceDigest?: string;
   observedAt?: number;
   upstreamStale?: boolean;
   error?: string;
+};
+
+export type OutcomePlanSnapshot = {
+  outcomeId: string;
+  objective: string;
+  contractRevision: number;
+  planGeneration: number;
+  criteria: Criterion[];
+};
+
+export type Acceptance = {
+  id: string;
+  requestHash: string;
+  acceptedRevision: number;
+  profileId: string;
+  acceptedAt: number;
+  planGeneration: number;
+  planHash: string;
+  closureHash: string;
+  acceptedPlan: OutcomePlanSnapshot;
+};
+
+export type OutcomeOperation = {
+  id: string;
+  kind: "workboard-card-start";
+  criterionId: string;
+  planGeneration: number;
+  createdRevision: number;
+  requestHash: string;
+  state: "prepared" | "may-have-crossed" | "succeeded" | "failed" | "unknown";
+  target: WorkboardRef;
+  attemptedAt?: number;
+  terminalAt?: number;
+  resultDigest?: string;
 };
 
 export type EvidenceRef = {
@@ -55,8 +90,8 @@ export type OutcomeRecord = {
   projections?: WorkProjection[];
   evidence?: EvidenceRef[];
   decisions?: HumanDecision[];
-  operations?: unknown[];
-  acceptances?: unknown[];
+  operations?: OutcomeOperation[];
+  acceptances?: Acceptance[];
   createdAt?: number;
   updatedAt?: number;
 };
