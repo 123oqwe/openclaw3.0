@@ -24,7 +24,7 @@ export type WorkProjection = {
   sourceUpdatedAt?: number;
   upstreamStale?: boolean;
   sourceFingerprint?: string;
-  errorCode?: "owner-unavailable" | "not-found" | "identity-conflict" | "upstream-error";
+  errorCode?: "workboard-disabled" | "not-found" | "forbidden" | "timeout" | "invalid-response" | "identity-conflict";
 };
 
 export type OutcomePlanSnapshot = {

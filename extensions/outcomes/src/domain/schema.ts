@@ -160,14 +160,18 @@ export const outcomeRecordSchema = z.strictObject({
       ctx.addIssue({ code: "custom", message: "record planHash does not match its canonical plan" });
     }
   }
-  if (record.phase === "cancelled" && record.planGeneration > 0 && record.planHash !== null && record.planHash !== safePlanHash({
-    outcomeId: record.id,
-    objective: record.objective,
-    contractRevision: record.contractRevision,
-    planGeneration: record.planGeneration,
-    criteria: record.criteria,
-  })) {
-    ctx.addIssue({ code: "custom", message: "cancelled record planHash does not match its preserved plan" });
+  if (record.phase === "cancelled") {
+    const validDraftCancellation = record.planGeneration === 0 && record.planHash === null;
+    const validPlannedCancellation = record.planGeneration > 0 && record.planHash === safePlanHash({
+      outcomeId: record.id,
+      objective: record.objective,
+      contractRevision: record.contractRevision,
+      planGeneration: record.planGeneration,
+      criteria: record.criteria,
+    });
+    if (!validDraftCancellation && !validPlannedCancellation) {
+      ctx.addIssue({ code: "custom", message: "cancelled record must preserve a valid plan or draft state" });
+    }
   }
   for (const decision of record.decisions) {
     if (decision.decidedPlan.outcomeId !== record.id || decision.decidedPlan.planGeneration !== decision.planGeneration) {
