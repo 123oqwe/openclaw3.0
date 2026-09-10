@@ -264,4 +264,24 @@ describe("Outcome repository host adapter", () => {
       await expect(repository.get(existing.id)).resolves.toEqual(existing);
     });
   });
+
+  it("enforces the 500-record reject-new capacity without evicting", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-capacity", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const repository = createOutcomeRepository(store);
+      for (let index = 0; index < 500; index += 1) {
+        await expect(repository.create(draftRecord(`capacity-${index}`))).resolves.toEqual({
+          created: true,
+        });
+      }
+      await expect(repository.create(draftRecord("capacity-overflow"))).rejects.toThrow();
+      await expect(repository.get("capacity-0")).resolves.toBeDefined();
+      await expect(repository.get("capacity-499")).resolves.toBeDefined();
+    });
+  });
 });
