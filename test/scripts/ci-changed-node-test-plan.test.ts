@@ -824,14 +824,18 @@ describe("CI changed Node test plan", () => {
   });
 
   it.each(["extensions/outcomes/index.ts", "extensions/outcomes/src/runtime-capabilities.ts"])(
-    "routes an Outcomes change through the extension catch-all with both behavior tests (%s)",
+    "routes an Outcomes change through the extension catch-all with required behavior tests (%s)",
     (changedPath) => {
       const groups = fallbackGroups(createChangedExtensionFallbackShards([changedPath]));
       const outcomeTests = listExtensionTestFilesForRoots(["extensions/outcomes"]);
-      expect(outcomeTests.toSorted()).toEqual([
-        "extensions/outcomes/index.test.ts",
-        "extensions/outcomes/src/runtime-capabilities.test.ts",
-      ]);
+      expect(outcomeTests.toSorted()).toEqual(
+        expect.arrayContaining([
+          "extensions/outcomes/index.test.ts",
+          "extensions/outcomes/src/runtime-capabilities.test.ts",
+          "extensions/outcomes/src/domain/repository.contract.test.ts",
+        ]),
+      );
+      expect(outcomeTests.length).toBeGreaterThanOrEqual(3);
       expect(
         groups.every((group) => group.configs[0] === "test/vitest/vitest.extensions.config.ts"),
       ).toBe(true);
