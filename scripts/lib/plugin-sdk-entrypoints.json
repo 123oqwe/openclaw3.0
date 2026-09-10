@@ -158,6 +158,7 @@
   "migration",
   "migration-runtime",
   "plugin-state-runtime",
+  "normalization-runtime",
   "plugin-state-test-runtime",
   "markdown-table-runtime",
   "account-helpers",
