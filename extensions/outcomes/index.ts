@@ -51,6 +51,9 @@ export default definePluginEntry({
       }
       respond(true, { record: await repository.get(id) });
     }, { scope: "operator.read" });
+    api.registerGatewayMethod("outcomes.list", async ({ respond }) => {
+      respond(true, { records: await repository.list() });
+    }, { scope: "operator.read" });
     api.registerGatewayMethod("outcomes.updateTitle", async ({ params, respond }) => {
       const input = params as { id?: unknown; expectedRevision?: unknown; title?: unknown } | undefined;
       if (
@@ -74,6 +77,15 @@ export default definePluginEntry({
         return { result: decision, next: decision.kind === "updated" ? decision.record : undefined };
       });
       respond(true, result);
+    }, { scope: "operator.write" });
+    api.registerGatewayMethod("outcomes.cancel", async ({ params, respond }) => {
+      const id = (params as { id?: unknown } | undefined)?.id;
+      if (typeof id !== "string" || !id) {
+        respond(false, { error: "id must be a non-empty string" });
+        return;
+      }
+      const deleted = await repository.deleteIf(id, (record) => record.phase !== "accepted");
+      respond(true, { cancelled: deleted });
     }, { scope: "operator.write" });
   },
 });
