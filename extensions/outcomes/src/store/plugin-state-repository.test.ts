@@ -8,11 +8,43 @@ import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
 import type { OutcomeRecord } from "../domain/types.js";
-import { createOutcomeRepository } from "./plugin-state-repository.js";
+import { createOutcomeRepository, createStrictOutcomeRepository } from "./plugin-state-repository.js";
 
 afterEach(() => resetPluginStateStoreForTests());
 
 describe("Outcome repository host adapter", () => {
+  it("strictly validates persisted records at the storage boundary", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-strict", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const repository = createStrictOutcomeRepository(store);
+      const record: OutcomeRecord = {
+        schemaVersion: 1,
+        id: "strict-1",
+        createRequestHash: "a".repeat(64),
+        managerProfileId: "alice",
+        title: "Strict",
+        objective: "Validate",
+        phase: "draft",
+        revision: 1,
+        contractRevision: 1,
+        planGeneration: 0,
+        planHash: null,
+        criteria: [{ id: "criterion-1", text: "done", required: true, workRefs: [] }],
+        projections: [], evidence: [], decisions: [], operations: [], acceptances: [], createdAt: 1, updatedAt: 1,
+      };
+      await expect(repository.create(record)).resolves.toEqual({ created: true });
+      await expect(repository.get(record.id)).resolves.toEqual(record);
+      const sparse = { ...record, id: "strict-sparse", managerProfileId: undefined };
+      await expect(repository.create(sparse)).rejects.toThrow();
+      await expect(store.lookup(sparse.id)).resolves.toBeUndefined();
+    });
+  });
+
   it("serializes concurrent CAS and persists only the winning title", async () => {
     await withOpenClawTestState({ label: "outcome-repository-cas", applyEnv: false }, async (state) => {
       const namespace = `outcomes-v1-${randomUUID()}`;
