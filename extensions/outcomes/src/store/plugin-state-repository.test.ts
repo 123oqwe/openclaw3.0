@@ -171,6 +171,28 @@ describe("Outcome repository host adapter", () => {
     });
   });
 
+  it("lists owned records in deterministic updatedAt/id order", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-list-order", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const repository = createOutcomeRepository(store);
+      const records = [
+        { ...draftRecord("b"), managerProfileId: "alice", updatedAt: 3 },
+        { ...draftRecord("a"), managerProfileId: "alice", updatedAt: 3 },
+        { ...draftRecord("z"), managerProfileId: "bob", updatedAt: 4 },
+      ];
+      for (const record of records) await repository.create(record);
+      await expect(repository.listOwned("alice")).resolves.toMatchObject([
+        { id: "a" },
+        { id: "b" },
+      ]);
+    });
+  });
+
   it("fails closed for an unauthorized owner transaction", async () => {
     await withOpenClawTestState({ label: "outcome-repository-owner", applyEnv: false }, async (state) => {
       const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
