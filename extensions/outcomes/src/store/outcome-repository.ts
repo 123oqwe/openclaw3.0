@@ -1,5 +1,5 @@
 import type { OutcomeRecord } from "../domain/types.js";
-export type { OutcomeRecord } from "../domain/types.js";
+export type { OutcomeRecord, PersistedOutcomeRecord } from "../domain/types.js";
 
 export type OutcomeRepository = {
   create(record: OutcomeRecord): Promise<{ created: boolean }>;
