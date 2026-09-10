@@ -182,7 +182,7 @@ describe("Outcome repository atomic contract", () => {
     const record = { ...activeRecord(), revision: 2, title: "old" };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new", serverTime: 42 })).toEqual({
       kind: "updated",
-      record: { ...record, title: "new", revision: 3 },
+      record: { ...record, title: "new", revision: 3, updatedAt: 42 },
     });
   });
 
@@ -321,10 +321,13 @@ describe("Outcome repository atomic contract", () => {
         { id: "c", text: "criterion", required: true, workRefs: [] },
       ],
     };
-    for (const phase of ["accepted", "cancelled"] as const) {
-      const record = { ...activeRecord(), phase };
-      expect(reduceOutcomeContract(record, mutation)).toEqual({ kind: "rejected", record });
-    }
+    const accepted = { ...activeRecord(), phase: "accepted" as const };
+    expect(reduceOutcomeContract(accepted, mutation)).toMatchObject({
+      kind: "updated",
+      record: { phase: "active", planGeneration: accepted.planGeneration + 1 },
+    });
+    const cancelled = { ...activeRecord(), phase: "cancelled" as const };
+    expect(reduceOutcomeContract(cancelled, mutation)).toEqual({ kind: "rejected", record: cancelled });
     const stale = activeRecord();
     expect(
       reduceOutcomeContract({ ...stale, revision: stale.revision + 1 }, mutation),
@@ -387,7 +390,7 @@ describe("Outcome repository atomic contract", () => {
     expect(reduceOutcomeCancel(record, 1, 42)).toEqual({ kind: "conflict", record });
     expect(reduceOutcomeCancel(record, 2, 42)).toEqual({
       kind: "updated",
-      record: { ...record, phase: "cancelled", revision: 3 },
+      record: { ...record, phase: "cancelled", revision: 3, updatedAt: 42 },
     });
     for (const state of ["prepared", "unknown", "may-have-crossed"] as const) {
       const busy = {
