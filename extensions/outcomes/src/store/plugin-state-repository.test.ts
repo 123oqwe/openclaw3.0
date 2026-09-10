@@ -6,6 +6,7 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
+import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import { reduceOutcomeActivate, reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
 import { createRequestHash, planHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
@@ -23,7 +24,7 @@ describe("Outcome repository host adapter", () => {
     await withOpenClawTestState({ label: "outcome-repository-strict", applyEnv: false }, async (state) => {
       const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
         namespace: `outcomes-v1-${randomUUID()}`,
-        maxEntries: 500,
+        maxEntries: OUTCOME_MAX_ENTRIES,
         overflowPolicy: "reject-new",
         env: state.env,
       });

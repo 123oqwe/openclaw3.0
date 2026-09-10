@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
+import {
+  OUTCOME_MAX_CRITERIA,
+  OUTCOME_MAX_RECORD_BYTES,
+} from "./constants.js";
 import type { Criterion, PersistedOutcomeRecord } from "./types.js";
 
 export const workboardRefSchema = z.strictObject({
@@ -21,7 +25,7 @@ export const createRequestSchema = z.strictObject({
   id: z.string().min(1).max(160),
   title: z.string().min(1).max(160),
   objective: z.string().min(1).max(4000),
-  criteria: z.array(criterionSchema).min(1).max(5),
+  criteria: z.array(criterionSchema).min(1).max(OUTCOME_MAX_CRITERIA),
 }).refine((request) => request.criteria.some((criterion) => criterion.required), {
   message: "at least one criterion must be required",
 });
@@ -273,7 +277,7 @@ export function planHash(input: CanonicalPlan): string {
     .digest("hex");
 }
 
-export function assertOutcomeRecordSize(record: unknown, maxBytes = 128 * 1024): void {
+export function assertOutcomeRecordSize(record: unknown, maxBytes = OUTCOME_MAX_RECORD_BYTES): void {
   const bytes = Buffer.byteLength(stableStringify(record), "utf8");
   if (bytes > maxBytes) {
     throw new Error(`Outcome record exceeds ${maxBytes}-byte limit`);
