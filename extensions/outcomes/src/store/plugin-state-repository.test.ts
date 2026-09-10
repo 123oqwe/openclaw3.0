@@ -8,10 +8,7 @@ import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
 import type { OutcomeRecord } from "../domain/types.js";
-import {
-  createLegacyOutcomeRepository as createOutcomeRepository,
-  createStrictOutcomeRepository,
-} from "./plugin-state-repository.js";
+import { createOutcomeRepository } from "./plugin-state-repository.js";
 
 afterEach(() => resetPluginStateStoreForTests());
 
@@ -24,7 +21,7 @@ describe("Outcome repository host adapter", () => {
         overflowPolicy: "reject-new",
         env: state.env,
       });
-      const repository = createStrictOutcomeRepository(store);
+      const repository = createOutcomeRepository(store);
       const record: OutcomeRecord = {
         schemaVersion: 1,
         id: "strict-1",

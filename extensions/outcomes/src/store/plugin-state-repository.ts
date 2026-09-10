@@ -2,7 +2,7 @@ import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-run
 import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
 import { assertOutcomeRecordSize, parseOutcomeRecord } from "../domain/schema.js";
 
-export function createLegacyOutcomeRepository(
+function createLegacyOutcomeRepository(
   store: Pick<
     PluginStateKeyedStore<OutcomeRecord>,
     "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf"
@@ -108,7 +108,7 @@ export function createLegacyOutcomeRepository(
 }
 
 /** Strict storage boundary for production records; rejects sparse or corrupt persisted values. */
-export function createStrictOutcomeRepository(
+function createStrictOutcomeRepository(
   store: Pick<PluginStateKeyedStore<OutcomeRecord>, "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf">,
 ): OutcomeRepository {
   if (typeof store.deleteIf !== "function") {
