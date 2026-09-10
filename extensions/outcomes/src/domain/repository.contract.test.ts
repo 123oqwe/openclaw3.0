@@ -268,6 +268,9 @@ describe("Outcome repository atomic contract", () => {
     ).toEqual({ kind: "conflict", record: { ...stale, revision: stale.revision + 1 } });
   });
 
+  // Replay, concurrent CAS, rejection, and no-op write-count contracts are
+  // exercised against the real host adapter in plugin-state-repository.test.ts.
+
   it("does not write when the reducer rejects or is a no-op", async () => {
     const { repository, writes } = fixture();
     const record = { ...activeRecord(), revision: 2, title: "same" };
@@ -370,8 +373,4 @@ describe("Outcome repository atomic contract", () => {
     });
   });
 
-  it.todo("replays an idempotent mutation before checking expected revision");
-  it.todo("commits the same mutation once when concurrent callers race");
-  it.todo("returns a typed rejection without writing the record");
-  it.todo("returns unchanged state without incrementing revision or writing");
 });
