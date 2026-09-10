@@ -2,25 +2,27 @@ import { createHash } from "node:crypto";
 import { z } from "zod";
 import { stableStringify } from "@openclaw/normalization-core/stable-stringify";
 
-export const workboardRefSchema = z.object({
+export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
   cardId: z.string().min(1),
   cardCreatedAt: z.number().finite(),
   boardIdAtLink: z.string().min(1),
 });
 
-export const criterionSchema = z.object({
-  id: z.string().min(1),
-  text: z.string().min(1),
+export const criterionSchema = z.strictObject({
+  id: z.string().min(1).max(160),
+  text: z.string().min(1).max(1000),
   required: z.boolean(),
   workRefs: z.array(workboardRefSchema),
 });
 
-export const createRequestSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  objective: z.string().min(1),
+export const createRequestSchema = z.strictObject({
+  id: z.string().min(1).max(160),
+  title: z.string().min(1).max(160),
+  objective: z.string().min(1).max(4000),
   criteria: z.array(criterionSchema).min(1).max(5),
+}).refine((request) => request.criteria.some((criterion) => criterion.required), {
+  message: "at least one criterion must be required",
 });
 
 export function createRequestHash(input: unknown): string {
@@ -32,13 +34,7 @@ export function createRequestHash(input: unknown): string {
       .map((criterion) => ({
         ...criterion,
         workRefs: [...criterion.workRefs].toSorted((a, b) =>
-          `${a.cardId}\0${a.cardCreatedAt}\0${a.boardIdAtLink}` <
-          `${b.cardId}\0${b.cardCreatedAt}\0${b.boardIdAtLink}`
-            ? -1
-            : `${a.cardId}\0${a.cardCreatedAt}\0${a.boardIdAtLink}` >
-                `${b.cardId}\0${b.cardCreatedAt}\0${b.boardIdAtLink}`
-              ? 1
-              : 0,
+          a.cardId < b.cardId ? -1 : a.cardId > b.cardId ? 1 : a.cardCreatedAt - b.cardCreatedAt || (a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0),
         ),
       })),
   };

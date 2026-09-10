@@ -6,7 +6,8 @@
   "type": "module",
   "devDependencies": {
     "@openclaw/plugin-sdk": "workspace:*",
-    "openclaw": "workspace:*"
+    "openclaw": "workspace:*",
+    "zod": "4.4.3"
   },
   "peerDependencies": {
     "openclaw": ">=2026.8.1"
