@@ -11,7 +11,9 @@ describe("Outcome repository atomic contract", () => {
     let writes = 0;
     const repository = createOutcomeRepository({
       registerIfAbsent: async (id, value) => {
-        if (records.has(id)) return false;
+        if (records.has(id)) {
+          return false;
+        }
         records.set(id, value);
         writes += 1;
         return true;
