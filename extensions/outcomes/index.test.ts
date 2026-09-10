@@ -70,7 +70,7 @@ describe("Outcome plugin shell", () => {
       }),
     );
 
-    expect(registerGatewayMethod).toHaveBeenCalledTimes(3);
+    expect(registerGatewayMethod).toHaveBeenCalledTimes(4);
     const [method, handler, options] = registerGatewayMethod.mock.calls[0] ?? [];
     expect(method).toBe("outcomes.health");
     expect(options).toEqual({ scope: "operator.read" });
@@ -104,6 +104,7 @@ describe("Outcome plugin shell", () => {
     expect(registerGatewayMethod.mock.calls.slice(1).map(([name]) => name)).toEqual([
       "outcomes.create",
       "outcomes.get",
+      "outcomes.updateTitle",
     ]);
   });
 

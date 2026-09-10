@@ -3,6 +3,8 @@ import { definePluginEntry } from "./api.js";
 import { registerOutcomeGatewayMethods } from "./runtime-api.js";
 import { createOutcomeRepository } from "./src/store/plugin-state-repository.js";
 import { createRequestHash, createRequestSchema } from "./src/domain/schema.js";
+import { reduceOutcomeTitle } from "./src/domain/reducer.js";
+import type { OutcomeMutationResult } from "./src/domain/reducer.js";
 import type { OutcomeRecord } from "./src/domain/types.js";
 
 export default definePluginEntry({
@@ -49,5 +51,29 @@ export default definePluginEntry({
       }
       respond(true, { record: await repository.get(id) });
     }, { scope: "operator.read" });
+    api.registerGatewayMethod("outcomes.updateTitle", async ({ params, respond }) => {
+      const input = params as { id?: unknown; expectedRevision?: unknown; title?: unknown } | undefined;
+      if (
+        typeof input?.id !== "string" ||
+        !input.id ||
+        typeof input.expectedRevision !== "number" ||
+        !Number.isInteger(input.expectedRevision) ||
+        typeof input.title !== "string"
+      ) {
+        respond(false, { error: "id, expectedRevision and title are required" });
+        return;
+      }
+      const result = await repository.transact<OutcomeMutationResult>(input.id, (current) => {
+        if (!current) {
+          return { result: { kind: "rejected", record: { id: input.id!, revision: 0 } } as OutcomeMutationResult };
+        }
+        const decision = reduceOutcomeTitle(current, {
+          expectedRevision: input.expectedRevision as number,
+          title: input.title as string,
+        });
+        return { result: decision, next: decision.kind === "updated" ? decision.record : undefined };
+      });
+      respond(true, result);
+    }, { scope: "operator.write" });
   },
 });
