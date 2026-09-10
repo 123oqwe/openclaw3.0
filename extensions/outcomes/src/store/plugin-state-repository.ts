@@ -44,8 +44,7 @@ export function createOutcomeRepository(
       let result!: T;
       await store.update!(id, (current) => {
         if (current?.managerProfileId !== managerProfileId) {
-          result = decide(undefined).result;
-          return undefined;
+          throw new Error("Outcome is not owned by the requested manager");
         }
         const decision = decide(current);
         result = decision.result;

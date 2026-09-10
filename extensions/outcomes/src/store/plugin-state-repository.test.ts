@@ -122,4 +122,29 @@ describe("Outcome repository host adapter", () => {
       await expect(reopenedRepository.get(record.id)).resolves.toBeUndefined();
     });
   });
+
+  it("fails closed for an unauthorized owner transaction", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-owner", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const repository = createOutcomeRepository(store);
+      const record = {
+        id: "owned",
+        managerProfileId: "alice",
+        revision: 1,
+        phase: "draft" as const,
+        planGeneration: 0,
+      };
+      await repository.create(record);
+      await expect(repository.getOwned("bob", record.id)).resolves.toBeUndefined();
+      await expect(
+        repository.transactOwned("bob", record.id, () => ({ result: "must-not-run", next: record })),
+      ).rejects.toThrow("not owned");
+      await expect(repository.get(record.id)).resolves.toEqual(record);
+    });
+  });
 });
