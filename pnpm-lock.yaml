@@ -1764,6 +1764,10 @@ importers:
         version: link:../../packages/plugin-sdk
 
   extensions/outcomes:
+    dependencies:
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
     devDependencies:
       '@openclaw/normalization-core':
         specifier: workspace:*
@@ -1774,9 +1778,6 @@ importers:
       openclaw:
         specifier: workspace:*
         version: link:../..
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
 
   extensions/parallel:
     devDependencies:
