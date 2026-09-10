@@ -566,9 +566,6 @@ importers:
       openclaw:
         specifier: workspace:*
         version: link:../..
-      zod:
-        specifier: 4.4.3
-        version: 4.4.3
 
   extensions/acpx:
     dependencies:
@@ -1768,12 +1765,18 @@ importers:
 
   extensions/outcomes:
     devDependencies:
+      '@openclaw/normalization-core':
+        specifier: workspace:*
+        version: link:../../packages/normalization-core
       '@openclaw/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
       openclaw:
         specifier: workspace:*
         version: link:../..
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
 
   extensions/parallel:
     devDependencies:
