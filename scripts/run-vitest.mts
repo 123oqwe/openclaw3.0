@@ -968,6 +968,7 @@ export async function runVitest(
   if (
     execution &&
     config &&
+    relativeConfig !== E2E_VITEST_CONFIG &&
     !hasAlternateVitestRootArg(vitestArgs) &&
     !hasExplicitVitestProjectArg(vitestArgs) &&
     !hasNonRunVitestSubcommand(vitestArgs) &&
