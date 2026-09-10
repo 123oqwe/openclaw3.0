@@ -191,30 +191,64 @@ describe("Outcome create schema and canonical hash", () => {
     };
     expect(() => outcomeRecordSchema.safeParse(malformed)).not.toThrow();
     expect(outcomeRecordSchema.safeParse(malformed).success).toBe(false);
-    expect(outcomeRecordSchema.safeParse({ ...record, decisions: [{ ...decision, planHash: "c".repeat(64) }] }).success).toBe(false);
-    expect(outcomeRecordSchema.safeParse({
-      ...record,
-      decisions: [{
-        ...decision,
-        decidedPlan: { ...plan, criteria: [{ ...plan.criteria[0], required: false }] },
-      }],
-    }).success).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        decisions: [{ ...decision, planHash: "c".repeat(64) }],
+      }).success,
+    ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        decisions: [
+          {
+            ...decision,
+            decidedPlan: {
+              ...plan,
+              criteria: [{ ...plan.criteria[0], required: false }],
+            },
+          },
+        ],
+      }).success,
+    ).toBe(false);
   });
 
   it("preserves only coherent cancelled plan state", () => {
     const draft = {
-      schemaVersion: 1, id: "o-cancel", createRequestHash: "a".repeat(64), managerProfileId: "m",
-      title: "x", objective: "y", phase: "cancelled" as const, revision: 1, contractRevision: 1,
-      planGeneration: 0, planHash: null, criteria: [{ id: "c", text: "done", required: true, workRefs: [] }],
-      projections: [], evidence: [], decisions: [], operations: [], acceptances: [], createdAt: 1, updatedAt: 1,
+      schemaVersion: 1,
+      id: "o-cancel",
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "m",
+      title: "x",
+      objective: "y",
+      phase: "cancelled" as const,
+      revision: 1,
+      contractRevision: 1,
+      planGeneration: 0,
+      planHash: null,
+      criteria: [{ id: "c", text: "done", required: true, workRefs: [] }],
+      projections: [],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+      createdAt: 1,
+      updatedAt: 1,
     };
     expect(outcomeRecordSchema.safeParse(draft).success).toBe(true);
     expect(outcomeRecordSchema.safeParse({ ...draft, planGeneration: 1 }).success).toBe(false);
     expect(outcomeRecordSchema.safeParse({ ...draft, planHash: "a".repeat(64) }).success).toBe(false);
-    const planned = { ...draft, planGeneration: 1, planHash: planHash({
-      outcomeId: draft.id, objective: draft.objective, contractRevision: 1, planGeneration: 1,
-      criteria: draft.criteria,
-    }) };
+    const planned = {
+      ...draft,
+      planGeneration: 1,
+      planHash: planHash({
+        outcomeId: draft.id,
+        objective: draft.objective,
+        contractRevision: 1,
+        planGeneration: 1,
+        criteria: draft.criteria,
+      }),
+    };
     expect(outcomeRecordSchema.safeParse(planned).success).toBe(true);
   });
 });

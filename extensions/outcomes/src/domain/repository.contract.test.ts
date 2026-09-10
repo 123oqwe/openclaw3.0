@@ -39,7 +39,18 @@ describe("Outcome repository atomic contract", () => {
   });
   const activeRecord = (id = "o-1") => {
     const draft = validRecord(id);
-    return { ...draft, phase: "active" as const, planGeneration: 1, planHash: planHash({ outcomeId: id, objective: draft.objective, contractRevision: draft.contractRevision, planGeneration: 1, criteria: draft.criteria }) };
+    return {
+      ...draft,
+      phase: "active" as const,
+      planGeneration: 1,
+      planHash: planHash({
+        outcomeId: id,
+        objective: draft.objective,
+        contractRevision: draft.contractRevision,
+        planGeneration: 1,
+        criteria: draft.criteria,
+      }),
+    };
   };
 
   function fixture() {
@@ -144,7 +155,12 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("rejects title updates for cancelled outcomes", () => {
-    const record = { ...validRecord(), revision: 2, title: "same", phase: "cancelled" as const };
+    const record = {
+      ...validRecord(),
+      revision: 2,
+      title: "same",
+      phase: "cancelled" as const,
+    };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({ kind: "rejected", record });
   });
 
@@ -202,9 +218,15 @@ describe("Outcome repository atomic contract", () => {
       expect(reduceOutcomeCancel(settled, 2).kind).toBe("updated");
     }
     const accepted = { ...record, phase: "accepted" as const };
-    expect(reduceOutcomeCancel(accepted, 2)).toEqual({ kind: "rejected", record: accepted });
+    expect(reduceOutcomeCancel(accepted, 2)).toEqual({
+      kind: "rejected",
+      record: accepted,
+    });
     const cancelled = { ...record, phase: "cancelled" as const };
-    expect(reduceOutcomeCancel(cancelled, 2)).toEqual({ kind: "rejected", record: cancelled });
+    expect(reduceOutcomeCancel(cancelled, 2)).toEqual({
+      kind: "rejected",
+      record: cancelled,
+    });
   });
 
   it.todo("replays an idempotent mutation before checking expected revision");
