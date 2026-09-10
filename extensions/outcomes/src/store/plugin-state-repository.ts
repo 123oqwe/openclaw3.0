@@ -8,6 +8,11 @@ export function createOutcomeRepository(
     "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf"
   >,
 ): OutcomeRepository {
+  const requireManager = (managerProfileId: string) => {
+    if (!managerProfileId.trim()) {
+      throw new Error("managerProfileId must be non-empty");
+    }
+  };
   if (typeof store.update !== "function") {
     throw new Error("Outcome repository requires atomic keyed-store update");
   }
@@ -17,6 +22,7 @@ export function createOutcomeRepository(
       return { created: await store.registerIfAbsent(record.id, record) };
     },
     createOwned: async (managerProfileId, record) => {
+      requireManager(managerProfileId);
       if (record.managerProfileId !== managerProfileId) {
         throw new Error("Outcome manager profile does not match authenticated owner");
       }
@@ -58,14 +64,18 @@ export function createOutcomeRepository(
       return store.deleteIf(id, predicate);
     },
     getOwned: async (managerProfileId, id) => {
+      requireManager(managerProfileId);
       const record = await store.lookup(id);
       return record?.managerProfileId === managerProfileId ? record : undefined;
     },
-    listOwned: async (managerProfileId) =>
-      (await store.entries())
+    listOwned: async (managerProfileId) => {
+      requireManager(managerProfileId);
+      return (await store.entries())
         .map((entry) => entry.value)
-        .filter((record) => record.managerProfileId === managerProfileId),
+        .filter((record) => record.managerProfileId === managerProfileId);
+    },
     transactOwned: async (managerProfileId, id, decide) => {
+      requireManager(managerProfileId);
       let result!: T;
       await store.update!(id, (current) => {
         if (current?.managerProfileId !== managerProfileId) {
@@ -81,6 +91,7 @@ export function createOutcomeRepository(
       return result;
     },
     deleteOwnedIf: async (managerProfileId, id, predicate) => {
+      requireManager(managerProfileId);
       if (typeof store.deleteIf !== "function") {
         throw new Error("Outcome repository requires atomic keyed-store deleteIf");
       }

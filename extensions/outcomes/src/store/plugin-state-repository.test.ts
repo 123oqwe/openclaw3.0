@@ -150,6 +150,7 @@ describe("Outcome repository host adapter", () => {
       await expect(repository.deleteOwnedIf("bob", record.id, () => true)).resolves.toBe(false);
       await expect(repository.deleteOwnedIf("alice", record.id, () => true)).resolves.toBe(true);
       await expect(repository.get(record.id)).resolves.toBeUndefined();
+      await expect(repository.listOwned("   ")).rejects.toThrow("non-empty");
     });
   });
 
