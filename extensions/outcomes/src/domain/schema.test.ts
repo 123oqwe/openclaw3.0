@@ -8,11 +8,19 @@ describe("Outcome create schema and canonical hash", () => {
       title: "Ship",
       objective: "Ship safely",
       criteria: [
-        { id: "c-2", text: "done", required: false, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 10, boardIdAtLink: "b" }] },
-        { id: "c-1", text: "done", required: true, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 2, boardIdAtLink: "a" }] },
+        {
+          id: "c-1",
+          text: "done",
+          required: true,
+          workRefs: [
+            { owner: "workboard", cardId: "card", cardCreatedAt: 10, boardIdAtLink: "b" },
+            { owner: "workboard", cardId: "card", cardCreatedAt: 2, boardIdAtLink: "a" },
+          ],
+        },
+        { id: "c-2", text: "done", required: false, workRefs: [] },
       ],
     };
-    expect(createRequestSchema.parse(base).criteria).toHaveLength(1);
+    expect(createRequestSchema.parse(base).criteria).toHaveLength(2);
     const reordered = { ...base, criteria: [...base.criteria].reverse() };
     expect(createRequestHash(base)).toBe(createRequestHash(reordered));
     expect(createRequestHash(base)).not.toBe(createRequestHash({ ...base, objective: "changed" }));
