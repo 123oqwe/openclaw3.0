@@ -1,6 +1,6 @@
 import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-runtime";
 import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
-import { assertOutcomeRecordSize } from "../domain/schema.js";
+import { assertOutcomeRecordSize, parseOutcomeRecord } from "../domain/schema.js";
 
 export function createOutcomeRepository(
   store: Pick<
@@ -104,5 +104,30 @@ export function createOutcomeRepository(
         (current) => current.managerProfileId === managerProfileId && predicate(current),
       );
     },
+  };
+}
+
+/** Strict storage boundary for production records; rejects sparse or corrupt persisted values. */
+export function createStrictOutcomeRepository(
+  store: Pick<PluginStateKeyedStore<OutcomeRecord>, "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf">,
+): OutcomeRepository {
+  const base = createOutcomeRepository(store);
+  const strict = (value: OutcomeRecord | undefined) => (value === undefined ? undefined : parseOutcomeRecord(value));
+  return {
+    ...base,
+    create: async (record) => base.create(parseOutcomeRecord(record)),
+    createOwned: async (owner, record) => base.createOwned(owner, parseOutcomeRecord(record)),
+    get: async (id) => strict(await base.get(id)),
+    list: async () => (await base.list()).map(parseOutcomeRecord),
+    getOwned: async (owner, id) => strict(await base.getOwned(owner, id)),
+    listOwned: async (owner) => (await base.listOwned(owner)).map(parseOutcomeRecord),
+    transact: async <T>(id, decide) => base.transact(id, (current) => {
+      const decision = decide(strict(current));
+      return { result: decision.result, next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next) };
+    }),
+    transactOwned: async <T>(owner, id, decide) => base.transactOwned(owner, id, (current) => {
+      const decision = decide(parseOutcomeRecord(current));
+      return { result: decision.result, next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next) };
+    }),
   };
 }
