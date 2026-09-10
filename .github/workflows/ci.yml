@@ -1415,6 +1415,8 @@ jobs:
                 : undefined;
           let changedNodeTestShards = null;
           let changedExtensionFallbackShards = [];
+          const p00WorkboardHealthTarget =
+            "test/e2e/qa-lab/runtime/real-workboard-health.e2e.test.ts";
           if (changedExtensionPullRequest && runNodeFull) {
             // Every PR plan excludes the full extension catch-all below. Keep changed
             // extension behavior covered even when a private mirror retains the full
@@ -1438,6 +1440,19 @@ jobs:
             if (!compactPullRequest || changedNodeTestShards === null) {
               changedExtensionFallbackShards =
                 changedNodeTestPlan.createChangedExtensionFallbackShards(changedPaths);
+            }
+            if (
+              !compactPullRequest &&
+              changedPaths.includes(p00WorkboardHealthTarget)
+            ) {
+              changedExtensionFallbackShards.push({
+                checkName: "checks-node-p00-workboard-health",
+                configs: [],
+                shardName: "p00-workboard-health",
+                targets: [p00WorkboardHealthTarget],
+                pretestBuildMode: "private-qa",
+                requiresDist: false,
+              });
             }
           }
           // Heavy packaging lanes run only when the diff touches surfaces they

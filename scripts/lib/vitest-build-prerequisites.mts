@@ -23,6 +23,12 @@ type TestSelection = {
 // while unrelated workers may still be importing its public plugin facades.
 const runtimeConsumers = [
   {
+    file: "test/e2e/qa-lab/runtime/real-workboard-health.e2e.test.ts",
+    configs: ["test/vitest/vitest.e2e.config.ts"],
+    mode: "private-qa",
+    dir: "",
+  },
+  {
     file: "extensions/qa-lab/src/suite-process-lifecycle.test.ts",
     configs: ["test/vitest/vitest.extension-qa.config.ts"],
     mode: "private-qa",
