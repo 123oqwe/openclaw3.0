@@ -8,10 +8,12 @@ import type { OutcomeRecord } from "./types.js";
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
 export function toOutcomeSummary(record: OutcomeRecord): OutcomeSummary {
   const required = record.criteria.filter((criterion) => criterion.required);
-  const hasUnavailableSource = record.projections.some((projection) =>
-    ["workboard-disabled", "not-found", "forbidden", "timeout", "invalid-response"].includes(
-      projection.errorCode ?? "",
-    ),
+  const hasUnavailableSource = record.projections.some(
+    (projection) =>
+      projection.availability !== "available" ||
+      ["workboard-disabled", "not-found", "forbidden", "timeout", "invalid-response"].includes(
+        projection.errorCode ?? "",
+      ),
   );
   const hasStaleSource = record.projections.some((projection) => projection.upstreamStale === true);
   const readiness = hasUnavailableSource
@@ -53,10 +55,23 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
   // refs/evidence or invent source timestamps; P-02 supplies these inputs.
   const work: OutcomeDetail["work"] = [];
   const evidence: OutcomeDetail["evidence"] = [];
-  const sourceIssues = record.projections.flatMap((projection) =>
-    projection.errorCode
-      ? [{ criterionId: projection.ref.cardId, reason: projection.errorCode }]
-      : [],
+  const sourceIssues = record.projections.flatMap((projection) => {
+    const criterion = record.criteria.find((item) =>
+      item.workRefs.some(
+        (ref) =>
+          ref.cardId === projection.ref.cardId &&
+          ref.cardCreatedAt === projection.ref.cardCreatedAt &&
+          ref.boardIdAtLink === projection.ref.boardIdAtLink,
+      ),
+    );
+    const reason = projection.errorCode;
+    return criterion && reason ? [{ criterionId: criterion.id, reason }] : [];
+  }).filter(
+    (issue, index, issues) =>
+      issues.findIndex(
+        (candidate) =>
+          candidate.criterionId === issue.criterionId && candidate.reason === issue.reason,
+      ) === index,
   );
   return {
     ...summary,

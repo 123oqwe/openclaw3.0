@@ -43,4 +43,26 @@ describe("Outcome P-01 read model", () => {
     expect(detail).not.toHaveProperty("createRequestHash");
     expect(detail).not.toHaveProperty("operations");
   });
+
+  it("reports source failures by criterion without leaking card identity", () => {
+    const input = record();
+    input.criteria[0].workRefs = [
+      { owner: "workboard", cardId: "secret-card", cardCreatedAt: 4, boardIdAtLink: "board" },
+    ];
+    input.projections = [
+      {
+        ref: input.criteria[0].workRefs[0],
+        availability: "identity-conflict",
+        errorCode: "identity-conflict",
+        observedAt: 5,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
+    const detail = toOutcomeDetail(input, 10);
+    expect(detail.readiness).toBe("unavailable");
+    expect(detail.sourceIssues).toEqual([{ criterionId: "c-1", reason: "identity-conflict" }]);
+    expect(JSON.stringify(detail)).not.toContain("secret-card");
+    expect(input.criteria[0].workRefs[0].cardId).toBe("secret-card");
+  });
 });
