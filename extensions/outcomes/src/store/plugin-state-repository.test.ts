@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { spawnSync } from "node:child_process";
 import {
   createPluginStateKeyedStoreForTests,
   resetPluginStateStoreForTests,
@@ -92,7 +93,20 @@ describe("Outcome repository host adapter", () => {
         overflowPolicy: "reject-new",
         env: state.env,
       });
-      await expect(reopened.lookup(record.id)).resolves.toBeUndefined();
+      await expect(reopened.lookup(record.id)).resolves.toEqual(record);
+      await expect(reopened.lookup(active.id)).resolves.toEqual(active);
+      const child = spawnSync(
+        process.execPath,
+        ["--import", "tsx", "--input-type=module", "--eval", `
+          import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
+          const store = createPluginStateKeyedStoreForTests("outcomes", { namespace: ${JSON.stringify(namespace)}, maxEntries: 500, overflowPolicy: "reject-new" });
+          const value = await store.lookup(${JSON.stringify(record.id)});
+          process.stdout.write(JSON.stringify(value));
+        `],
+        { cwd: process.cwd(), encoding: "utf8", env: { ...process.env, ...state.env } },
+      );
+      expect(child.status, child.stderr).toBe(0);
+      expect(JSON.parse(child.stdout)).toEqual(record);
     });
   });
 });
