@@ -20,12 +20,23 @@ describe("Outcome repository atomic contract", () => {
         return true;
       },
       lookup: async (id) => records.get(id),
+      entries: async () =>
+        Array.from(records, ([key, value]) => ({ key, value, createdAt: 0 })),
       update: async (id, decide) => {
         const next = decide(records.get(id));
         if (next === undefined) {
           return false;
         }
         records.set(id, next);
+        writes += 1;
+        return true;
+      },
+      deleteIf: async (id, predicate) => {
+        const current = records.get(id);
+        if (!current || !predicate(current)) {
+          return false;
+        }
+        records.delete(id);
         writes += 1;
         return true;
       },

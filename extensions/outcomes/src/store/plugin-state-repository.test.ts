@@ -96,14 +96,6 @@ describe("Outcome repository host adapter", () => {
       });
       await expect(reopened.lookup(record.id)).resolves.toEqual(record);
       await expect(reopened.lookup(active.id)).resolves.toEqual(active);
-      const reopenedRepository = createOutcomeRepository(reopened);
-      await expect(reopenedRepository.deleteIf(record.id, (current) => current.phase === "active")).resolves.toBe(
-        false,
-      );
-      await expect(reopenedRepository.deleteIf(record.id, (current) => current.phase === "cancelled")).resolves.toBe(
-        true,
-      );
-      await expect(reopenedRepository.get(record.id)).resolves.toBeUndefined();
       const child = spawnSync(
         process.execPath,
         ["--import", "tsx", "--input-type=module", "--eval", `
@@ -116,6 +108,14 @@ describe("Outcome repository host adapter", () => {
       );
       expect(child.status, child.stderr).toBe(0);
       expect(JSON.parse(child.stdout)).toEqual(record);
+      const reopenedRepository = createOutcomeRepository(reopened);
+      await expect(reopenedRepository.deleteIf(record.id, (current) => current.phase === "active")).resolves.toBe(
+        false,
+      );
+      await expect(reopenedRepository.deleteIf(record.id, (current) => current.phase === "cancelled")).resolves.toBe(
+        true,
+      );
+      await expect(reopenedRepository.get(record.id)).resolves.toBeUndefined();
     });
   });
 });
