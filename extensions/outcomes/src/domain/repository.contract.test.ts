@@ -55,6 +55,14 @@ describe("Outcome repository atomic contract", () => {
     });
   });
 
+  it("increments only revision when title changes", () => {
+    const record = { id: "o-1", revision: 2, title: "old", phase: "active" as const, planGeneration: 3 };
+    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
+      kind: "updated",
+      record: { ...record, title: "new", revision: 3 },
+    });
+  });
+
   it("rejects title updates for cancelled outcomes", () => {
     const record = { id: "o-1", revision: 2, title: "same", phase: "cancelled" as const };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
