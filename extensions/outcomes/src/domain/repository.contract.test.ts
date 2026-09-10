@@ -149,7 +149,30 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("reopens accepted contracts while preserving acceptance history", () => {
-    const record = { ...activeRecord(), phase: "accepted" as const, acceptances: [] };
+    const base = activeRecord();
+    const record = {
+      ...base,
+      phase: "accepted" as const,
+      acceptances: [
+        {
+          id: "a-1",
+          requestHash: "a".repeat(64),
+          acceptedRevision: base.revision,
+          profileId: "manager-1",
+          acceptedAt: 2,
+          planGeneration: base.planGeneration,
+          planHash: base.planHash!,
+          closureHash: "b".repeat(64),
+          acceptedPlan: {
+            outcomeId: base.id,
+            objective: base.objective,
+            contractRevision: base.contractRevision,
+            planGeneration: base.planGeneration,
+            criteria: base.criteria,
+          },
+        },
+      ],
+    };
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
       objective: "Revised objective",
@@ -160,6 +183,44 @@ describe("Outcome repository atomic contract", () => {
     expect(result.record.phase).toBe("active");
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
     expect(result.record.acceptances).toEqual(record.acceptances);
+    expect(result.record.acceptances[0].acceptedPlan).toEqual(record.acceptances[0].acceptedPlan);
+  });
+
+  it("keeps draft contracts unplanned while applying a revision CAS", () => {
+    const record = validRecord();
+    const result = reduceOutcomeContract(record, {
+      expectedRevision: 1,
+      objective: "Draft objective",
+      criteria: [{ id: "c-2", text: "Draft criterion", required: true, workRefs: [] }],
+    });
+    expect(result.kind).toBe("updated");
+    if (result.kind !== "updated") return;
+    expect(result.record.phase).toBe("draft");
+    expect(result.record.planGeneration).toBe(0);
+    expect(result.record.planHash).toBeNull();
+    expect(result.record.revision).toBe(2);
+    expect(result.record.contractRevision).toBe(2);
+  });
+
+  it("never reuses a generation when a contract cycles A to B to A", () => {
+    const initial = activeRecord();
+    const criteriaA = initial.criteria;
+    const first = reduceOutcomeContract(initial, {
+      expectedRevision: initial.revision,
+      objective: "B",
+      criteria: [{ id: "c-b", text: "B", required: true, workRefs: [] }],
+    });
+    expect(first.kind).toBe("updated");
+    if (first.kind !== "updated") return;
+    const second = reduceOutcomeContract(first.record, {
+      expectedRevision: first.record.revision,
+      objective: initial.objective,
+      criteria: criteriaA,
+    });
+    expect(second.kind).toBe("updated");
+    if (second.kind !== "updated") return;
+    expect(second.record.planGeneration).toBe(initial.planGeneration + 2);
+    expect(second.record.planHash).not.toBe(initial.planHash);
   });
 
   it("does not write when the reducer rejects or is a no-op", async () => {

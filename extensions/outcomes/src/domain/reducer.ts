@@ -42,9 +42,14 @@ export function reduceOutcomeContract(
         ...criterion,
         workRefs: criterion.workRefs
           .map((ref) => ({ ...ref }))
-          .sort((a, b) => a.cardId.localeCompare(b.cardId) || a.cardCreatedAt - b.cardCreatedAt),
+          .sort(
+            (a, b) =>
+              (a.cardId < b.cardId ? -1 : a.cardId > b.cardId ? 1 : 0) ||
+              a.cardCreatedAt - b.cardCreatedAt ||
+              (a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0),
+          ),
       }))
-      .sort((a, b) => a.id.localeCompare(b.id));
+      .sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   if (
     current.objective === mutation.objective &&
     stableStringify(canonicalCriteria(current.criteria)) ===
