@@ -1,5 +1,6 @@
 import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-runtime";
 import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
+import { assertOutcomeRecordSize } from "../domain/schema.js";
 
 export function createOutcomeRepository(
   store: Pick<
@@ -11,11 +12,15 @@ export function createOutcomeRepository(
     throw new Error("Outcome repository requires atomic keyed-store update");
   }
   return {
-    create: async (record) => ({ created: await store.registerIfAbsent(record.id, record) }),
+    create: async (record) => {
+      assertOutcomeRecordSize(record);
+      return { created: await store.registerIfAbsent(record.id, record) };
+    },
     createOwned: async (managerProfileId, record) => {
       if (record.managerProfileId !== managerProfileId) {
         throw new Error("Outcome manager profile does not match authenticated owner");
       }
+      assertOutcomeRecordSize(record);
       const created = await store.registerIfAbsent(record.id, record);
       if (created) {
         return { created: true, replayed: false, record };
@@ -39,6 +44,9 @@ export function createOutcomeRepository(
       await store.update!(id, (current) => {
         const decision = decide(current);
         result = decision.result;
+        if (decision.next) {
+          assertOutcomeRecordSize(decision.next);
+        }
         return decision.next;
       });
       return result;
@@ -65,6 +73,9 @@ export function createOutcomeRepository(
         }
         const decision = decide(current);
         result = decision.result;
+        if (decision.next) {
+          assertOutcomeRecordSize(decision.next);
+        }
         return decision.next;
       });
       return result;
