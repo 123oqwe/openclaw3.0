@@ -268,8 +268,9 @@ describe("Outcome repository atomic contract", () => {
     ).toEqual({ kind: "conflict", record: { ...stale, revision: stale.revision + 1 } });
   });
 
-  // Replay, concurrent CAS, rejection, and no-op write-count contracts are
-  // exercised against the real host adapter in plugin-state-repository.test.ts.
+  // P-01 host tests cover create replay, revision CAS, typed rejection, no-op,
+  // and identical create races. Replay-before-CAS for verify/accept/start is a
+  // later-phase contract and intentionally has no P-01 placeholder here.
 
   it("does not write when the reducer rejects or is a no-op", async () => {
     const { repository, writes } = fixture();

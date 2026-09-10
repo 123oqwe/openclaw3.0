@@ -220,6 +220,26 @@ describe("Outcome repository host adapter", () => {
     });
   });
 
+  it("commits one record when identical owner creates race", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-create-race", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const repository = createOutcomeRepository(store);
+      const record = { ...draftRecord("race"), createRequestHash: "c".repeat(64) };
+      const results = await Promise.all([
+        repository.createOwned("alice", record),
+        repository.createOwned("alice", record),
+      ]);
+      expect(results.filter((result) => result.created)).toHaveLength(1);
+      expect(results.filter((result) => result.replayed)).toHaveLength(1);
+      await expect(repository.get(record.id)).resolves.toEqual(record);
+    });
+  });
+
   it("rejects oversized aggregates before create or update", async () => {
     await withOpenClawTestState({ label: "outcome-repository-size", applyEnv: false }, async (state) => {
       const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
