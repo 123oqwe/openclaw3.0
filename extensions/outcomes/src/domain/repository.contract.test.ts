@@ -4,6 +4,7 @@ import type { OutcomeRecord } from "./types.js";
 import { createRequestHash, planHash } from "./schema.js";
 import {
   reduceOutcomeCancel,
+  reduceOutcomeContract,
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "./reducer.js";
@@ -125,6 +126,24 @@ describe("Outcome repository atomic contract", () => {
       kind: "updated",
       record: { ...record, title: "new", revision: 3 },
     });
+  });
+
+  it("moves contract changes to a new generation with a new canonical plan hash", () => {
+    const record = activeRecord();
+    const nextCriteria = [
+      { id: "c-2", text: "New criterion", required: true, workRefs: [] },
+    ];
+    const result = reduceOutcomeContract(record, {
+      expectedRevision: record.revision,
+      objective: "New objective",
+      criteria: nextCriteria,
+    });
+    expect(result.kind).toBe("updated");
+    if (result.kind !== "updated") return;
+    expect(result.record.revision).toBe(record.revision + 1);
+    expect(result.record.contractRevision).toBe(record.contractRevision + 1);
+    expect(result.record.planGeneration).toBe(record.planGeneration + 1);
+    expect(result.record.planHash).not.toBe(record.planHash);
   });
 
   it("does not write when the reducer rejects or is a no-op", async () => {
