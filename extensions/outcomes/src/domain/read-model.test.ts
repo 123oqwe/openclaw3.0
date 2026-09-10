@@ -89,6 +89,29 @@ describe("Outcome P-01 read model", () => {
         decidedAt: 1,
       },
     ];
-    expect(toOutcomeSummary(input).readiness).toBe("incomplete");
+    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
+  });
+
+  it("uses last successful observation and the inclusive 24-hour boundary", () => {
+    const input = record();
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "card",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board",
+    };
+    input.criteria[0].workRefs = [ref];
+    input.projections = [
+      {
+        ref,
+        availability: "available",
+        observedAt: 99,
+        lastSuccessfulAt: 1,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
+    expect(toOutcomeSummary(input, 1 + 24 * 60 * 60 * 1000 - 1).readiness).toBe("incomplete");
+    expect(toOutcomeSummary(input, 1 + 24 * 60 * 60 * 1000).readiness).toBe("stale");
   });
 });
