@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { assertOutcomeRecordSize, createRequestHash, createRequestSchema, planHash } from "./schema.js";
+import {
+  assertOutcomeRecordSize,
+  createRequestHash,
+  createRequestSchema,
+  outcomeRecordSchema,
+  planHash,
+} from "./schema.js";
 
 describe("Outcome create schema and canonical hash", () => {
   it("accepts at most five criteria and produces order-independent hashes", () => {
@@ -69,5 +75,31 @@ describe("Outcome create schema and canonical hash", () => {
     expect(planHash(plan)).toHaveLength(64);
     expect(planHash(plan)).not.toBe(planHash({ ...plan, planGeneration: 2 }));
     expect(planHash(plan)).not.toBe(planHash({ ...plan, contractRevision: 2 }));
+  });
+
+  it("requires the complete persisted aggregate shape", () => {
+    const record = {
+      schemaVersion: 1,
+      id: "o-1",
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "manager-1",
+      title: "Ship",
+      objective: "Ship safely",
+      phase: "draft" as const,
+      revision: 1,
+      contractRevision: 1,
+      planGeneration: 0,
+      planHash: null,
+      criteria: [{ id: "c-1", text: "done", required: true, workRefs: [] }],
+      projections: [],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    expect(outcomeRecordSchema.parse(record)).toEqual(record);
+    expect(() => outcomeRecordSchema.parse({ ...record, managerProfileId: undefined })).toThrow();
   });
 });

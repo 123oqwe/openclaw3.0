@@ -26,6 +26,93 @@ export const createRequestSchema = z.strictObject({
   message: "at least one criterion must be required",
 });
 
+const projectionSchema = z.strictObject({
+  ref: workboardRefSchema.optional(),
+  criterionId: z.string().min(1),
+  availability: z.enum(["available", "unavailable", "identity-conflict"]),
+  sourceDigest: z.string().min(1).optional(),
+  observedAt: z.number().finite().optional(),
+  upstreamStale: z.boolean().optional(),
+  error: z.string().optional(),
+});
+
+const evidenceSchema = z.strictObject({
+  criterionId: z.string().min(1),
+  planGeneration: z.number().int().nonnegative(),
+  sourceId: z.string().min(1),
+  sourceDigest: z.string().min(1),
+});
+
+const decisionSchema = z.strictObject({
+  id: z.string().min(1),
+  criterionId: z.string().min(1),
+  planGeneration: z.number().int().nonnegative(),
+  decidedRevision: z.number().int().positive(),
+  status: z.enum(["verified", "rejected"]),
+  evidenceSetHash: z.string().length(64),
+  note: z.string().optional(),
+  decidedAt: z.number().finite(),
+});
+
+const operationSchema = z.strictObject({
+  id: z.string().min(1),
+  kind: z.literal("workboard-card-start"),
+  criterionId: z.string().min(1),
+  planGeneration: z.number().int().nonnegative(),
+  createdRevision: z.number().int().positive(),
+  requestHash: z.string().length(64),
+  state: z.enum(["prepared", "may-have-crossed", "succeeded", "failed", "unknown"]),
+  target: workboardRefSchema,
+  attemptedAt: z.number().finite().optional(),
+  terminalAt: z.number().finite().optional(),
+  resultDigest: z.string().min(1).optional(),
+});
+
+const acceptanceSchema = z.strictObject({
+  id: z.string().min(1),
+  requestHash: z.string().length(64),
+  acceptedRevision: z.number().int().positive(),
+  profileId: z.string().min(1),
+  acceptedAt: z.number().finite(),
+  planGeneration: z.number().int().nonnegative(),
+  planHash: z.string().length(64),
+  closureHash: z.string().length(64),
+  acceptedPlan: z.strictObject({
+    outcomeId: z.string().min(1),
+    objective: z.string().min(1),
+    contractRevision: z.number().int().positive(),
+    planGeneration: z.number().int().positive(),
+    criteria: z.array(criterionSchema).min(1).max(5),
+  }),
+});
+
+/** Strict persisted aggregate contract; adapters should parse before exposing records. */
+export const outcomeRecordSchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  id: z.string().min(1).max(160),
+  createRequestHash: z.string().length(64),
+  managerProfileId: z.string().min(1),
+  title: z.string().min(1).max(160),
+  objective: z.string().min(1).max(4000),
+  phase: z.enum(["draft", "active", "accepted", "cancelled"]),
+  revision: z.number().int().positive(),
+  contractRevision: z.number().int().positive(),
+  planGeneration: z.number().int().nonnegative(),
+  planHash: z.string().length(64).nullable(),
+  criteria: z.array(criterionSchema).min(1).max(5),
+  projections: z.array(projectionSchema),
+  evidence: z.array(evidenceSchema),
+  decisions: z.array(decisionSchema),
+  operations: z.array(operationSchema),
+  acceptances: z.array(acceptanceSchema),
+  createdAt: z.number().finite(),
+  updatedAt: z.number().finite(),
+});
+
+export function parseOutcomeRecord(input: unknown) {
+  return outcomeRecordSchema.parse(input);
+}
+
 export function createRequestHash(input: unknown): string {
   const request = createRequestSchema.parse(input);
   const canonical = {
