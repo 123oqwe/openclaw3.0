@@ -20,14 +20,18 @@ describe("outcomes public contract", () => {
   });
 
   it("keeps core detail views free of persistence identity and internal history", () => {
-    expect(Object.keys(contract)).toEqual(
-      expect.arrayContaining([
-        "OUTCOME_PHASES",
-        "OUTCOME_READINESS",
+    expect(Object.keys(contract).sort()).toEqual([
         "OUTCOME_ACCEPTANCE_VALIDITY",
-        "OUTCOME_MAX_LIST_LIMIT",
+        "OUTCOME_ATTENTION_CODES",
         "OUTCOME_DEFAULT_LIST_LIMIT",
-      ]),
-    );
+        "OUTCOME_EVIDENCE_KINDS",
+        "OUTCOME_MAX_LIST_LIMIT",
+        "OUTCOME_NEXT_ACTIONS",
+        "OUTCOME_PHASES",
+        "OUTCOME_PROOF_STATUSES",
+        "OUTCOME_READINESS",
+        "OUTCOME_SOURCE_ISSUE_REASONS",
+        "OUTCOME_SOURCE_VISIBILITY",
+      ].sort());
   });
 });

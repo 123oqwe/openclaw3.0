@@ -8,16 +8,18 @@ import type { OutcomeRecord } from "./types.js";
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
 export function toOutcomeSummary(record: OutcomeRecord): OutcomeSummary {
   const required = record.criteria.filter((criterion) => criterion.required);
-  const verified = new Set(
-    record.decisions
-      .filter((decision) => decision.status === "verified")
-      .map((decision) => decision.criterionId),
+  const hasUnavailableSource = record.projections.some((projection) =>
+    ["workboard-disabled", "not-found", "forbidden", "timeout", "invalid-response"].includes(
+      projection.errorCode ?? "",
+    ),
   );
-  const readiness =
-    record.phase === "cancelled"
-      ? "blocked"
-      : required.length > 0 && required.every((criterion) => verified.has(criterion.id))
-        ? "ready"
+  const hasStaleSource = record.projections.some((projection) => projection.upstreamStale === true);
+  const readiness = hasUnavailableSource
+    ? "unavailable"
+    : hasStaleSource
+      ? "stale"
+      : record.phase === "cancelled"
+        ? "blocked"
         : "incomplete";
   const acceptanceValidity =
     record.acceptances.length === 0
@@ -43,30 +45,19 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
     id: criterion.id,
     text: criterion.text,
     required: criterion.required,
-    workRefs: criterion.workRefs as PublicWorkboardRef[],
-    sourcesVisibility: "complete" as const,
+    workRefs: [] as PublicWorkboardRef[],
+    sourcesVisibility: "restricted" as const,
     evidenceSetHash: null,
   }));
-  const work = record.projections.map((projection) => ({
-    ref: projection.ref,
-    currentBoardId: projection.currentBoardId ?? projection.ref.boardIdAtLink,
-    status: projection.status ?? "unknown",
-    observedAt: projection.observedAt,
-    sourceUpdatedAt: projection.sourceUpdatedAt,
-    lastSuccessfulAt: projection.lastSuccessfulAt,
-    upstreamStale: projection.upstreamStale ?? false,
-  }));
-  const evidence = record.evidence.map((item) => ({
-    id: item.id,
-    criterionId: item.criterionId,
-    workRef: item.workRef,
-    kind: item.kind,
-    sourceId: item.sourceId,
-    sourceDigest: item.sourceDigest,
-    observedAt: item.observedAt,
-    planGeneration: item.planGeneration,
-    sourceCreatedAt: item.observedAt,
-  }));
+  // P-01 has no owner-authorized observation adapter yet. Do not leak persisted
+  // refs/evidence or invent source timestamps; P-02 supplies these inputs.
+  const work: OutcomeDetail["work"] = [];
+  const evidence: OutcomeDetail["evidence"] = [];
+  const sourceIssues = record.projections.flatMap((projection) =>
+    projection.errorCode
+      ? [{ criterionId: projection.ref.cardId, reason: projection.errorCode }]
+      : [],
+  );
   return {
     ...summary,
     objective: record.objective,
@@ -77,8 +68,13 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
     criteria,
     work,
     evidence,
-    sourceIssues: [],
-    acceptance: { acceptanceValidity: summary.acceptanceValidity },
+    sourceIssues,
+    acceptance: {
+      acceptanceValidity: summary.acceptanceValidity,
+      ...(summary.acceptanceValidity === "needs-review"
+        ? { reason: summary.readiness === "stale" ? "stale" as const : "not-rechecked" as const }
+        : {}),
+    },
     observedAt,
     recheckAfter: null,
     closureHash: null,
