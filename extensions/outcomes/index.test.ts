@@ -34,10 +34,10 @@ describe("Outcome plugin shell", () => {
         "@openclaw/plugin-sdk": "workspace:*",
         openclaw: "workspace:*",
       },
+      dependencies: { zod: "4.4.3" },
       peerDependencies: { openclaw: ">=2026.8.1" },
       peerDependenciesMeta: { openclaw: { optional: true } },
     });
-    expect(packageManifest).not.toHaveProperty("dependencies");
   });
 
   it("registers only the content-free operator.read health method", async () => {
