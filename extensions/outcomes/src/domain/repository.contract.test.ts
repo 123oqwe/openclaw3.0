@@ -120,6 +120,17 @@ describe("Outcome repository atomic contract", () => {
     });
   });
 
+  it("treats canonical criteria/ref reordering as a contract no-op", () => {
+    const record = activeRecord();
+    const reordered = [...record.criteria].reverse();
+    const result = reduceOutcomeContract(record, {
+      expectedRevision: record.revision,
+      objective: record.objective,
+      criteria: reordered,
+    });
+    expect(result).toEqual({ kind: "noop", record });
+  });
+
   it("increments only revision when title changes", () => {
     const record = { ...activeRecord(), revision: 2, title: "old" };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
