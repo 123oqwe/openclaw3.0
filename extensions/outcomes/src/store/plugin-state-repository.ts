@@ -116,18 +116,34 @@ export function createStrictOutcomeRepository(
   return {
     ...base,
     create: async (record) => base.create(parseOutcomeRecord(record)),
-    createOwned: async (owner, record) => base.createOwned(owner, parseOutcomeRecord(record)),
+    createOwned: async (owner, record) => {
+      const parsed = parseOutcomeRecord(record);
+      const created = await store.registerIfAbsent(parsed.id, parsed);
+      if (created) return { created: true, replayed: false, record: parsed };
+      const existing = parseOutcomeRecord(await store.lookup(parsed.id));
+      if (existing.managerProfileId !== owner) throw new Error("Outcome is not owned by the requested manager");
+      if (existing.createRequestHash !== parsed.createRequestHash) throw new Error("Outcome create request conflicts with existing record");
+      return { created: false, replayed: true, record: existing };
+    },
     get: async (id) => strict(await base.get(id)),
     list: async () => (await base.list()).map(parseOutcomeRecord),
     getOwned: async (owner, id) => strict(await base.getOwned(owner, id)),
     listOwned: async (owner) => (await base.listOwned(owner)).map(parseOutcomeRecord),
-    transact: async <T>(id, decide) => base.transact(id, (current) => {
+    transact: async <T>(id: string, decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord }) => base.transact(id, (current) => {
       const decision = decide(strict(current));
       return { result: decision.result, next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next) };
     }),
-    transactOwned: async <T>(owner, id, decide) => base.transactOwned(owner, id, (current) => {
+    transactOwned: async <T>(owner: string, id: string, decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord }) => base.transactOwned(owner, id, (current) => {
       const decision = decide(parseOutcomeRecord(current));
       return { result: decision.result, next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next) };
+    }),
+    deleteIf: async (id, predicate) => store.deleteIf(id, (current) => {
+      const parsed = parseOutcomeRecord(current);
+      return predicate(parsed);
+    }),
+    deleteOwnedIf: async (owner, id, predicate) => store.deleteIf(id, (current) => {
+      const parsed = parseOutcomeRecord(current);
+      return parsed.managerProfileId === owner && predicate(parsed);
     }),
   };
 }
