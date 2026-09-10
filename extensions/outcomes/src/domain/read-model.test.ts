@@ -53,12 +53,13 @@ describe("Outcome P-01 read model", () => {
 
   it("reports source failures by criterion without leaking card identity", () => {
     const input = record();
-    input.criteria[0].workRefs = [
+    const criterion = input.criteria[0]!;
+    criterion.workRefs = [
       { owner: "workboard", cardId: "secret-card", cardCreatedAt: 4, boardIdAtLink: "board" },
     ];
     input.projections = [
       {
-        ref: input.criteria[0].workRefs[0],
+        ref: criterion.workRefs[0]!,
         availability: "identity-conflict",
         errorCode: "identity-conflict",
         observedAt: 5,
@@ -70,7 +71,7 @@ describe("Outcome P-01 read model", () => {
     expect(detail.readiness).toBe("unavailable");
     expect(detail.sourceIssues).toEqual([{ criterionId: "c-1", reason: "identity-conflict" }]);
     expect(JSON.stringify(detail)).not.toContain("secret-card");
-    expect(input.criteria[0].workRefs[0].cardId).toBe("secret-card");
+    expect(criterion.workRefs[0]!.cardId).toBe("secret-card");
   });
 
   it("never treats historical decisions as current readiness", () => {
@@ -121,7 +122,8 @@ describe("Outcome P-01 read model", () => {
       cardCreatedAt: 1,
       boardIdAtLink: "board",
     };
-    input.criteria[0].workRefs = [ref];
+    const criterion = input.criteria[0]!;
+    criterion.workRefs = [ref];
     input.projections = [
       {
         ref,
@@ -150,7 +152,8 @@ describe("Outcome P-01 read model", () => {
       cardCreatedAt: 1,
       boardIdAtLink: "board",
     };
-    input.criteria[0].workRefs = [current];
+    const firstCriterion = input.criteria[0]!;
+    firstCriterion.workRefs = [current];
     input.criteria.push({ id: "c-2", text: "Also done", required: true, workRefs: [current] });
     input.projections = [
       {
