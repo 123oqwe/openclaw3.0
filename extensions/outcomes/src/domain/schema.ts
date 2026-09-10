@@ -27,13 +27,18 @@ export const createRequestSchema = z.strictObject({
 });
 
 const projectionSchema = z.strictObject({
-  ref: workboardRefSchema.optional(),
-  criterionId: z.string().min(1),
+  ref: workboardRefSchema,
   availability: z.enum(["available", "unavailable", "identity-conflict"]),
-  sourceDigest: z.string().min(1).optional(),
-  observedAt: z.number().finite().optional(),
+  observedAt: z.number().finite(),
+  proofs: z.array(z.strictObject({ sourceId: z.string().min(1), digest: z.string().min(1) })),
+  artifacts: z.array(z.strictObject({ sourceId: z.string().min(1), digest: z.string().min(1) })),
+  currentBoardId: z.string().min(1).optional(),
+  status: z.string().min(1).optional(),
+  lastSuccessfulAt: z.number().finite().optional(),
+  sourceUpdatedAt: z.number().finite().optional(),
   upstreamStale: z.boolean().optional(),
-  error: z.string().optional(),
+  sourceFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
+  errorCode: z.enum(["owner-unavailable", "not-found", "identity-conflict", "upstream-error"]).optional(),
 });
 
 const evidenceSchema = z.strictObject({
@@ -64,7 +69,7 @@ const decisionSchema = z.strictObject({
     criteria: z.array(criterionSchema).min(1).max(5),
   }),
   evidenceSetHash: z.string().regex(/^[0-9a-f]{64}$/),
-  note: z.string().optional(),
+  note: z.string().max(2000).optional(),
   decidedAt: z.number().finite(),
 });
 
@@ -74,7 +79,7 @@ const operationSchema = z.strictObject({
   criterionId: z.string().min(1),
   planGeneration: z.number().int().nonnegative(),
   createdRevision: z.number().int().positive(),
-  requestHash: z.string().length(64),
+  requestHash: z.string().regex(/^[0-9a-f]{64}$/),
   state: z.enum(["prepared", "may-have-crossed", "succeeded", "failed", "unknown"]),
   target: workboardRefSchema,
   attemptedAt: z.number().finite().optional(),
@@ -104,7 +109,7 @@ const acceptanceSchema = z.strictObject({
 export const outcomeRecordSchema = z.strictObject({
   schemaVersion: z.literal(1),
   id: z.string().min(1).max(160),
-  createRequestHash: z.string().length(64),
+  createRequestHash: z.string().regex(/^[0-9a-f]{64}$/),
   managerProfileId: z.string().min(1),
   title: z.string().min(1).max(160),
   objective: z.string().min(1).max(4000),
@@ -112,7 +117,7 @@ export const outcomeRecordSchema = z.strictObject({
   revision: z.number().int().positive(),
   contractRevision: z.number().int().positive(),
   planGeneration: z.number().int().nonnegative(),
-  planHash: z.string().length(64).nullable(),
+  planHash: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
   criteria: z.array(criterionSchema).min(1).max(5),
   projections: z.array(projectionSchema),
   evidence: z.array(evidenceSchema).max(100),
@@ -128,6 +133,17 @@ export const outcomeRecordSchema = z.strictObject({
   if (record.phase === "active" || record.phase === "accepted") {
     if (record.planGeneration < 1 || record.planHash === null) {
       ctx.addIssue({ code: "custom", message: "active and accepted records require a plan" });
+    } else if (
+      record.planHash !==
+      planHash({
+        outcomeId: record.id,
+        objective: record.objective,
+        contractRevision: record.contractRevision,
+        planGeneration: record.planGeneration,
+        criteria: record.criteria,
+      })
+    ) {
+      ctx.addIssue({ code: "custom", message: "record planHash does not match its canonical plan" });
     }
   }
   for (const decision of record.decisions) {
@@ -137,10 +153,16 @@ export const outcomeRecordSchema = z.strictObject({
     if (!decision.decidedPlan.criteria.some((criterion) => criterion.id === decision.criterionId)) {
       ctx.addIssue({ code: "custom", message: "decision criterion is absent from its plan snapshot" });
     }
+    if (decision.planHash !== planHash(decision.decidedPlan)) {
+      ctx.addIssue({ code: "custom", message: "decision planHash does not match its snapshot" });
+    }
   }
   for (const acceptance of record.acceptances) {
     if (acceptance.acceptedPlan.outcomeId !== record.id || acceptance.acceptedPlan.planGeneration !== acceptance.planGeneration) {
       ctx.addIssue({ code: "custom", message: "acceptance snapshot does not match its outcome/generation" });
+    }
+    if (acceptance.planHash !== planHash(acceptance.acceptedPlan)) {
+      ctx.addIssue({ code: "custom", message: "acceptance planHash does not match its snapshot" });
     }
   }
 });

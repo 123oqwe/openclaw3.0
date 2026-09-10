@@ -138,6 +138,6 @@ describe("Outcome create schema and canonical hash", () => {
       updatedAt: 1,
     };
     expect(() => outcomeRecordSchema.parse(record)).not.toThrow();
-    expect(() => parseOutcomeRecord(record)).toThrow("128");
+    expect(() => parseOutcomeRecord(record)).toThrow("131072-byte");
   });
 });

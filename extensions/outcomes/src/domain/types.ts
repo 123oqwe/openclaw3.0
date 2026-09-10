@@ -13,13 +13,18 @@ export type Criterion = {
 };
 
 export type WorkProjection = {
-  ref?: WorkboardRef;
-  criterionId: string;
+  ref: WorkboardRef;
   availability: "available" | "unavailable" | "identity-conflict";
-  sourceDigest?: string;
-  observedAt?: number;
+  observedAt: number;
+  proofs: Array<{ sourceId: string; digest: string }>;
+  artifacts: Array<{ sourceId: string; digest: string }>;
+  currentBoardId?: string;
+  status?: string;
+  lastSuccessfulAt?: number;
+  sourceUpdatedAt?: number;
   upstreamStale?: boolean;
-  error?: string;
+  sourceFingerprint?: string;
+  errorCode?: "owner-unavailable" | "not-found" | "identity-conflict" | "upstream-error";
 };
 
 export type OutcomePlanSnapshot = {
@@ -57,10 +62,14 @@ export type OutcomeOperation = {
 };
 
 export type EvidenceRef = {
+  id: string;
   criterionId: string;
   planGeneration: number;
+  workRef: WorkboardRef;
+  kind: "workboard-proof" | "workboard-artifact";
   sourceId: string;
   sourceDigest: string;
+  observedAt: number;
 };
 
 export type HumanDecision = {
@@ -69,6 +78,10 @@ export type HumanDecision = {
   planGeneration: number;
   decidedRevision: number;
   status: "verified" | "rejected";
+  requestHash: string;
+  profileId: string;
+  planHash: string;
+  decidedPlan: OutcomePlanSnapshot;
   evidenceSetHash: string;
   note?: string;
   decidedAt: number;
