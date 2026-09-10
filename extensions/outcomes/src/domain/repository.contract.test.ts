@@ -106,7 +106,7 @@ describe("Outcome repository atomic contract", () => {
       ...draft,
       criteria: [{ ...draft.criteria[0]!, workRefs: [{ owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }] }],
     };
-    const activated = reduceOutcomeActivate(linked, linked.revision);
+    const activated = reduceOutcomeActivate(linked, linked.revision, 42);
     expect(activated.kind).toBe("updated");
     if (activated.kind !== "updated") return;
     expect(activated.record.phase).toBe("active");
@@ -114,6 +114,7 @@ describe("Outcome repository atomic contract", () => {
     expect(activated.record.planHash).toMatch(/^[0-9a-f]{64}$/);
     expect(activated.record.contractRevision).toBe(linked.contractRevision);
     expect(activated.record.revision).toBe(linked.revision + 1);
+    expect(activated.record.updatedAt).toBe(42);
     expect(reduceOutcomeActivate(draft, draft.revision).kind).toBe("rejected");
     expect(reduceOutcomeActivate(linked, linked.revision - 1).kind).toBe("conflict");
     const optionalOnly = {

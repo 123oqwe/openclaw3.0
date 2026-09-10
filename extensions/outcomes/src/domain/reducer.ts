@@ -23,6 +23,8 @@ export type OutcomeContractMutation = {
   expectedRevision: number;
   objective: string;
   criteria: Criterion[];
+  /** Supplied by the authenticated server context, never client payload. */
+  serverTime?: number;
 };
 
 export type OutcomeActivateResult =
@@ -91,6 +93,7 @@ export function reduceOutcomeContract(
         criteria,
       }),
       revision: current.revision + 1,
+      updatedAt: mutation.serverTime ?? current.updatedAt,
     },
   };
 }
@@ -99,6 +102,7 @@ export function reduceOutcomeContract(
 export function reduceOutcomeActivate(
   current: OutcomeRecord,
   expectedRevision: number,
+  serverTime?: number,
 ): OutcomeActivateResult {
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
@@ -124,6 +128,7 @@ export function reduceOutcomeActivate(
         criteria: current.criteria,
       }),
       revision: current.revision + 1,
+      updatedAt: serverTime ?? current.updatedAt,
     },
   };
 }
