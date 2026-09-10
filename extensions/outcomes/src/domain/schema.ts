@@ -37,10 +37,14 @@ const projectionSchema = z.strictObject({
 });
 
 const evidenceSchema = z.strictObject({
+  id: z.string().min(1),
   criterionId: z.string().min(1),
   planGeneration: z.number().int().nonnegative(),
+  workRef: workboardRefSchema,
+  kind: z.enum(["workboard-proof", "workboard-artifact"]),
   sourceId: z.string().min(1),
   sourceDigest: z.string().min(1),
+  observedAt: z.number().finite(),
 });
 
 const decisionSchema = z.strictObject({
@@ -49,7 +53,17 @@ const decisionSchema = z.strictObject({
   planGeneration: z.number().int().nonnegative(),
   decidedRevision: z.number().int().positive(),
   status: z.enum(["verified", "rejected"]),
-  evidenceSetHash: z.string().length(64),
+  requestHash: z.string().regex(/^[0-9a-f]{64}$/),
+  profileId: z.string().min(1),
+  planHash: z.string().regex(/^[0-9a-f]{64}$/),
+  decidedPlan: z.strictObject({
+    outcomeId: z.string().min(1),
+    objective: z.string().min(1).max(4000),
+    contractRevision: z.number().int().positive(),
+    planGeneration: z.number().int().positive(),
+    criteria: z.array(criterionSchema).min(1).max(5),
+  }),
+  evidenceSetHash: z.string().regex(/^[0-9a-f]{64}$/),
   note: z.string().optional(),
   decidedAt: z.number().finite(),
 });
@@ -75,8 +89,8 @@ const acceptanceSchema = z.strictObject({
   profileId: z.string().min(1),
   acceptedAt: z.number().finite(),
   planGeneration: z.number().int().nonnegative(),
-  planHash: z.string().length(64),
-  closureHash: z.string().length(64),
+  planHash: z.string().regex(/^[0-9a-f]{64}$/),
+  closureHash: z.string().regex(/^[0-9a-f]{64}$/),
   acceptedPlan: z.strictObject({
     outcomeId: z.string().min(1),
     objective: z.string().min(1),
@@ -101,12 +115,34 @@ export const outcomeRecordSchema = z.strictObject({
   planHash: z.string().length(64).nullable(),
   criteria: z.array(criterionSchema).min(1).max(5),
   projections: z.array(projectionSchema),
-  evidence: z.array(evidenceSchema),
-  decisions: z.array(decisionSchema),
-  operations: z.array(operationSchema),
-  acceptances: z.array(acceptanceSchema),
+  evidence: z.array(evidenceSchema).max(100),
+  decisions: z.array(decisionSchema).max(100),
+  operations: z.array(operationSchema).max(20),
+  acceptances: z.array(acceptanceSchema).max(20),
   createdAt: z.number().finite(),
   updatedAt: z.number().finite(),
+}).superRefine((record, ctx) => {
+  if (record.phase === "draft" && (record.planGeneration !== 0 || record.planHash !== null)) {
+    ctx.addIssue({ code: "custom", message: "draft records must have generation 0 and null planHash" });
+  }
+  if (record.phase === "active" || record.phase === "accepted") {
+    if (record.planGeneration < 1 || record.planHash === null) {
+      ctx.addIssue({ code: "custom", message: "active and accepted records require a plan" });
+    }
+  }
+  for (const decision of record.decisions) {
+    if (decision.decidedPlan.outcomeId !== record.id || decision.decidedPlan.planGeneration !== decision.planGeneration) {
+      ctx.addIssue({ code: "custom", message: "decision snapshot does not match its outcome/generation" });
+    }
+    if (!decision.decidedPlan.criteria.some((criterion) => criterion.id === decision.criterionId)) {
+      ctx.addIssue({ code: "custom", message: "decision criterion is absent from its plan snapshot" });
+    }
+  }
+  for (const acceptance of record.acceptances) {
+    if (acceptance.acceptedPlan.outcomeId !== record.id || acceptance.acceptedPlan.planGeneration !== acceptance.planGeneration) {
+      ctx.addIssue({ code: "custom", message: "acceptance snapshot does not match its outcome/generation" });
+    }
+  }
 });
 
 export function parseOutcomeRecord(input: unknown) {
