@@ -32,7 +32,9 @@ export function createRequestHash(input: unknown): string {
     criteria: [...request.criteria]
       .toSorted((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0))
       .map((criterion) => ({
-        ...criterion,
+        id: criterion.id,
+        text: criterion.text,
+        required: criterion.required,
         workRefs: [...criterion.workRefs].toSorted((a, b) =>
           a.cardId < b.cardId ? -1 : a.cardId > b.cardId ? 1 : a.cardCreatedAt - b.cardCreatedAt || (a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0),
         ),

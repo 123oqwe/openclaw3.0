@@ -21,7 +21,7 @@ describe("Outcome create schema and canonical hash", () => {
       ],
     };
     expect(createRequestSchema.parse(base).criteria).toHaveLength(2);
-    const reordered = { ...base, criteria: [...base.criteria].reverse() };
+    const reordered = { ...base, criteria: [...base.criteria].toReversed() };
     expect(createRequestHash(base)).toBe(createRequestHash(reordered));
     expect(createRequestHash(base)).not.toBe(createRequestHash({ ...base, objective: "changed" }));
     expect(() => createRequestSchema.parse({ ...base, criteria: Array.from({ length: 6 }, (_, i) => ({ ...base.criteria[0], id: `c-${i}` })) })).toThrow();
@@ -30,5 +30,7 @@ describe("Outcome create schema and canonical hash", () => {
   it("enforces the UTF-8 aggregate size limit", () => {
     expect(() => assertOutcomeRecordSize({ text: "x".repeat(128 * 1024) })).toThrow();
     expect(() => assertOutcomeRecordSize({ text: "ok" })).not.toThrow();
+    expect(() => assertOutcomeRecordSize({ text: "🙂".repeat(32767) })).not.toThrow();
+    expect(() => assertOutcomeRecordSize({ text: "🙂".repeat(32768) })).toThrow();
   });
 });
