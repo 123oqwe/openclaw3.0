@@ -26,7 +26,9 @@ describe("Outcome create schema and canonical hash", () => {
     const refsReordered = {
       ...base,
       criteria: base.criteria.map((criterion) => ({
-        ...criterion,
+        id: criterion.id,
+        text: criterion.text,
+        required: criterion.required,
         workRefs: criterion.workRefs.toReversed(),
       })),
     };
