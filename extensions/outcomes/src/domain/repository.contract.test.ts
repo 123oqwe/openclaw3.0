@@ -250,6 +250,24 @@ describe("Outcome repository atomic contract", () => {
     expect(second.record.planHash).not.toBe(initial.planHash);
   });
 
+  it("fails closed for terminal phases and stale CAS revisions", () => {
+    const mutation = {
+      expectedRevision: 1,
+      objective: "changed",
+      criteria: [
+        { id: "c", text: "criterion", required: true, workRefs: [] },
+      ],
+    };
+    for (const phase of ["accepted", "cancelled"] as const) {
+      const record = { ...activeRecord(), phase };
+      expect(reduceOutcomeContract(record, mutation)).toEqual({ kind: "rejected", record });
+    }
+    const stale = activeRecord();
+    expect(
+      reduceOutcomeContract({ ...stale, revision: stale.revision + 1 }, mutation),
+    ).toEqual({ kind: "conflict", record: { ...stale, revision: stale.revision + 1 } });
+  });
+
   it("does not write when the reducer rejects or is a no-op", async () => {
     const { repository, writes } = fixture();
     const record = { ...activeRecord(), revision: 2, title: "same" };
