@@ -197,6 +197,16 @@ describe("Outcome repository host adapter", () => {
       };
       await expect(repository.create(oversized)).rejects.toThrow("131072-byte");
       await expect(repository.get(oversized.id)).resolves.toBeUndefined();
+
+      const existing = { id: "small", revision: 1, phase: "draft" as const, planGeneration: 0 };
+      await repository.create(existing);
+      await expect(
+        repository.transact(existing.id, (current) => ({
+          result: "updated",
+          next: { ...current!, title: "x".repeat(140_000) },
+        })),
+      ).rejects.toThrow("131072-byte");
+      await expect(repository.get(existing.id)).resolves.toEqual(existing);
     });
   });
 });
