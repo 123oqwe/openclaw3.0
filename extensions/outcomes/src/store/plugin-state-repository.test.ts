@@ -178,4 +178,25 @@ describe("Outcome repository host adapter", () => {
       ).rejects.toThrow("conflicts");
     });
   });
+
+  it("rejects oversized aggregates before create or update", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-size", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const repository = createOutcomeRepository(store);
+      const oversized = {
+        id: "large",
+        revision: 1,
+        phase: "draft" as const,
+        planGeneration: 0,
+        title: "x".repeat(140_000),
+      };
+      await expect(repository.create(oversized)).rejects.toThrow("131072-byte");
+      await expect(repository.get(oversized.id)).resolves.toBeUndefined();
+    });
+  });
 });
