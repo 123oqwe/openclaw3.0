@@ -238,7 +238,7 @@ export type CanonicalPlan = {
   criteria: Criterion[];
 };
 
-const canonicalPlanSchema = z.strictObject({
+export const canonicalPlanSchema = z.strictObject({
   outcomeId: z.string().min(1).max(160),
   objective: z.string().min(1).max(4000),
   contractRevision: z.number().int().positive(),
