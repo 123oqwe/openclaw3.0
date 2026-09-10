@@ -4,7 +4,6 @@ import {
 import type {
   OutcomeDetail,
   OutcomeSummary,
-  WorkboardRef as PublicWorkboardRef,
 } from "@openclaw/outcomes-contract";
 import type { OutcomeRecord } from "./types.js";
 
@@ -62,7 +61,7 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
     id: criterion.id,
     text: criterion.text,
     required: criterion.required,
-    workRefs: [] as PublicWorkboardRef[],
+    workRefs: [],
     sourcesVisibility: "restricted" as const,
     evidenceSetHash: null,
   }));
