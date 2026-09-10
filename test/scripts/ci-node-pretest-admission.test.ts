@@ -13,8 +13,23 @@ vi.mock("../../scripts/lib/ci-test-timings.mts", async (importOriginal) => ({
   readCompactGroupTimings: () => fixture.timings,
 }));
 import { createNodeTestShardBundles } from "../../scripts/lib/ci-node-test-plan.mts";
+import { resolveVitestPretestBuildMode } from "../../scripts/lib/vitest-build-prerequisites.mts";
 
 type Mode = "runtime" | "private-qa" | undefined;
+
+describe("P-00 Workboard health runtime prerequisite", () => {
+  it("requires the private QA runtime build for the real E2E target", () => {
+    expect(
+      resolveVitestPretestBuildMode([
+        {
+          configs: ["test/vitest/vitest.e2e.config.ts"],
+          includePatterns: ["test/e2e/qa-lab/runtime/real-workboard-health.e2e.test.ts"],
+        },
+      ]),
+    ).toBe("private-qa");
+  });
+});
+
 function setGroups(groups: Array<[string, Mode, number]>) {
   const config = (mode: Mode) =>
     mode === "private-qa"
