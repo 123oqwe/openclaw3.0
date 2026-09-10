@@ -35,9 +35,15 @@ export function createRequestHash(input: unknown): string {
         id: criterion.id,
         text: criterion.text,
         required: criterion.required,
-        workRefs: [...criterion.workRefs].toSorted((a, b) =>
-          a.cardId < b.cardId ? -1 : a.cardId > b.cardId ? 1 : a.cardCreatedAt - b.cardCreatedAt || (a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0),
-        ),
+        workRefs: [...criterion.workRefs].toSorted((a, b) => {
+          if (a.cardId !== b.cardId) {
+            return a.cardId < b.cardId ? -1 : 1;
+          }
+          if (a.cardCreatedAt !== b.cardCreatedAt) {
+            return a.cardCreatedAt - b.cardCreatedAt;
+          }
+          return a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0;
+        }),
       })),
   };
   return createHash("sha256")

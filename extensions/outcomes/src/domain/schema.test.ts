@@ -18,9 +18,12 @@ describe("Outcome create schema and canonical hash", () => {
           ],
         },
         { id: "c-2", text: "done", required: false, workRefs: [] },
+        { id: "c-3", text: "verified", required: false, workRefs: [] },
+        { id: "c-4", text: "reviewed", required: false, workRefs: [] },
+        { id: "c-5", text: "accepted", required: false, workRefs: [] },
       ],
     };
-    expect(createRequestSchema.parse(base).criteria).toHaveLength(2);
+    expect(createRequestSchema.parse(base).criteria).toHaveLength(5);
     const reordered = { ...base, criteria: [...base.criteria].toReversed() };
     expect(createRequestHash(base)).toBe(createRequestHash(reordered));
     const refsReordered = {

@@ -51,9 +51,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("rejects an obsolete revision before applying a title change", () => {
     const record = { id: "o-1", revision: 2, title: "old" };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 1, title: "new" })).toEqual({
-      kind: "conflict", record,
-    });
+    expect(reduceOutcomeTitle(record, { expectedRevision: 1, title: "new" })).toEqual({ kind: "conflict", record });
   });
 
   it("returns no-op without incrementing revision for unchanged title", () => {
@@ -65,7 +63,13 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("increments only revision when title changes", () => {
-    const record = { id: "o-1", revision: 2, title: "old", phase: "active" as const, planGeneration: 3 };
+    const record = {
+      id: "o-1",
+      revision: 2,
+      title: "old",
+      phase: "active" as const,
+      planGeneration: 3,
+    };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
       kind: "updated",
       record: { ...record, title: "new", revision: 3 },
@@ -101,9 +105,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("rejects title updates for cancelled outcomes", () => {
     const record = { id: "o-1", revision: 2, title: "same", phase: "cancelled" as const };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
-      kind: "rejected", record,
-    });
+    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({ kind: "rejected", record });
   });
 
   it.todo("replays an idempotent mutation before checking expected revision");
