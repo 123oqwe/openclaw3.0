@@ -2,6 +2,15 @@ import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-run
 import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
 import { assertOutcomeRecordSize, parseOutcomeRecord } from "../domain/schema.js";
 
+export class OutcomeRepositoryCapacityError extends Error {
+  readonly code = "outcome-capacity-exceeded" as const;
+
+  constructor() {
+    super("Outcome repository capacity exceeded");
+    this.name = "OutcomeRepositoryCapacityError";
+  }
+}
+
 function createLegacyOutcomeRepository(
   store: Pick<
     PluginStateKeyedStore<OutcomeRecord>,
@@ -32,7 +41,10 @@ function createLegacyOutcomeRepository(
         return { created: true, replayed: false, record };
       }
       const existing = await store.lookup(record.id);
-      if (!existing || existing.managerProfileId !== managerProfileId) {
+      if (!existing) {
+        throw new OutcomeRepositoryCapacityError();
+      }
+      if (existing.managerProfileId !== managerProfileId) {
         throw new Error("Outcome is not owned by the requested manager");
       }
       if (existing.createRequestHash !== record.createRequestHash) {

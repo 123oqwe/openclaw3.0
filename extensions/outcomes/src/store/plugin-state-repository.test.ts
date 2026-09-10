@@ -282,6 +282,10 @@ describe("Outcome repository host adapter", () => {
       await expect(repository.create(draftRecord("capacity-overflow"))).resolves.toEqual({
         created: false,
       });
+      await expect(
+        repository.createOwned("alice", draftRecord("capacity-owned-overflow")),
+      ).rejects.toMatchObject({ code: "outcome-capacity-exceeded" });
+      await expect(store.lookup("capacity-owned-overflow")).resolves.toBeUndefined();
       await expect(repository.get("capacity-0")).resolves.toBeDefined();
       await expect(repository.get("capacity-499")).resolves.toBeDefined();
       const retained = await repository.list();
