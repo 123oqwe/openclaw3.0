@@ -1,7 +1,7 @@
 /** Public P-01 Outcome views. Persisted records and manager identity stay private. */
 export const OUTCOME_PHASES = ["draft", "active", "accepted", "cancelled"] as const;
-export const OUTCOME_READINESS = ["incomplete", "ready", "blocked"] as const;
-export const OUTCOME_ACCEPTANCE_VALIDITY = ["none", "valid", "stale"] as const;
+export const OUTCOME_READINESS = ["incomplete", "blocked", "ready", "stale", "unavailable"] as const;
+export const OUTCOME_ACCEPTANCE_VALIDITY = ["none", "current", "needs-review"] as const;
 export const OUTCOME_SOURCE_VISIBILITY = ["complete", "restricted"] as const;
 export const OUTCOME_SOURCE_ISSUE_REASONS = [
   "workboard-disabled",
@@ -48,6 +48,20 @@ export type OutcomeAttentionCode = (typeof OUTCOME_ATTENTION_CODES)[number];
 export type OutcomeNextAction = (typeof OUTCOME_NEXT_ACTIONS)[number];
 export type OutcomeEvidenceKind = (typeof OUTCOME_EVIDENCE_KINDS)[number];
 export type OutcomeProofStatus = (typeof OUTCOME_PROOF_STATUSES)[number];
+export type OutcomeAcceptanceReason =
+  | "contract-changed"
+  | "evidence-changed"
+  | "decision-changed"
+  | "blocked"
+  | "stale"
+  | "unavailable"
+  | "unknown-operation"
+  | "not-rechecked";
+export type OutcomeAcceptanceView = {
+  acceptanceValidity: OutcomeAcceptanceValidity;
+  lastSuccessfulAt?: number;
+  reason?: OutcomeAcceptanceReason;
+};
 
 export type WorkboardRef = {
   owner: "workboard";
@@ -125,6 +139,7 @@ export type OutcomeDetail = OutcomeSummary & {
   work: OutcomeWorkView[];
   evidence: OutcomeEvidenceView[];
   sourceIssues: Array<{ criterionId: string; reason: OutcomeSourceIssueReason }>;
+  acceptance: OutcomeAcceptanceView;
   observedAt: number;
   recheckAfter: number | null;
   closureHash: string | null;
