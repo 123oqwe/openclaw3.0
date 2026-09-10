@@ -304,6 +304,7 @@ describe("Outcome repository host adapter", () => {
         overflowPolicy: "reject-new",
         env: state.env,
       });
+      // Deliberately malformed persisted value: unknown version and missing fields.
       const corrupt = { id: "corrupt", schemaVersion: 99 } as unknown as OutcomeRecord;
       await store.registerIfAbsent(corrupt.id, corrupt);
       const repository = createOutcomeRepository(store);
@@ -324,6 +325,22 @@ describe("Outcome repository host adapter", () => {
       ).rejects.toThrow();
       expect(called).toBe(false);
       await expect(store.lookup(corrupt.id)).resolves.toEqual(corrupt);
+    });
+  });
+
+  it("preserves a complete record with an unknown schema version", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-future-schema", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const future = { ...draftRecord("future"), schemaVersion: 2 } as unknown as OutcomeRecord;
+      await store.registerIfAbsent(future.id, future);
+      const repository = createOutcomeRepository(store);
+      await expect(repository.get(future.id)).rejects.toThrow();
+      await expect(store.lookup(future.id)).resolves.toEqual(future);
     });
   });
 });
