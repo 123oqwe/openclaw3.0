@@ -6,6 +6,7 @@ import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 export type OutcomeMutation = {
   expectedRevision: number;
   title: string;
+  serverTime?: number;
 };
 
 export type OutcomeMutationResult =
@@ -148,7 +149,12 @@ export function reduceOutcomeTitle(
   }
   return {
     kind: "updated",
-    record: { ...current, title: mutation.title, revision: current.revision + 1 },
+    record: {
+      ...current,
+      title: mutation.title,
+      revision: current.revision + 1,
+      updatedAt: mutation.serverTime ?? current.updatedAt,
+    },
   };
 }
 

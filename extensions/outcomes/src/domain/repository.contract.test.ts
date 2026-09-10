@@ -127,7 +127,9 @@ describe("Outcome repository atomic contract", () => {
     for (const state of ["prepared", "unknown", "may-have-crossed"] as const) {
       const withOperation = { ...activeRecord(`active-${state}`), criteria: linked.criteria, operations: [{ id: state, kind: "workboard-card-start" as const, criterionId: "c-1", planGeneration: 1, createdRevision: 1, requestHash: "a".repeat(64), state, target: linked.criteria[0]!.workRefs[0]! }] };
       expect(reduceOutcomeContract(withOperation, { expectedRevision: 1, objective: "changed", criteria: withOperation.criteria }).kind).toBe("rejected");
-      expect(reduceOutcomeTitle(withOperation, { expectedRevision: 1, title: "new" }).kind).toBe("updated");
+      const titleUpdate = reduceOutcomeTitle(withOperation, { expectedRevision: 1, title: "new", serverTime: 42 });
+      expect(titleUpdate.kind).toBe("updated");
+      if (titleUpdate.kind === "updated") expect(titleUpdate.record.updatedAt).toBe(42);
     }
   });
 
