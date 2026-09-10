@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
+
+function first<T>(items: T[]): T {
+  const item = items[0];
+  if (item === undefined) throw new Error("fixture item missing");
+  return item;
+}
 import type { OutcomeRecord } from "./types.js";
 import { parseOutcomeRecord, planHash } from "./schema.js";
 
@@ -53,13 +59,13 @@ describe("Outcome P-01 read model", () => {
 
   it("reports source failures by criterion without leaking card identity", () => {
     const input = record();
-    const criterion = input.criteria[0]!;
+    const criterion = first(input.criteria);
     criterion.workRefs = [
       { owner: "workboard", cardId: "secret-card", cardCreatedAt: 4, boardIdAtLink: "board" },
     ];
     input.projections = [
       {
-        ref: criterion.workRefs[0]!,
+        ref: first(criterion.workRefs),
         availability: "identity-conflict",
         errorCode: "identity-conflict",
         observedAt: 5,
@@ -71,7 +77,7 @@ describe("Outcome P-01 read model", () => {
     expect(detail.readiness).toBe("unavailable");
     expect(detail.sourceIssues).toEqual([{ criterionId: "c-1", reason: "identity-conflict" }]);
     expect(JSON.stringify(detail)).not.toContain("secret-card");
-    expect(criterion.workRefs[0]!.cardId).toBe("secret-card");
+    expect(first(criterion.workRefs).cardId).toBe("secret-card");
   });
 
   it("never treats historical decisions as current readiness", () => {
@@ -122,7 +128,7 @@ describe("Outcome P-01 read model", () => {
       cardCreatedAt: 1,
       boardIdAtLink: "board",
     };
-    const criterion = input.criteria[0]!;
+    const criterion = first(input.criteria);
     criterion.workRefs = [ref];
     input.projections = [
       {
@@ -152,7 +158,7 @@ describe("Outcome P-01 read model", () => {
       cardCreatedAt: 1,
       boardIdAtLink: "board",
     };
-    const firstCriterion = input.criteria[0]!;
+    const firstCriterion = first(input.criteria);
     firstCriterion.workRefs = [current];
     input.criteria.push({ id: "c-2", text: "Also done", required: true, workRefs: [current] });
     input.projections = [

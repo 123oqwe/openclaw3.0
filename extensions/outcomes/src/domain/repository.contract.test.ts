@@ -13,6 +13,11 @@ import {
 // P-01 contract cases exercise the repository boundary through the formal
 // strict adapter and keep reducer behavior independently observable.
 describe("Outcome repository atomic contract", () => {
+  function first<T>(items: T[]): T {
+    const item = items[0];
+    if (item === undefined) throw new Error("fixture item missing");
+    return item;
+  }
   const validRecord = (id = "o-1"): OutcomeRecord => ({
     schemaVersion: 1,
     id,
@@ -104,7 +109,7 @@ describe("Outcome repository atomic contract", () => {
     const draft = validRecord("activate-1");
     const linked = {
       ...draft,
-      criteria: [{ ...draft.criteria[0]!, workRefs: [{ owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }] }],
+      criteria: [{ ...first(draft.criteria), workRefs: [{ owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }] }],
     };
     const activated = reduceOutcomeActivate(linked, linked.revision, 42);
     expect(activated.kind).toBe("updated");
@@ -119,14 +124,14 @@ describe("Outcome repository atomic contract", () => {
     expect(reduceOutcomeActivate(linked, linked.revision - 1, 42).kind).toBe("conflict");
     const optionalOnly = {
       ...draft,
-      criteria: [{ ...draft.criteria[0]!, required: false, workRefs: [] }, { id: "c-2", text: "optional", required: true, workRefs: linked.criteria[0]!.workRefs }],
+      criteria: [{ ...first(draft.criteria), required: false, workRefs: [] }, { id: "c-2", text: "optional", required: true, workRefs: first(linked.criteria).workRefs }],
     };
     expect(reduceOutcomeActivate(optionalOnly, optionalOnly.revision, 42).kind).toBe("updated");
     expect(reduceOutcomeActivate(activeRecord("active-1"), 1, 42).kind).toBe("rejected");
 
     for (const state of ["prepared", "unknown", "may-have-crossed"] as const) {
-      const withOperation = { ...activeRecord(`active-${state}`), criteria: linked.criteria, operations: [{ id: state, kind: "workboard-card-start" as const, criterionId: "c-1", planGeneration: 1, createdRevision: 1, requestHash: "a".repeat(64), state, target: linked.criteria[0]!.workRefs[0]! }] };
-      expect(reduceOutcomeContract(withOperation, { expectedRevision: 1, objective: "changed", criteria: withOperation.criteria }).kind).toBe("rejected");
+      const withOperation = { ...activeRecord(`active-${state}`), criteria: linked.criteria, operations: [{ id: state, kind: "workboard-card-start" as const, criterionId: "c-1", planGeneration: 1, createdRevision: 1, requestHash: "a".repeat(64), state, target: first(first(linked.criteria).workRefs) }] };
+      expect(reduceOutcomeContract(withOperation, { expectedRevision: 1, serverTime: 42, objective: "changed", criteria: withOperation.criteria }).kind).toBe("rejected");
       const titleUpdate = reduceOutcomeTitle(withOperation, { expectedRevision: 1, title: "new", serverTime: 42 });
       expect(titleUpdate.kind).toBe("updated");
       if (titleUpdate.kind === "updated") expect(titleUpdate.record.updatedAt).toBe(42);
@@ -204,8 +209,8 @@ describe("Outcome repository atomic contract", () => {
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
     expect(result.record.planHash).not.toBe(record.planHash);
     expect(result.record.criteria).not.toBe(nextCriteria);
-    nextCriteria[0].workRefs[0].cardId = "mutated";
-    expect(result.record.criteria[0].workRefs[0].cardId).toBe("card");
+    first(first(nextCriteria).workRefs).cardId = "mutated";
+    expect(first(first(result.record.criteria).workRefs).cardId).toBe("card");
     expect(() => parseOutcomeRecord(result.record)).not.toThrow();
   });
 
