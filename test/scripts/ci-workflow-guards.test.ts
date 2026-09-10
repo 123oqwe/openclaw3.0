@@ -11401,6 +11401,31 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       ]),
     );
 
+    const p00WorkboardPullRequest = runCiManifestFixture({
+      bundledPlanner: true,
+      changedPaths: ["test/e2e/qa-lab/runtime/real-workboard-health.e2e.test.ts"],
+      eventName: "pull_request",
+      repository: "123oqwe/openclaw3.0",
+    });
+    expect(p00WorkboardPullRequest.status, p00WorkboardPullRequest.output).toBe(0);
+    const p00Matrix = JSON.parse(
+      expectDefined(
+        p00WorkboardPullRequest.outputs.checks_node_core_nondist_matrix,
+        "P-00 Workboard matrix",
+      ),
+    ).include as Array<Record<string, unknown>>;
+    expect(p00Matrix).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          check_name: "checks-node-p00-workboard-health",
+          configs: ["test/vitest/vitest.e2e.config.ts"],
+          includePatterns: ["test/e2e/qa-lab/runtime/real-workboard-health.e2e.test.ts"],
+          pretest_build_mode: "private-qa",
+        }),
+      ]),
+    );
+    expect(p00Matrix.some((entry) => entry.check_name === "bundled-node-plan")).toBe(true);
+
     const sqliteLifecycleTestPullRequest = runCiManifestFixture({
       bundledPlanner: true,
       changedPaths: ["test/scripts/sqlite-sessions-transcripts-flip-proof.built-cli.e2e.test.ts"],
