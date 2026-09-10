@@ -143,12 +143,12 @@ describe("Outcome repository atomic contract", () => {
 
   it("rejects an obsolete revision before applying a title change", () => {
     const record = { ...validRecord(), revision: 2, title: "old" };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 1, title: "new" })).toEqual({ kind: "conflict", record });
+    expect(reduceOutcomeTitle(record, { expectedRevision: 1, title: "new", serverTime: 42 })).toEqual({ kind: "conflict", record });
   });
 
   it("returns no-op without incrementing revision for unchanged title", () => {
     const record = { ...validRecord(), revision: 2, title: "same" };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "same" })).toEqual({
+    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "same", serverTime: 42 })).toEqual({
       kind: "noop",
       record,
     });
@@ -159,6 +159,7 @@ describe("Outcome repository atomic contract", () => {
     const reordered = [...record.criteria].reverse();
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
+      serverTime: 42,
       objective: record.objective,
       criteria: reordered,
     });
@@ -167,7 +168,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("increments only revision when title changes", () => {
     const record = { ...activeRecord(), revision: 2, title: "old" };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
+    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new", serverTime: 42 })).toEqual({
       kind: "updated",
       record: { ...record, title: "new", revision: 3 },
     });
@@ -192,6 +193,7 @@ describe("Outcome repository atomic contract", () => {
     ];
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
+      serverTime: 42,
       objective: "New objective",
       criteria: nextCriteria,
     });
@@ -235,6 +237,7 @@ describe("Outcome repository atomic contract", () => {
     const acceptedPlanBefore = structuredClone(record.acceptances[0].acceptedPlan);
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
+      serverTime: 42,
       objective: "Revised objective",
       criteria: record.criteria,
     });
@@ -251,6 +254,7 @@ describe("Outcome repository atomic contract", () => {
     const record = validRecord();
     const result = reduceOutcomeContract(record, {
       expectedRevision: 1,
+      serverTime: 42,
       objective: "Draft objective",
       criteria: [{ id: "c-2", text: "Draft criterion", required: true, workRefs: [] }],
     });
@@ -268,6 +272,7 @@ describe("Outcome repository atomic contract", () => {
     const criteriaA = initial.criteria;
     const first = reduceOutcomeContract(initial, {
       expectedRevision: initial.revision,
+      serverTime: 42,
       objective: "B",
       criteria: [{ id: "c-b", text: "B", required: true, workRefs: [] }],
     });
@@ -275,6 +280,7 @@ describe("Outcome repository atomic contract", () => {
     if (first.kind !== "updated") return;
     const second = reduceOutcomeContract(first.record, {
       expectedRevision: first.record.revision,
+      serverTime: 42,
       objective: initial.objective,
       criteria: criteriaA,
     });
@@ -287,6 +293,7 @@ describe("Outcome repository atomic contract", () => {
   it("fails closed for terminal phases and stale CAS revisions", () => {
     const mutation = {
       expectedRevision: 1,
+      serverTime: 42,
       objective: "changed",
       criteria: [
         { id: "c", text: "criterion", required: true, workRefs: [] },
@@ -312,7 +319,7 @@ describe("Outcome repository atomic contract", () => {
     await repository.create(record);
     const before = writes();
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
-      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
+      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same", serverTime: 42 });
       return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
     });
     expect(decision.kind).toBe("noop");
@@ -325,7 +332,7 @@ describe("Outcome repository atomic contract", () => {
     const record = { ...activeRecord(), revision: 2, title: "old" };
     await repository.create(record);
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
-      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "new" });
+      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "new", serverTime: 42 });
       return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
     });
     expect(decision.kind).toBe("updated");
@@ -340,7 +347,7 @@ describe("Outcome repository atomic contract", () => {
       title: "same",
       phase: "cancelled" as const,
     };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({ kind: "rejected", record });
+    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new", serverTime: 42 })).toEqual({ kind: "rejected", record });
   });
 
   it("cancels only with the current revision and no in-flight operation", () => {

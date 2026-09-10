@@ -80,7 +80,7 @@ describe("Outcome repository host adapter", () => {
       const initial = { ...initialBase, planHash: planHash({ outcomeId: initialBase.id, objective: initialBase.objective, contractRevision: initialBase.contractRevision, planGeneration: 1, criteria: initialBase.criteria }) };
       await expect(repository.create(initial)).resolves.toEqual({ created: true });
       const mutate = (title: string) => repository.transact<OutcomeMutationResult>(initial.id, (current) => {
-        const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title });
+        const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title, serverTime: 42 });
         return decision.kind === "updated" ? { result: decision, next: decision.record } : { result: decision };
       });
       const results = await Promise.all([mutate("left"), mutate("right")]);
@@ -142,7 +142,7 @@ describe("Outcome repository host adapter", () => {
       const record = { ...draft, revision: 2, phase: "cancelled" as const, planGeneration: 1, planHash: planHash({ outcomeId: draft.id, objective: draft.objective, contractRevision: draft.contractRevision, planGeneration: 1, criteria: draft.criteria }) };
       await repository.create(record);
       const result = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
-        const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
+        const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same", serverTime: 42 });
         return decision.kind === "updated" ? { result: decision, next: decision.record } : { result: decision };
       });
       expect(result.kind).toBe("rejected");
@@ -153,7 +153,7 @@ describe("Outcome repository host adapter", () => {
       const active = { ...activeBase, planHash: planHash({ outcomeId: activeBase.id, objective: activeBase.objective, contractRevision: activeBase.contractRevision, planGeneration: 1, criteria: activeBase.criteria }) };
       await repository.create(active);
       const noop = await repository.transact<OutcomeMutationResult>(active.id, (current) => {
-        const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
+        const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same", serverTime: 42 });
         return decision.kind === "updated" ? { result: decision, next: decision.record } : { result: decision };
       });
       expect(noop.kind).toBe("noop");

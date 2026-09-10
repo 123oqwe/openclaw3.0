@@ -6,7 +6,7 @@ import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 export type OutcomeMutation = {
   expectedRevision: number;
   title: string;
-  serverTime?: number;
+  serverTime: number;
 };
 
 export type OutcomeMutationResult =
@@ -25,7 +25,7 @@ export type OutcomeContractMutation = {
   objective: string;
   criteria: Criterion[];
   /** Supplied by the authenticated server context, never client payload. */
-  serverTime?: number;
+  serverTime: number;
 };
 
 export type OutcomeActivateResult =
@@ -103,7 +103,7 @@ export function reduceOutcomeContract(
 export function reduceOutcomeActivate(
   current: OutcomeRecord,
   expectedRevision: number,
-  serverTime?: number,
+  serverTime: number,
 ): OutcomeActivateResult {
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
