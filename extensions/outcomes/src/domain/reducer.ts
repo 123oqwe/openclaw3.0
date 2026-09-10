@@ -30,33 +30,46 @@ export function reduceOutcomeContract(
   current: OutcomeRecord,
   mutation: OutcomeContractMutation,
 ): OutcomeMutationResult {
-  if (current.phase === "cancelled" || current.phase === "accepted") {
+  if (current.phase === "cancelled") {
     return { kind: "rejected", record: current };
   }
   if (mutation.expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }
+  const canonicalCriteria = (criteria: Criterion[]) =>
+    criteria
+      .map((criterion) => ({
+        ...criterion,
+        workRefs: criterion.workRefs
+          .map((ref) => ({ ...ref }))
+          .sort((a, b) => a.cardId.localeCompare(b.cardId) || a.cardCreatedAt - b.cardCreatedAt),
+      }))
+      .sort((a, b) => a.id.localeCompare(b.id));
   if (
     current.objective === mutation.objective &&
-    stableStringify(current.criteria) === stableStringify(mutation.criteria)
+    stableStringify(canonicalCriteria(current.criteria)) ===
+      stableStringify(canonicalCriteria(mutation.criteria))
   ) {
     return { kind: "noop", record: current };
   }
-  const planGeneration = current.planGeneration + 1;
+  const planGeneration = current.phase === "draft" ? 0 : current.planGeneration + 1;
+  const phase = current.phase === "accepted" ? "active" : current.phase;
+  const criteria = canonicalCriteria(mutation.criteria);
   return {
     kind: "updated",
     record: {
       ...current,
       objective: mutation.objective,
-      criteria: mutation.criteria,
+      criteria,
+      phase,
       contractRevision: current.contractRevision + 1,
       planGeneration,
-      planHash: planHash({
+      planHash: planGeneration === 0 ? null : planHash({
         outcomeId: current.id,
         objective: mutation.objective,
         contractRevision: current.contractRevision + 1,
         planGeneration,
-        criteria: mutation.criteria,
+        criteria,
       }),
       revision: current.revision + 1,
     },

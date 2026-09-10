@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
-import { createRequestHash, planHash } from "./schema.js";
+import { createRequestHash, parseOutcomeRecord, planHash } from "./schema.js";
 import {
   reduceOutcomeCancel,
   reduceOutcomeContract,
@@ -144,6 +144,22 @@ describe("Outcome repository atomic contract", () => {
     expect(result.record.contractRevision).toBe(record.contractRevision + 1);
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
     expect(result.record.planHash).not.toBe(record.planHash);
+    expect(result.record.criteria).not.toBe(nextCriteria);
+    expect(() => parseOutcomeRecord(result.record)).not.toThrow();
+  });
+
+  it("reopens accepted contracts while preserving acceptance history", () => {
+    const record = { ...activeRecord(), phase: "accepted" as const, acceptances: [] };
+    const result = reduceOutcomeContract(record, {
+      expectedRevision: record.revision,
+      objective: "Revised objective",
+      criteria: record.criteria,
+    });
+    expect(result.kind).toBe("updated");
+    if (result.kind !== "updated") return;
+    expect(result.record.phase).toBe("active");
+    expect(result.record.planGeneration).toBe(record.planGeneration + 1);
+    expect(result.record.acceptances).toEqual(record.acceptances);
   });
 
   it("does not write when the reducer rejects or is a no-op", async () => {
