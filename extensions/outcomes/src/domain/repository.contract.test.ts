@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
-import { createRequestHash } from "./schema.js";
+import { createRequestHash, planHash } from "./schema.js";
 import {
   reduceOutcomeCancel,
   reduceOutcomeTitle,
@@ -37,6 +37,10 @@ describe("Outcome repository atomic contract", () => {
     createdAt: 1,
     updatedAt: 1,
   });
+  const activeRecord = (id = "o-1") => {
+    const draft = validRecord(id);
+    return { ...draft, phase: "active" as const, planGeneration: 1, planHash: planHash({ outcomeId: id, objective: draft.objective, contractRevision: draft.contractRevision, planGeneration: 1, criteria: draft.criteria }) };
+  };
 
   function fixture() {
     const records = new Map<string, OutcomeRecord>();
@@ -120,7 +124,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("does not write when the reducer rejects or is a no-op", async () => {
     const { repository, writes } = fixture();
-    const record = { ...validRecord(), revision: 2, title: "same", phase: "active" as const, planGeneration: 1, planHash: "0".repeat(64) };
+    const record = { ...activeRecord(), revision: 2, title: "same" };
     await repository.create(record);
     const before = writes();
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
@@ -134,7 +138,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("persists only an updated reducer decision", async () => {
     const { repository, writes } = fixture();
-    const record = { ...validRecord(), revision: 2, title: "old", phase: "active" as const, planGeneration: 1, planHash: "0".repeat(64) };
+    const record = { ...activeRecord(), revision: 2, title: "old" };
     await repository.create(record);
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
       const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "new" });
