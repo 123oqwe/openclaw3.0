@@ -75,7 +75,8 @@ describe("Outcome repository host adapter", () => {
           return next;
         }),
       });
-      const initial = { id: "o-1", revision: 2, title: "old", phase: "active" as const, planGeneration: 1 };
+      const initialBase = { ...draftRecord("o-1"), revision: 2, title: "old", phase: "active" as const, planGeneration: 1 };
+      const initial = { ...initialBase, planHash: planHash({ outcomeId: initialBase.id, objective: initialBase.objective, contractRevision: initialBase.contractRevision, planGeneration: 1, criteria: initialBase.criteria }) };
       await expect(repository.create(initial)).resolves.toEqual({ created: true });
       const mutate = (title: string) => repository.transact<OutcomeMutationResult>(initial.id, (current) => {
         const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title });
@@ -213,7 +214,7 @@ describe("Outcome repository host adapter", () => {
         replayed: true,
       });
       await expect(
-        repository.createOwned("alice", { ...record, createRequestHash: "hash-b" }),
+        repository.createOwned("alice", { ...record, createRequestHash: "b".repeat(64) }),
       ).rejects.toThrow("conflicts");
     });
   });
@@ -227,22 +228,16 @@ describe("Outcome repository host adapter", () => {
         env: state.env,
       });
       const repository = createOutcomeRepository(store);
-      const oversized = {
-        id: "large",
-        revision: 1,
-        phase: "draft" as const,
-        planGeneration: 0,
-        title: "x".repeat(140_000),
-      };
+      const oversized = { ...draftRecord("large"), projections: [{ ref: { owner: "workboard" as const, cardId: "c", cardCreatedAt: 1, boardIdAtLink: "b" }, availability: "available" as const, observedAt: 1, proofs: [{ sourceId: "s", digest: "x".repeat(140_000) }], artifacts: [] }] };
       await expect(repository.create(oversized)).rejects.toThrow("131072-byte");
       await expect(repository.get(oversized.id)).resolves.toBeUndefined();
 
-      const existing = { id: "small", revision: 1, phase: "draft" as const, planGeneration: 0 };
+      const existing = draftRecord("small");
       await repository.create(existing);
       await expect(
         repository.transact(existing.id, (current) => ({
           result: "updated",
-          next: { ...current!, title: "x".repeat(140_000) },
+          next: { ...current!, projections: [{ ref: { owner: "workboard", cardId: "c", cardCreatedAt: 1, boardIdAtLink: "b" }, availability: "available", observedAt: 1, proofs: [{ sourceId: "s", digest: "x".repeat(140_000) }], artifacts: [] }] },
         })),
       ).rejects.toThrow("131072-byte");
       await expect(repository.get(existing.id)).resolves.toEqual(existing);
