@@ -153,6 +153,29 @@ describe("Outcome repository atomic contract", () => {
       };
       expect(reduceOutcomeCancel(busy, 2)).toEqual({ kind: "rejected", record: busy });
     }
+    for (const state of ["succeeded", "failed"] as const) {
+      const settled = {
+        ...record,
+        operations: [
+          {
+            id: "op-1",
+            kind: "workboard-card-start" as const,
+            criterionId: "c-1",
+            planGeneration: 1,
+            createdRevision: 2,
+            requestHash: "hash",
+            state,
+            target: {
+              owner: "workboard" as const,
+              cardId: "c",
+              cardCreatedAt: 1,
+              boardIdAtLink: "b",
+            },
+          },
+        ],
+      };
+      expect(reduceOutcomeCancel(settled, 2).kind).toBe("updated");
+    }
     const accepted = { ...record, phase: "accepted" as const };
     expect(reduceOutcomeCancel(accepted, 2)).toEqual({ kind: "rejected", record: accepted });
     const cancelled = { ...record, phase: "cancelled" as const };
