@@ -141,7 +141,15 @@ function createStrictOutcomeRepository(
       if (created) {
         return { created: true, replayed: false, record: parsed };
       }
-      const existing = parseOutcomeRecord(await store.lookup(parsed.id));
+      const rawExisting = await store.lookup(parsed.id);
+      if (!rawExisting) {
+        const entries = await store.entries();
+        if (entries.length >= 500) {
+          throw new OutcomeRepositoryCapacityError();
+        }
+        throw new Error("Outcome create lost its registration race");
+      }
+      const existing = parseOutcomeRecord(rawExisting);
       if (existing.managerProfileId !== owner) {
         throw new Error("Outcome is not owned by the requested manager");
       }
