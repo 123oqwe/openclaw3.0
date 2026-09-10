@@ -284,7 +284,11 @@ describe("Outcome repository host adapter", () => {
       });
       await expect(repository.get("capacity-0")).resolves.toBeDefined();
       await expect(repository.get("capacity-499")).resolves.toBeDefined();
-      await expect(repository.list()).resolves.toHaveLength(500);
+      const retained = await repository.list();
+      expect(retained).toHaveLength(500);
+      expect(new Set(retained.map((entry) => entry.id))).toEqual(
+        new Set(Array.from({ length: 500 }, (_, index) => `capacity-${index}`)),
+      );
     });
   });
 });
