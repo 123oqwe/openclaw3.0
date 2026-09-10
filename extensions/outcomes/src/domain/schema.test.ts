@@ -48,12 +48,18 @@ describe("Outcome create schema and canonical hash", () => {
   });
 
   it("binds plan hashes to generation and contract revision", () => {
+    const criterion = {
+      id: "c-1",
+      text: "done",
+      required: true,
+      workRefs: [],
+    };
     const plan = {
       outcomeId: "o-1",
       objective: "Ship safely",
       contractRevision: 1,
       planGeneration: 1,
-      criteria: [base.criteria[0]],
+      criteria: [criterion],
     };
     expect(planHash(plan)).toHaveLength(64);
     expect(planHash(plan)).not.toBe(planHash({ ...plan, planGeneration: 2 }));
