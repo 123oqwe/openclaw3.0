@@ -108,3 +108,24 @@ export type OutcomeRecord = {
   createdAt?: number;
   updatedAt?: number;
 };
+
+/** Fully materialized aggregate accepted at the persistence boundary. */
+export type PersistedOutcomeRecord = OutcomeRecord & {
+  schemaVersion: 1;
+  createRequestHash: string;
+  managerProfileId: string;
+  title: string;
+  objective: string;
+  contractRevision: number;
+  phase: "draft" | "active" | "accepted" | "cancelled";
+  planGeneration: number;
+  planHash: string | null;
+  criteria: Criterion[];
+  projections: WorkProjection[];
+  evidence: EvidenceRef[];
+  decisions: HumanDecision[];
+  operations: OutcomeOperation[];
+  acceptances: Acceptance[];
+  createdAt: number;
+  updatedAt: number;
+};

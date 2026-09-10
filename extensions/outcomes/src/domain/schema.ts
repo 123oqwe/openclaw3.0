@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { z } from "zod";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
-import type { Criterion } from "./types.js";
+import type { Criterion, PersistedOutcomeRecord } from "./types.js";
 
 export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
@@ -194,7 +194,7 @@ export const outcomeRecordSchema = z.strictObject({
   }
 });
 
-export function parseOutcomeRecord(input: unknown) {
+export function parseOutcomeRecord(input: unknown): PersistedOutcomeRecord {
   const record = outcomeRecordSchema.parse(input);
   assertOutcomeRecordSize(record);
   return record;
