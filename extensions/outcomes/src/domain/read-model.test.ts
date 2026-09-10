@@ -26,7 +26,7 @@ const record = (): OutcomeRecord => ({
 
 describe("Outcome P-01 read model", () => {
   it("derives a redacted summary and detail", () => {
-    const summary = toOutcomeSummary(record());
+    const summary = toOutcomeSummary(record(), 10);
     expect(summary).toEqual({
       id: "outcome-1",
       title: "Ship",
@@ -113,5 +113,47 @@ describe("Outcome P-01 read model", () => {
     ];
     expect(toOutcomeSummary(input, 1 + 24 * 60 * 60 * 1000 - 1).readiness).toBe("incomplete");
     expect(toOutcomeSummary(input, 1 + 24 * 60 * 60 * 1000).readiness).toBe("stale");
+  });
+
+  it("ignores unlinked failures and reports every criterion sharing a ref", () => {
+    const input = record();
+    const current = {
+      owner: "workboard" as const,
+      cardId: "shared",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board",
+    };
+    const old = {
+      owner: "workboard" as const,
+      cardId: "old",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board",
+    };
+    input.criteria[0].workRefs = [current];
+    input.criteria.push({ id: "c-2", text: "Also done", required: true, workRefs: [current] });
+    input.projections = [
+      {
+        ref: current,
+        availability: "identity-conflict",
+        errorCode: "identity-conflict",
+        observedAt: 1,
+        proofs: [],
+        artifacts: [],
+      },
+      {
+        ref: old,
+        availability: "identity-conflict",
+        errorCode: "identity-conflict",
+        observedAt: 1,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
+    const detail = toOutcomeDetail(input, 10);
+    expect(detail.sourceIssues).toEqual([
+      { criterionId: "c-1", reason: "identity-conflict" },
+      { criterionId: "c-2", reason: "identity-conflict" },
+    ]);
+    expect(detail.sourceIssues.map((issue) => issue.criterionId)).not.toContain("old");
   });
 });

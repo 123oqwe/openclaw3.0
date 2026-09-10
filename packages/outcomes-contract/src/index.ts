@@ -38,6 +38,7 @@ export const OUTCOME_EVIDENCE_KINDS = ["workboard-proof", "workboard-artifact"] 
 export const OUTCOME_PROOF_STATUSES = ["passed", "failed", "skipped", "unknown"] as const;
 export const OUTCOME_MAX_LIST_LIMIT = 100;
 export const OUTCOME_DEFAULT_LIST_LIMIT = 25;
+export const OUTCOME_PROJECTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export type OutcomePhase = (typeof OUTCOME_PHASES)[number];
 export type OutcomeReadiness = (typeof OUTCOME_READINESS)[number];

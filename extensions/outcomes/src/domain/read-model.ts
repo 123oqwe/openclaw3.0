@@ -1,6 +1,7 @@
 import type {
   OutcomeDetail,
   OutcomeSummary,
+  OUTCOME_PROJECTION_MAX_AGE_MS,
   WorkboardRef as PublicWorkboardRef,
 } from "@openclaw/outcomes-contract";
 import type { OutcomeRecord } from "./types.js";
@@ -28,7 +29,7 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
     (projection) =>
       projection.upstreamStale === true ||
       projection.lastSuccessfulAt === undefined ||
-      observedAt - projection.lastSuccessfulAt >= 24 * 60 * 60 * 1000,
+      observedAt - projection.lastSuccessfulAt >= OUTCOME_PROJECTION_MAX_AGE_MS,
   );
   const readiness = hasUnavailableSource
     ? "unavailable"

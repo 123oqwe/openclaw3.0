@@ -26,6 +26,7 @@ describe("outcomes public contract", () => {
         "OUTCOME_DEFAULT_LIST_LIMIT",
         "OUTCOME_EVIDENCE_KINDS",
         "OUTCOME_MAX_LIST_LIMIT",
+        "OUTCOME_PROJECTION_MAX_AGE_MS",
         "OUTCOME_NEXT_ACTIONS",
         "OUTCOME_PHASES",
         "OUTCOME_PROOF_STATUSES",
