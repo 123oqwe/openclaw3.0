@@ -20,6 +20,13 @@ describe("Outcome repository atomic contract", () => {
         return true;
       },
       lookup: async (id) => records.get(id),
+      update: async (id, decide) => {
+        const next = decide(records.get(id));
+        if (next === undefined) return false;
+        records.set(id, next);
+        writes += 1;
+        return true;
+      },
     });
     return { repository, records, writes: () => writes };
   }
@@ -61,6 +68,17 @@ describe("Outcome repository atomic contract", () => {
       kind: "updated",
       record: { ...record, title: "new", revision: 3 },
     });
+  });
+
+  it("does not write when the reducer rejects or is a no-op", async () => {
+    const { repository, writes } = fixture();
+    const record = { id: "o-1", revision: 2, title: "same", phase: "active" as const };
+    await repository.create(record);
+    const before = writes();
+    await repository.transact(record.id, (current) => ({
+      result: reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" }),
+    }));
+    expect(writes()).toBe(before);
   });
 
   it("rejects title updates for cancelled outcomes", () => {
