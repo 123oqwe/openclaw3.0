@@ -109,13 +109,7 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("increments only revision when title changes", () => {
-    const record = {
-      id: "o-1",
-      revision: 2,
-      title: "old",
-      phase: "active" as const,
-      planGeneration: 3,
-    };
+    const record = { ...activeRecord(), revision: 2, title: "old" };
     expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new" })).toEqual({
       kind: "updated",
       record: { ...record, title: "new", revision: 3 },
@@ -155,13 +149,7 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("cancels only with the current revision and no in-flight operation", () => {
-    const record = {
-      id: "o-1",
-      revision: 2,
-      phase: "active" as const,
-      planGeneration: 3,
-      planHash: "plan-hash",
-    };
+    const record = { ...activeRecord(), revision: 2 };
     expect(reduceOutcomeCancel(record, 1)).toEqual({ kind: "conflict", record });
     expect(reduceOutcomeCancel(record, 2)).toEqual({
       kind: "updated",
@@ -177,7 +165,7 @@ describe("Outcome repository atomic contract", () => {
             criterionId: "c-1",
             planGeneration: 1,
             createdRevision: 2,
-            requestHash: "hash",
+            requestHash: "a".repeat(64),
             state,
             target: {
               owner: "workboard" as const,
@@ -200,7 +188,7 @@ describe("Outcome repository atomic contract", () => {
             criterionId: "c-1",
             planGeneration: 1,
             createdRevision: 2,
-            requestHash: "hash",
+            requestHash: "b".repeat(64),
             state,
             target: {
               owner: "workboard" as const,
