@@ -301,6 +301,16 @@ describe("Outcome repository host adapter", () => {
           created: true,
         });
       }
+      await expect(repository.createOwned("alice", draftRecord("capacity-0"))).resolves.toEqual({
+        created: false,
+        replayed: true,
+      });
+      await expect(
+        repository.createOwned("alice", {
+          ...draftRecord("capacity-0"),
+          createRequestHash: "f".repeat(64),
+        }),
+      ).rejects.toMatchObject({ code: "outcome-create-conflict" });
       await expect(repository.create(draftRecord("capacity-overflow"))).rejects.toMatchObject({
         code: "outcome-capacity-exceeded",
       });
