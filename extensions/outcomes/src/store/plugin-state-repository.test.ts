@@ -100,7 +100,11 @@ describe("Outcome repository host adapter", () => {
         process.execPath,
         ["--import", "tsx", "--input-type=module", "--eval", `
           import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
-          const store = createPluginStateKeyedStoreForTests("outcomes", { namespace: ${JSON.stringify(namespace)}, maxEntries: 500, overflowPolicy: "reject-new" });
+          const store = createPluginStateKeyedStoreForTests("outcomes", {
+            namespace: ${JSON.stringify(namespace)},
+            maxEntries: 500,
+            overflowPolicy: "reject-new",
+          });
           const value = await store.lookup(${JSON.stringify(record.id)});
           process.stdout.write(JSON.stringify(value));
         `],

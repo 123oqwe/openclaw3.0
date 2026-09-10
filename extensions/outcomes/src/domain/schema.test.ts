@@ -37,7 +37,12 @@ describe("Outcome create schema and canonical hash", () => {
     };
     expect(createRequestHash(base)).toBe(createRequestHash(refsReordered));
     expect(createRequestHash(base)).not.toBe(createRequestHash({ ...base, objective: "changed" }));
-    expect(() => createRequestSchema.parse({ ...base, criteria: Array.from({ length: 6 }, (_, i) => ({ ...base.criteria[0], id: `c-${i}` })) })).toThrow();
+    expect(() =>
+      createRequestSchema.parse({
+        ...base,
+        criteria: Array.from({ length: 6 }, (_, i) => ({ ...base.criteria[0], id: `c-${i}` })),
+      }),
+    ).toThrow();
   });
 
   it("enforces the UTF-8 aggregate size limit", () => {

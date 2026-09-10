@@ -84,8 +84,12 @@ export function planHash(input: CanonicalPlan): string {
         text: criterion.text,
         required: criterion.required,
         workRefs: [...criterion.workRefs].toSorted((a, b) => {
-          if (a.cardId !== b.cardId) return a.cardId < b.cardId ? -1 : 1;
-          if (a.cardCreatedAt !== b.cardCreatedAt) return a.cardCreatedAt - b.cardCreatedAt;
+          if (a.cardId !== b.cardId) {
+            return a.cardId < b.cardId ? -1 : 1;
+          }
+          if (a.cardCreatedAt !== b.cardCreatedAt) {
+            return a.cardCreatedAt - b.cardCreatedAt;
+          }
           return a.boardIdAtLink < b.boardIdAtLink ? -1 : a.boardIdAtLink > b.boardIdAtLink ? 1 : 0;
         }),
       })),
