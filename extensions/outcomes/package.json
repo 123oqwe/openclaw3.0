@@ -6,6 +6,7 @@
   "type": "module",
   "devDependencies": {
     "@openclaw/plugin-sdk": "workspace:*",
+    "@openclaw/outcomes-contract": "workspace:*",
     "openclaw": "workspace:*"
   },
   "dependencies": {

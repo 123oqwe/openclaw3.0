@@ -1,9 +1,6 @@
-export type WorkboardRef = {
-  owner: "workboard";
-  cardId: string;
-  cardCreatedAt: number;
-  boardIdAtLink: string;
-};
+import type { OutcomePhase, WorkboardRef as PublicWorkboardRef } from "@openclaw/outcomes-contract";
+
+export type WorkboardRef = PublicWorkboardRef;
 
 export type Criterion = {
   id: string;
@@ -96,7 +93,7 @@ export type OutcomeRecordDraft = {
   objective?: string;
   contractRevision?: number;
   revision: number;
-  phase?: "draft" | "active" | "accepted" | "cancelled";
+  phase?: OutcomePhase;
   planGeneration?: number;
   planHash?: string | null;
   criteria?: Criterion[];

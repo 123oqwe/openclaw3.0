@@ -1769,6 +1769,9 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
     devDependencies:
+      '@openclaw/outcomes-contract':
+        specifier: workspace:*
+        version: link:../../packages/outcomes-contract
       '@openclaw/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
@@ -2580,6 +2583,8 @@ importers:
         version: link:../normalization-core
 
   packages/workboard-contract: {}
+
+  packages/outcomes-contract: {}
 
   ui:
     dependencies:
