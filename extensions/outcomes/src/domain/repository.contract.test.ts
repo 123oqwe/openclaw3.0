@@ -130,27 +130,29 @@ describe("Outcome repository atomic contract", () => {
       kind: "updated",
       record: { ...record, phase: "cancelled", revision: 3 },
     });
-    const busy = {
-      ...record,
-      operations: [
-        {
-          id: "op-1",
-          kind: "workboard-card-start" as const,
-          criterionId: "c-1",
-          planGeneration: 1,
-          createdRevision: 2,
-          requestHash: "hash",
-          state: "prepared" as const,
-          target: {
-            owner: "workboard" as const,
-            cardId: "c",
-            cardCreatedAt: 1,
-            boardIdAtLink: "b",
+    for (const state of ["prepared", "unknown", "may-have-crossed"] as const) {
+      const busy = {
+        ...record,
+        operations: [
+          {
+            id: "op-1",
+            kind: "workboard-card-start" as const,
+            criterionId: "c-1",
+            planGeneration: 1,
+            createdRevision: 2,
+            requestHash: "hash",
+            state,
+            target: {
+              owner: "workboard" as const,
+              cardId: "c",
+              cardCreatedAt: 1,
+              boardIdAtLink: "b",
+            },
           },
-        },
-      ],
-    };
-    expect(reduceOutcomeCancel(busy, 2)).toEqual({ kind: "rejected", record: busy });
+        ],
+      };
+      expect(reduceOutcomeCancel(busy, 2)).toEqual({ kind: "rejected", record: busy });
+    }
     const accepted = { ...record, phase: "accepted" as const };
     expect(reduceOutcomeCancel(accepted, 2)).toEqual({ kind: "rejected", record: accepted });
     const cancelled = { ...record, phase: "cancelled" as const };
