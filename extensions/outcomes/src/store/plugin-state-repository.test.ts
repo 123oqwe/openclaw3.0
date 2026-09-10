@@ -9,7 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { reduceOutcomeTitle, type OutcomeMutationResult } from "../domain/reducer.js";
 import { createRequestHash, planHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
-import { createOutcomeRepository } from "./plugin-state-repository.js";
+import { OutcomeRepositoryConflictError, createOutcomeRepository } from "./plugin-state-repository.js";
 
 function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
   const request = { id, title: "same", objective: "objective", criteria: [{ id: "c-1", text: "criterion", required: true, workRefs: [] }] };
@@ -238,7 +238,7 @@ describe("Outcome repository host adapter", () => {
       });
       await expect(
         repository.createOwned("alice", { ...record, createRequestHash: "b".repeat(64) }),
-      ).rejects.toThrow("conflicts");
+      ).rejects.toBeInstanceOf(OutcomeRepositoryConflictError);
     });
   });
 

@@ -25,6 +25,17 @@ export type OutcomeContractMutation = {
   criteria: Criterion[];
 };
 
+export type OutcomeActivateResult =
+  | { kind: "conflict"; record: OutcomeRecord }
+  | { kind: "rejected"; record: OutcomeRecord }
+  | { kind: "updated"; record: OutcomeRecord };
+
+function hasInFlightOperation(current: OutcomeRecord): boolean {
+  return current.operations?.some((operation) =>
+    ["prepared", "unknown", "may-have-crossed"].includes(operation.state),
+  ) ?? false;
+}
+
 /** Update the contract with an ABA-safe CAS and a new plan generation. */
 export function reduceOutcomeContract(
   current: OutcomeRecord,
@@ -35,6 +46,9 @@ export function reduceOutcomeContract(
   }
   if (mutation.expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
+  }
+  if (hasInFlightOperation(current)) {
+    return { kind: "rejected", record: current };
   }
   const canonicalCriteria = (criteria: Criterion[]) =>
     criteria
@@ -75,6 +89,39 @@ export function reduceOutcomeContract(
         contractRevision: current.contractRevision + 1,
         planGeneration,
         criteria,
+      }),
+      revision: current.revision + 1,
+    },
+  };
+}
+
+/** Freeze a draft contract into its first active plan generation. */
+export function reduceOutcomeActivate(
+  current: OutcomeRecord,
+  expectedRevision: number,
+): OutcomeActivateResult {
+  if (expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current };
+  }
+  if (current.phase !== "draft" || hasInFlightOperation(current)) {
+    return { kind: "rejected", record: current };
+  }
+  if (current.criteria.some((criterion) => criterion.required && criterion.workRefs.length === 0)) {
+    return { kind: "rejected", record: current };
+  }
+  const planGeneration = 1;
+  return {
+    kind: "updated",
+    record: {
+      ...current,
+      phase: "active",
+      planGeneration,
+      planHash: planHash({
+        outcomeId: current.id,
+        objective: current.objective,
+        contractRevision: current.contractRevision,
+        planGeneration,
+        criteria: current.criteria,
       }),
       revision: current.revision + 1,
     },

@@ -3,6 +3,7 @@ import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "./types.js";
 import { createRequestHash, parseOutcomeRecord, planHash } from "./schema.js";
 import {
+  reduceOutcomeActivate,
   reduceOutcomeCancel,
   reduceOutcomeContract,
   reduceOutcomeTitle,
@@ -97,6 +98,27 @@ describe("Outcome repository atomic contract", () => {
     await expect(repository.create(record)).resolves.toEqual({ created: true });
     await expect(repository.get(record.id)).resolves.toEqual(record);
     expect(writes()).toBe(1);
+  });
+
+  it("activates linked drafts and blocks contract changes with in-flight operations", async () => {
+    const draft = validRecord("activate-1");
+    const linked = {
+      ...draft,
+      criteria: [{ ...draft.criteria[0]!, workRefs: [{ owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }] }],
+    };
+    const activated = reduceOutcomeActivate(linked, linked.revision);
+    expect(activated.kind).toBe("updated");
+    if (activated.kind !== "updated") return;
+    expect(activated.record.phase).toBe("active");
+    expect(activated.record.planGeneration).toBe(1);
+    expect(activated.record.planHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(activated.record.contractRevision).toBe(linked.contractRevision);
+    expect(activated.record.revision).toBe(linked.revision + 1);
+
+    for (const state of ["prepared", "unknown", "may-have-crossed"] as const) {
+      const withOperation = { ...linked, operations: [{ id: state, kind: "workboard-card-start" as const, criterionId: "c-1", planGeneration: 0, createdRevision: 1, requestHash: "a".repeat(64), state, target: linked.criteria[0]!.workRefs[0]! }] };
+      expect(reduceOutcomeContract(withOperation, { expectedRevision: 1, objective: "changed", criteria: withOperation.criteria }).kind).toBe("rejected");
+    }
   });
 
   it("rejects a duplicate create without a second write", async () => {
