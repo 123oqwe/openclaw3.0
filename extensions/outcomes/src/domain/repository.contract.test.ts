@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import type { OutcomeRecord } from "../store/outcome-repository.js";
+import { reduceOutcomeTitle } from "./reducer.js";
 
 // P-01 contract cases are intentionally staged before the domain repository
 // exists. They name the required observable behavior without treating a
@@ -37,6 +38,22 @@ describe("Outcome repository atomic contract", () => {
     await repository.create(record);
     await expect(repository.create(record)).resolves.toEqual({ created: false });
     expect(writes()).toBe(1);
+  });
+
+  it("replays before checking an obsolete revision", () => {
+    const record = { id: "o-1", revision: 2, title: "old", lastRequestHash: "r-1" };
+    expect(reduceOutcomeTitle(record, { requestHash: "r-1", expectedRevision: 1, title: "new" })).toEqual({
+      kind: "replay",
+      record,
+    });
+  });
+
+  it("returns no-op without incrementing revision for unchanged title", () => {
+    const record = { id: "o-1", revision: 2, title: "same" };
+    expect(reduceOutcomeTitle(record, { requestHash: "r-2", expectedRevision: 2, title: "same" })).toEqual({
+      kind: "noop",
+      record,
+    });
   });
 
   it.todo("replays an idempotent mutation before checking expected revision");

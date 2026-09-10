@@ -1,6 +1,8 @@
 export type OutcomeRecord = {
   id: string;
   revision: number;
+  title?: string;
+  lastRequestHash?: string;
   [key: string]: unknown;
 };
 
