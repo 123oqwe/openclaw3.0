@@ -122,7 +122,8 @@ describe("Outcome repository host adapter", () => {
       await expect(repository.get(record.id)).resolves.toEqual(record);
       expect(updates).toEqual([undefined]);
 
-      const active = { ...record, id: "o-2", phase: "active" as const, title: "same" };
+      const activeBase = { ...draftRecord("o-2"), revision: 2, phase: "active" as const, planGeneration: 1 };
+      const active = { ...activeBase, planHash: planHash({ outcomeId: activeBase.id, objective: activeBase.objective, contractRevision: activeBase.contractRevision, planGeneration: 1, criteria: activeBase.criteria }) };
       await repository.create(active);
       const noop = await repository.transact<OutcomeMutationResult>(active.id, (current) => {
         const decision = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same" });
