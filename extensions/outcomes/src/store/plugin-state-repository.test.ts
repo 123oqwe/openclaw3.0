@@ -279,9 +279,12 @@ describe("Outcome repository host adapter", () => {
           created: true,
         });
       }
-      await expect(repository.create(draftRecord("capacity-overflow"))).rejects.toThrow();
+      await expect(repository.create(draftRecord("capacity-overflow"))).resolves.toEqual({
+        created: false,
+      });
       await expect(repository.get("capacity-0")).resolves.toBeDefined();
       await expect(repository.get("capacity-499")).resolves.toBeDefined();
+      await expect(repository.list()).resolves.toHaveLength(500);
     });
   });
 });
