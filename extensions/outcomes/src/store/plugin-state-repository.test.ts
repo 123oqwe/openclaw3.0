@@ -301,10 +301,9 @@ describe("Outcome repository host adapter", () => {
           created: true,
         });
       }
-      await expect(repository.createOwned("alice", draftRecord("capacity-0"))).resolves.toEqual({
-        created: false,
-        replayed: true,
-      });
+      const replay = await repository.createOwned("alice", draftRecord("capacity-0"));
+      expect(replay).toMatchObject({ created: false, replayed: true });
+      expect(replay.record).toEqual(draftRecord("capacity-0"));
       await expect(
         repository.createOwned("alice", {
           ...draftRecord("capacity-0"),

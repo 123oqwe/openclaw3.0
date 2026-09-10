@@ -11,6 +11,15 @@ export class OutcomeRepositoryCapacityError extends Error {
   }
 }
 
+export class OutcomeRepositoryConflictError extends Error {
+  readonly code = "outcome-create-conflict" as const;
+
+  constructor() {
+    super("Outcome create request conflicts with existing record");
+    this.name = "OutcomeRepositoryConflictError";
+  }
+}
+
 function createLegacyOutcomeRepository(
   store: Pick<
     PluginStateKeyedStore<OutcomeRecord>,
@@ -48,7 +57,7 @@ function createLegacyOutcomeRepository(
         throw new Error("Outcome is not owned by the requested manager");
       }
       if (existing.createRequestHash !== record.createRequestHash) {
-        throw new Error("Outcome create request conflicts with existing record");
+        throw new OutcomeRepositoryConflictError();
       }
       return { created: false, replayed: true, record: existing };
     },
@@ -181,7 +190,7 @@ function createStrictOutcomeRepository(
         throw new Error("Outcome is not owned by the requested manager");
       }
       if (existing.createRequestHash !== parsed.createRequestHash) {
-        throw new Error("Outcome create request conflicts with existing record");
+        throw new OutcomeRepositoryConflictError();
       }
       return { created: false, replayed: true, record: existing };
     },
