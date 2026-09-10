@@ -394,7 +394,9 @@ describe("Outcome repository atomic contract", () => {
           },
         ],
       };
-      expect(reduceOutcomeCancel(settled, 2).kind).toBe("updated");
+    const cancelled = reduceOutcomeCancel(settled, 2, 42);
+    expect(cancelled.kind).toBe("updated");
+    if (cancelled.kind === "updated") expect(cancelled.record.updatedAt).toBe(42);
     }
     const accepted = { ...record, phase: "accepted" as const };
     expect(reduceOutcomeCancel(accepted, 2)).toEqual({

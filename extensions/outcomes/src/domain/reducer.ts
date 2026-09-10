@@ -161,6 +161,7 @@ export function reduceOutcomeTitle(
 export function reduceOutcomeCancel(
   current: OutcomeRecord,
   expectedRevision: number,
+  serverTime?: number,
 ): OutcomeCancelResult {
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
@@ -181,6 +182,7 @@ export function reduceOutcomeCancel(
       ...current,
       phase: "cancelled",
       revision: current.revision + 1,
+      updatedAt: serverTime ?? current.updatedAt,
     },
   };
 }
