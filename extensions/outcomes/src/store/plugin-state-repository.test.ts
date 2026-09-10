@@ -147,6 +147,9 @@ describe("Outcome repository host adapter", () => {
         repository.transactOwned("bob", record.id, () => ({ result: "must-not-run", next: record })),
       ).rejects.toThrow("not owned");
       await expect(repository.get(record.id)).resolves.toEqual(record);
+      await expect(repository.deleteOwnedIf("bob", record.id, () => true)).resolves.toBe(false);
+      await expect(repository.deleteOwnedIf("alice", record.id, () => true)).resolves.toBe(true);
+      await expect(repository.get(record.id)).resolves.toBeUndefined();
     });
   });
 
