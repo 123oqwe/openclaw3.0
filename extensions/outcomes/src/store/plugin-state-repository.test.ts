@@ -147,4 +147,35 @@ describe("Outcome repository host adapter", () => {
       await expect(repository.get(record.id)).resolves.toEqual(record);
     });
   });
+
+  it("replays same-owner create and rejects hash conflicts", async () => {
+    await withOpenClawTestState({ label: "outcome-repository-create-replay", applyEnv: false }, async (state) => {
+      const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+        namespace: `outcomes-v1-${randomUUID()}`,
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: state.env,
+      });
+      const repository = createOutcomeRepository(store);
+      const record = {
+        id: "replay",
+        managerProfileId: "alice",
+        createRequestHash: "hash-a",
+        revision: 1,
+        phase: "draft" as const,
+        planGeneration: 0,
+      };
+      await expect(repository.createOwned("alice", record)).resolves.toMatchObject({
+        created: true,
+        replayed: false,
+      });
+      await expect(repository.createOwned("alice", record)).resolves.toMatchObject({
+        created: false,
+        replayed: true,
+      });
+      await expect(
+        repository.createOwned("alice", { ...record, createRequestHash: "hash-b" }),
+      ).rejects.toThrow("conflicts");
+    });
+  });
 });

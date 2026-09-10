@@ -12,6 +12,23 @@ export function createOutcomeRepository(
   }
   return {
     create: async (record) => ({ created: await store.registerIfAbsent(record.id, record) }),
+    createOwned: async (managerProfileId, record) => {
+      if (record.managerProfileId !== managerProfileId) {
+        throw new Error("Outcome manager profile does not match authenticated owner");
+      }
+      const created = await store.registerIfAbsent(record.id, record);
+      if (created) {
+        return { created: true, replayed: false, record };
+      }
+      const existing = await store.lookup(record.id);
+      if (!existing || existing.managerProfileId !== managerProfileId) {
+        throw new Error("Outcome is not owned by the requested manager");
+      }
+      if (existing.createRequestHash !== record.createRequestHash) {
+        throw new Error("Outcome create request conflicts with existing record");
+      }
+      return { created: false, replayed: true, record: existing };
+    },
     get: (id) => store.lookup(id),
     list: async () => (await store.entries()).map((entry) => entry.value),
     transact: async <T>(

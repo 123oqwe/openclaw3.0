@@ -3,6 +3,10 @@ export type { OutcomeRecord } from "../domain/types.js";
 
 export type OutcomeRepository = {
   create(record: OutcomeRecord): Promise<{ created: boolean }>;
+  createOwned(
+    managerProfileId: string,
+    record: OutcomeRecord,
+  ): Promise<{ created: boolean; replayed: boolean; record: OutcomeRecord }>;
   get(id: string): Promise<OutcomeRecord | undefined>;
   list(): Promise<OutcomeRecord[]>;
   transact<T>(
