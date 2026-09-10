@@ -210,7 +210,9 @@ describe("Outcome repository host adapter", () => {
         { ...draftRecord("a"), managerProfileId: "alice", updatedAt: 3 },
         { ...draftRecord("z"), managerProfileId: "bob", updatedAt: 4 },
       ];
-      for (const record of records) await repository.create(record);
+      for (const record of records) {
+        await repository.create(record);
+      }
       await expect(repository.listOwned("alice")).resolves.toMatchObject([
         { id: "a" },
         { id: "b" },

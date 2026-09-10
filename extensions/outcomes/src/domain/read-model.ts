@@ -81,7 +81,7 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
     ),
   );
   const sourceIssues = currentProjections.flatMap((projection) => {
-    const criteria = record.criteria.filter((item) =>
+    const linkedCriteria = record.criteria.filter((item) =>
       item.workRefs.some(
         (ref) =>
           ref.cardId === projection.ref.cardId &&
@@ -90,7 +90,7 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
       ),
     );
     const reason = projection.errorCode;
-    return reason ? criteria.map((criterion) => ({ criterionId: criterion.id, reason })) : [];
+    return reason ? linkedCriteria.map((criterion) => ({ criterionId: criterion.id, reason })) : [];
   }).filter(
     (issue, index, issues) =>
       issues.findIndex(

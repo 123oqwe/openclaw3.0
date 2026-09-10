@@ -115,7 +115,9 @@ describe("Outcome repository atomic contract", () => {
     };
     const activated = reduceOutcomeActivate(linked, linked.revision, 42);
     expect(activated.kind).toBe("updated");
-    if (activated.kind !== "updated") return;
+    if (activated.kind !== "updated") {
+      return;
+    }
     expect(activated.record.phase).toBe("active");
     expect(activated.record.planGeneration).toBe(1);
     expect(activated.record.planHash).toMatch(/^[0-9a-f]{64}$/);
@@ -136,7 +138,9 @@ describe("Outcome repository atomic contract", () => {
       expect(reduceOutcomeContract(withOperation, { expectedRevision: 1, serverTime: 42, objective: "changed", criteria: withOperation.criteria }).kind).toBe("rejected");
       const titleUpdate = reduceOutcomeTitle(withOperation, { expectedRevision: 1, title: "new", serverTime: 42 });
       expect(titleUpdate.kind).toBe("updated");
-      if (titleUpdate.kind === "updated") expect(titleUpdate.record.updatedAt).toBe(42);
+      if (titleUpdate.kind === "updated") {
+        expect(titleUpdate.record.updatedAt).toBe(42);
+      }
     }
   });
 
@@ -163,7 +167,7 @@ describe("Outcome repository atomic contract", () => {
 
   it("treats canonical criteria/ref reordering as a contract no-op", () => {
     const record = activeRecord();
-    const reordered = [...record.criteria].reverse();
+    const reordered = record.criteria.toReversed();
     const result = reduceOutcomeContract(record, {
       expectedRevision: record.revision,
       serverTime: 42,
@@ -205,7 +209,9 @@ describe("Outcome repository atomic contract", () => {
       criteria: nextCriteria,
     });
     expect(result.kind).toBe("updated");
-    if (result.kind !== "updated") return;
+    if (result.kind !== "updated") {
+      return;
+    }
     expect(result.record.revision).toBe(record.revision + 1);
     expect(result.record.contractRevision).toBe(record.contractRevision + 1);
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
@@ -249,7 +255,9 @@ describe("Outcome repository atomic contract", () => {
       criteria: record.criteria,
     });
     expect(result.kind).toBe("updated");
-    if (result.kind !== "updated") return;
+    if (result.kind !== "updated") {
+      return;
+    }
     expect(result.record.phase).toBe("active");
     expect(result.record.planGeneration).toBe(record.planGeneration + 1);
     expect(result.record.acceptances).toEqual(record.acceptances);
@@ -266,7 +274,9 @@ describe("Outcome repository atomic contract", () => {
       criteria: [{ id: "c-2", text: "Draft criterion", required: true, workRefs: [] }],
     });
     expect(result.kind).toBe("updated");
-    if (result.kind !== "updated") return;
+    if (result.kind !== "updated") {
+      return;
+    }
     expect(result.record.phase).toBe("draft");
     expect(result.record.planGeneration).toBe(0);
     expect(result.record.planHash).toBeNull();
@@ -284,7 +294,9 @@ describe("Outcome repository atomic contract", () => {
       criteria: [{ id: "c-b", text: "B", required: true, workRefs: [] }],
     });
     expect(first.kind).toBe("updated");
-    if (first.kind !== "updated") return;
+    if (first.kind !== "updated") {
+      return;
+    }
     const second = reduceOutcomeContract(first.record, {
       expectedRevision: first.record.revision,
       serverTime: 42,
@@ -292,7 +304,9 @@ describe("Outcome repository atomic contract", () => {
       criteria: criteriaA,
     });
     expect(second.kind).toBe("updated");
-    if (second.kind !== "updated") return;
+    if (second.kind !== "updated") {
+      return;
+    }
     expect(second.record.planGeneration).toBe(initial.planGeneration + 2);
     expect(second.record.planHash).not.toBe(initial.planHash);
   });
@@ -410,7 +424,9 @@ describe("Outcome repository atomic contract", () => {
       };
     const cancelled = reduceOutcomeCancel(settled, 2, 42);
     expect(cancelled.kind).toBe("updated");
-    if (cancelled.kind === "updated") expect(cancelled.record.updatedAt).toBe(42);
+    if (cancelled.kind === "updated") {
+      expect(cancelled.record.updatedAt).toBe(42);
+    }
     }
     const accepted = { ...record, phase: "accepted" as const };
     expect(reduceOutcomeCancel(accepted, 2, 42)).toEqual({

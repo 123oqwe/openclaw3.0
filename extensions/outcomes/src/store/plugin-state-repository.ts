@@ -65,7 +65,7 @@ function createLegacyOutcomeRepository(
     list: async () =>
       (await store.entries())
         .map((entry) => entry.value)
-        .sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+        .toSorted((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     transact: async <T>(
       id: string,
       decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },
@@ -97,7 +97,7 @@ function createLegacyOutcomeRepository(
       return (await store.entries())
         .map((entry) => entry.value)
         .filter((record) => record.managerProfileId === managerProfileId)
-        .sort((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+        .toSorted((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
     },
     transactOwned: async <T>(
       managerProfileId: string,
