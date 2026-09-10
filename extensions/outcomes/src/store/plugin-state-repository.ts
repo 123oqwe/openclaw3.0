@@ -111,12 +111,18 @@ export function createLegacyOutcomeRepository(
 export function createStrictOutcomeRepository(
   store: Pick<PluginStateKeyedStore<OutcomeRecord>, "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf">,
 ): OutcomeRepository {
+  if (typeof store.deleteIf !== "function") {
+    throw new Error("Outcome repository requires atomic keyed-store deleteIf");
+  }
   const base = createLegacyOutcomeRepository(store);
   const strict = (value: OutcomeRecord | undefined) => (value === undefined ? undefined : parseOutcomeRecord(value));
   return {
     ...base,
     create: async (record) => base.create(parseOutcomeRecord(record)),
     createOwned: async (owner, record) => {
+      if (!owner.trim() || record.managerProfileId !== owner) {
+        throw new Error("Outcome manager profile does not match authenticated owner");
+      }
       const parsed = parseOutcomeRecord(record);
       const created = await store.registerIfAbsent(parsed.id, parsed);
       if (created) return { created: true, replayed: false, record: parsed };
