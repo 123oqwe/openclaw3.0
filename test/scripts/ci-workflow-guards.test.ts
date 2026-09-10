@@ -11418,8 +11418,9 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       expect.arrayContaining([
         expect.objectContaining({
           check_name: "checks-node-p00-workboard-health",
-          configs: ["test/vitest/vitest.e2e.config.ts"],
-          includePatterns: ["test/e2e/qa-lab/runtime/real-workboard-health.e2e.test.ts"],
+          configs: [],
+          shard_name: "p00-workboard-health",
+          targets: ["test/e2e/qa-lab/runtime/real-workboard-health.e2e.test.ts"],
           pretest_build_mode: "private-qa",
         }),
       ]),

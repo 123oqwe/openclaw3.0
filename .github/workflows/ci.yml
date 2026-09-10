@@ -1447,8 +1447,9 @@ jobs:
             ) {
               changedExtensionFallbackShards.push({
                 checkName: "checks-node-p00-workboard-health",
-                configs: ["test/vitest/vitest.e2e.config.ts"],
-                includePatterns: [p00WorkboardHealthTarget],
+                configs: [],
+                shardName: "p00-workboard-health",
+                targets: [p00WorkboardHealthTarget],
                 pretestBuildMode: "private-qa",
                 requiresDist: false,
               });
