@@ -8,6 +8,7 @@ import {
   reduceOutcomeLink,
   reduceOutcomeUnlink,
   reduceOutcomePatch,
+  reduceOutcomeRefresh,
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "./reducer.js";
@@ -63,6 +64,26 @@ describe("Outcome repository atomic contract", () => {
         planGeneration: 1,
         criteria: draft.criteria,
       }),
+    };
+  };
+
+  const linkedActiveRecord = (id = "refresh-1") => {
+    const active = activeRecord(id);
+    return {
+      ...active,
+      criteria: [
+        {
+          ...first(active.criteria),
+          workRefs: [
+            {
+              owner: "workboard" as const,
+              cardId: "card-1",
+              cardCreatedAt: 1,
+              boardIdAtLink: "board-1",
+            },
+          ],
+        },
+      ],
     };
   };
 
@@ -204,6 +225,77 @@ describe("Outcome repository atomic contract", () => {
     const mutation = { expectedRevision: 2, criterionId: "c-1", ref: { owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }, serverTime: 43 };
     expect(reduceOutcomeUnlink(linked, mutation)).toMatchObject({ kind: "updated", record: { revision: 3 } });
     expect(reduceOutcomeUnlink({ ...linked, revision: 2, criteria: [{ ...first(linked.criteria), workRefs: [] }] }, mutation).kind).toBe("noop");
+  });
+
+  it("refreshes every linked projection atomically while retaining evidence history", () => {
+    const record = linkedActiveRecord();
+    const ref = first(first(record.criteria).workRefs);
+    const historicalEvidence = {
+      id: "old-evidence",
+      criterionId: "c-1",
+      planGeneration: 1,
+      workRef: ref,
+      kind: "workboard-proof" as const,
+      sourceId: "proof-1",
+      sourceDigest: "a".repeat(64),
+      observedAt: 1,
+    };
+    const refreshedEvidence = { ...historicalEvidence, id: "new-evidence", sourceDigest: "b".repeat(64), observedAt: 42 };
+    const result = reduceOutcomeRefresh(
+      { ...record, evidence: [historicalEvidence] },
+      {
+        expectedRevision: record.revision,
+        serverTime: 42,
+        projections: [
+          {
+            ref,
+            availability: "available",
+            observedAt: 42,
+            proofs: [{ sourceId: "proof-1", digest: refreshedEvidence.sourceDigest }],
+            artifacts: [],
+            currentBoardId: "board-2",
+            status: "done",
+            sourceUpdatedAt: 41,
+            lastSuccessfulAt: 42,
+            upstreamStale: false,
+            sourceFingerprint: "c".repeat(64),
+          },
+        ],
+        evidence: [refreshedEvidence],
+      },
+    );
+    expect(result).toMatchObject({ kind: "updated", record: { revision: 2, updatedAt: 42 } });
+    if (result.kind !== "updated") return;
+    expect(result.record.evidence).toEqual([refreshedEvidence, historicalEvidence]);
+    expect(first(result.record.projections).ref).toEqual(ref);
+  });
+
+  it("rejects partial, terminal, stale, and over-capacity refreshes without changing the record", () => {
+    const record = linkedActiveRecord();
+    const ref = first(first(record.criteria).workRefs);
+    const validProjection = {
+      ref,
+      availability: "unavailable" as const,
+      observedAt: 42,
+      proofs: [],
+      artifacts: [],
+      errorCode: "timeout" as const,
+    };
+    const mutation = { expectedRevision: record.revision, serverTime: 42, projections: [validProjection], evidence: [] };
+    expect(reduceOutcomeRefresh(record, { ...mutation, projections: [] })).toEqual({ kind: "rejected", record });
+    expect(reduceOutcomeRefresh({ ...record, phase: "cancelled" as const }, mutation)).toMatchObject({ kind: "rejected" });
+    expect(reduceOutcomeRefresh({ ...record, revision: 2 }, mutation)).toMatchObject({ kind: "conflict" });
+    const evidence = Array.from({ length: 101 }, (_, index) => ({
+      id: `evidence-${index}`,
+      criterionId: "c-1",
+      planGeneration: 1,
+      workRef: ref,
+      kind: "workboard-proof" as const,
+      sourceId: `proof-${index}`,
+      sourceDigest: `${index}`.padStart(64, "0"),
+      observedAt: 42,
+    }));
+    expect(reduceOutcomeRefresh(record, { ...mutation, evidence })).toEqual({ kind: "rejected", record });
   });
 
   it("treats link and unlink as generation-changing contract mutations outside draft", () => {

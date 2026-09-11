@@ -4,7 +4,13 @@ import {
   OUTCOME_MAX_DISTINCT_WORK_REFS,
   OUTCOME_MAX_WORK_REFS_PER_CRITERION,
 } from "./constants.js";
-import type { Criterion, OutcomeRecord, WorkboardRef } from "./types.js";
+import type {
+  Criterion,
+  EvidenceRef,
+  OutcomeRecord,
+  WorkProjection,
+  WorkboardRef,
+} from "./types.js";
 
 export type OutcomeMutation = {
   expectedRevision: number;
@@ -47,8 +53,33 @@ export type OutcomeActivateResult =
 
 export type OutcomeLinkMutation = { expectedRevision: number; criterionId: string; ref: WorkboardRef; serverTime: number };
 
+/**
+ * The Gateway builds these values exclusively from one authorized Workboard
+ * observation.  A refresh is intentionally all-or-nothing for the record's
+ * current linked identities: a partial observation must not look current.
+ */
+export type OutcomeRefreshMutation = {
+  expectedRevision: number;
+  projections: WorkProjection[];
+  evidence: EvidenceRef[];
+  /** Supplied by the authenticated server context, never client payload. */
+  serverTime: number;
+};
+
 function workRefIdentity(ref: WorkboardRef): string {
   return `${ref.cardId}\0${ref.cardCreatedAt}`;
+}
+
+function evidenceIdentity(evidence: EvidenceRef): string {
+  return evidence.id;
+}
+
+function canonicalRefOrder(left: WorkboardRef, right: WorkboardRef): number {
+  return (
+    (left.cardId < right.cardId ? -1 : left.cardId > right.cardId ? 1 : 0) ||
+    left.cardCreatedAt - right.cardCreatedAt ||
+    (left.boardIdAtLink < right.boardIdAtLink ? -1 : left.boardIdAtLink > right.boardIdAtLink ? 1 : 0)
+  );
 }
 
 function reduceWorkboardRefContract(
@@ -306,6 +337,70 @@ export function reduceOutcomeUnlink(
     mutation,
     current.criteria.map((item) => (item.id === mutation.criterionId ? { ...item, workRefs } : item)),
   );
+}
+
+/**
+ * Replaces every current linked Workboard projection from one observation and
+ * appends its evidence to the immutable evidence history.  It deliberately
+ * does not silently accept a partial list, because that would let omitted
+ * sources retain an apparently-current cached projection.
+ */
+export function reduceOutcomeRefresh(
+  current: OutcomeRecord,
+  mutation: OutcomeRefreshMutation,
+): OutcomeMutationResult {
+  assertServerTime(mutation.serverTime);
+  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
+  if (current.phase === "cancelled") return { kind: "rejected", record: current };
+
+  const linkedRefs = current.criteria.flatMap((criterion) => criterion.workRefs);
+  const linkedIdentities = new Set(linkedRefs.map(workRefIdentity));
+  const projectionIdentities = mutation.projections.map((projection) => workRefIdentity(projection.ref));
+  const projectionIdentitySet = new Set(projectionIdentities);
+  if (
+    projectionIdentitySet.size !== projectionIdentities.length ||
+    projectionIdentitySet.size !== linkedIdentities.size ||
+    Array.from(linkedIdentities).some((identity) => !projectionIdentitySet.has(identity))
+  ) {
+    return { kind: "rejected", record: current };
+  }
+
+  const evidenceIds = new Set(mutation.evidence.map(evidenceIdentity));
+  if (
+    evidenceIds.size !== mutation.evidence.length ||
+    mutation.evidence.some(
+      (evidence) =>
+        evidence.planGeneration !== current.planGeneration ||
+        !linkedIdentities.has(workRefIdentity(evidence.workRef)),
+    )
+  ) {
+    return { kind: "rejected", record: current };
+  }
+
+  const existingEvidence = new Map(current.evidence.map((evidence) => [evidenceIdentity(evidence), evidence]));
+  for (const evidence of mutation.evidence) existingEvidence.set(evidenceIdentity(evidence), evidence);
+  const evidence = Array.from(existingEvidence.values()).toSorted((left, right) =>
+    left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
+  );
+  if (evidence.length > 100) return { kind: "rejected", record: current };
+
+  return {
+    kind: "updated",
+    record: {
+      ...current,
+      projections: mutation.projections
+        .map((projection) => ({
+          ...projection,
+          ref: { ...projection.ref },
+          proofs: projection.proofs.map((proof) => ({ ...proof })),
+          artifacts: projection.artifacts.map((artifact) => ({ ...artifact })),
+        }))
+        .toSorted((left, right) => canonicalRefOrder(left.ref, right.ref)),
+      evidence,
+      revision: current.revision + 1,
+      updatedAt: mutation.serverTime,
+    },
+  };
 }
 
 export function reduceOutcomeCancel(
