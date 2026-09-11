@@ -210,6 +210,19 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(0);
   });
 
+  it("counts public text limits by Unicode code point rather than UTF-16 code unit", async () => {
+    const harness = createHarness();
+    const validTitle = "🙂".repeat(160);
+    expect(await harness.call("outcomes.create", createParams(outcomeIds[0]!, validTitle))).toMatchObject([
+      true,
+      { outcome: { title: validTitle } },
+    ]);
+    expect(
+      await harness.call("outcomes.create", createParams(outcomeIds[1]!, "🙂".repeat(161))),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_INVALID_REQUEST" }]);
+    expect(harness.writes()).toBe(1);
+  });
+
   it("applies a combined patch once and rejects stale or terminal mutations without a write", async () => {
     const harness = createHarness();
     const id = outcomeIds[0]!;

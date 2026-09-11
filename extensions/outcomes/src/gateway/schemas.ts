@@ -5,13 +5,15 @@ const UUID_PATTERN =
   "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
 
 const outcomeId = Type.String({ pattern: UUID_PATTERN });
-const outcomeTitle = Type.String({ minLength: 1, maxLength: 160 });
-const outcomeObjective = Type.String({ minLength: 1, maxLength: 4000 });
+// TypeBox string lengths are UTF-16 code units. These bounds admit every valid
+// Unicode code-point-length input; normalizeText performs the exact protocol limit.
+const outcomeTitle = Type.String({ minLength: 1, maxLength: 160 * 2 });
+const outcomeObjective = Type.String({ minLength: 1, maxLength: 4000 * 2 });
 
 const criterion = Type.Object(
   {
     id: Type.String({ pattern: UUID_PATTERN }),
-    text: Type.String({ minLength: 1, maxLength: 1000 }),
+    text: Type.String({ minLength: 1, maxLength: 1000 * 2 }),
     required: Type.Boolean(),
   },
   { additionalProperties: false },
