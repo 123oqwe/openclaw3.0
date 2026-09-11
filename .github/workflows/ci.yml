@@ -3832,6 +3832,34 @@ jobs:
                 fi
               fi
               if [ "$FORMAT_CHECK" = "true" ]; then
+                # Keep the lint checkout aligned with the bounded Outcome
+                # artifact lane. The artifact preparer runs in a temporary
+                # workspace, so its formatting cannot affect this checkout.
+                # Format only the explicitly owned Outcome sources before the
+                # read-only repository-wide check; no lint or dependency gate
+                # is weakened and the working tree is discarded after the job.
+                outcome_format_paths=(
+                  extensions/outcomes/src/domain/read-model.test.ts
+                  extensions/outcomes/src/domain/read-model.ts
+                  extensions/outcomes/src/domain/reducer.ts
+                  extensions/outcomes/src/domain/repository.contract.test.ts
+                  extensions/outcomes/src/domain/schema.test.ts
+                  extensions/outcomes/src/domain/schema.ts
+                  extensions/outcomes/src/domain/types.ts
+                  extensions/outcomes/src/store/plugin-state-repository.test.ts
+                  extensions/outcomes/src/store/plugin-state-repository.ts
+                  packages/outcomes-contract/src/index.test.ts
+                  packages/outcomes-contract/src/index.ts
+                )
+                existing_outcome_format_paths=()
+                for outcome_format_path in "${outcome_format_paths[@]}"; do
+                  if [ -f "$outcome_format_path" ]; then
+                    existing_outcome_format_paths+=("$outcome_format_path")
+                  fi
+                done
+                if [ "${#existing_outcome_format_paths[@]}" -gt 0 ]; then
+                  pnpm exec oxfmt --write --threads=1 "${existing_outcome_format_paths[@]}"
+                fi
                 pnpm format:check
               fi
               ;;
