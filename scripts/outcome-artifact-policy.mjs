@@ -19,6 +19,7 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/package.json",
   "extensions/outcomes/runtime-api.ts",
   "extensions/outcomes/src/gateway/health.ts",
+  "extensions/outcomes/src/gateway/p02-admission.contract.md",
   "extensions/outcomes/src/runtime-capabilities.test.ts",
   "extensions/outcomes/src/domain/read-model.test.ts",
   "extensions/outcomes/src/domain/read-model.ts",

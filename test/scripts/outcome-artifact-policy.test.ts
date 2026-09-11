@@ -37,7 +37,7 @@ describe("outcome artifact policy", () => {
     }
   });
 
-  it("accepts only the fixed P-00 generated-output allowlist", () => {
+  it("accepts only the fixed Outcome artifact allowlist", () => {
     expect(() =>
       assertOutcomeArtifactPaths([
         "docs/.generated/config-baseline.sha256",
@@ -47,6 +47,7 @@ describe("outcome artifact policy", () => {
         "docs/plugins/reference/outcomes.md",
         "extensions/outcomes/index.ts",
         "extensions/outcomes/src/gateway/health.ts",
+        "extensions/outcomes/src/gateway/p02-admission.contract.md",
         "pnpm-lock.yaml",
       ]),
     ).not.toThrow();
