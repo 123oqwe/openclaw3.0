@@ -17,17 +17,19 @@ export class WorkboardIdentityConflictError extends Error {
 const optionalText = z.string().min(1).optional();
 const proofSchema = z.object({ id: z.string().min(1), status: z.enum(WORKBOARD_PROOF_STATUSES), createdAt: z.number().finite(), label: optionalText, command: optionalText, url: optionalText, note: optionalText }).passthrough();
 const artifactSchema = z.object({ id: z.string().min(1), createdAt: z.number().finite(), label: optionalText, url: optionalText, path: optionalText, mimeType: optionalText }).passthrough();
+const staleSchema = z.object({ detectedAt: z.number().finite(), lastSessionUpdatedAt: z.number().finite().optional(), reason: z.string().min(1) }).passthrough();
 const cardSchema = z.object({
   id: z.string().min(1), status: z.enum(WORKBOARD_STATUSES), createdAt: z.number().finite(), updatedAt: z.number().finite(),
   metadata: z.object({
     automation: z.object({ boardId: z.string().min(1) }).optional(),
-    proof: z.array(proofSchema).optional(), artifacts: z.array(artifactSchema).optional(),
+    proof: z.array(proofSchema).optional(), artifacts: z.array(artifactSchema).optional(), stale: staleSchema.optional(),
   }).passthrough().optional(),
 }).passthrough();
 const responseSchema = z.object({ cards: z.array(cardSchema) }).passthrough();
 
 export type WorkboardCard = {
   id: string; createdAt: number; updatedAt: number; status: WorkboardStatus; boardId: string;
+  upstreamStale: boolean;
   proofs: Array<{ id: string; status: WorkboardProofStatus; createdAt: number; label?: string; command?: string; url?: string; note?: string }>;
   artifacts: Array<{ id: string; createdAt: number; label?: string; url?: string; path?: string; mimeType?: string }>;
 };
@@ -51,6 +53,7 @@ export function readWorkboardCards(value: unknown): WorkboardCard[] {
     return {
       id: card.id, createdAt: card.createdAt, updatedAt: card.updatedAt, status: card.status,
       boardId: card.metadata?.automation?.boardId ?? "default",
+      upstreamStale: card.metadata?.stale !== undefined,
       proofs,
       artifacts,
     };
