@@ -392,6 +392,59 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("treats changed authorized source content as current evidence without rewriting on get", async () => {
+    const cards = [
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 8,
+        metadata: {
+          automation: { boardId: "board-b" },
+          proof: [{ id: "proof-a", status: "passed", createdAt: 3, label: "Initial proof" }],
+          artifacts: [],
+        },
+      },
+    ];
+    const harness = createHarness({ workboardCards: cards });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    await harness.call("outcomes.refresh", { id, expectedRevision: 2 });
+    const persistedDigest = harness.records.get(id)!.evidence[0]!.sourceDigest;
+    cards[0] = {
+      ...cards[0]!,
+      updatedAt: 9,
+      metadata: {
+        ...cards[0]!.metadata,
+        proof: [
+          { id: "proof-a", status: "passed", createdAt: 3, label: "Replacement proof" },
+        ],
+      },
+    };
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+    const response = await harness.call("outcomes.get", { id });
+    expect(response).toMatchObject([true, { outcome: { evidence: [{ sourceId: "proof-a" }] } }]);
+    const outcome = (response[1] as { outcome: { criteria: Array<{ evidenceSetHash: string | null }>; evidence: Array<{ sourceDigest: string }> } }).outcome;
+    expect(outcome.evidence[0]!.sourceDigest).not.toBe(persistedDigest);
+    expect(outcome.criteria[0]!.evidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.writes()).toBe(writes);
+    expect(harness.records.get(id)!.evidence).toHaveLength(1);
+    expect(harness.records.get(id)!.evidence[0]!.sourceDigest).toBe(persistedDigest);
+
+    await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    expect(harness.records.get(id)!.evidence.map((evidence) => evidence.sourceDigest)).toEqual(
+      expect.arrayContaining([persistedDigest, outcome.evidence[0]!.sourceDigest]),
+    );
+  });
+
   it("keeps Outcome content but never leaks cached source material after an owner-read failure", async () => {
     const harness = createHarness({
       workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" },
