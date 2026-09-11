@@ -51,6 +51,7 @@ function createOperatorClient(
 }
 
 function registerHarness() {
+  const records = new Map<string, unknown>();
   const registrations: Array<{
     method: string;
     handler: never;
@@ -62,11 +63,25 @@ function registerHarness() {
     runtime: {
       state: {
         openKeyedStore: () => ({
-          registerIfAbsent: async () => false,
-          lookup: async () => undefined,
-          entries: async () => [],
-          update: async () => false,
-          deleteIf: async () => false,
+          registerIfAbsent: async (key: string, value: unknown) => {
+            if (records.has(key)) return false;
+            records.set(key, value);
+            return true;
+          },
+          lookup: async (key: string) => records.get(key),
+          entries: async () => Array.from(records, ([key, value]) => ({ key, value })),
+          update: async (key: string, decide: (current: unknown) => unknown) => {
+            const next = decide(records.get(key));
+            if (next === undefined) return false;
+            records.set(key, next);
+            return true;
+          },
+          deleteIf: async (key: string, predicate: (current: unknown) => boolean) => {
+            const current = records.get(key);
+            if (current === undefined || !predicate(current)) return false;
+            records.delete(key);
+            return true;
+          },
         }),
       },
       gateway: { isAvailable: async () => false, request: async () => ({}) },
@@ -201,5 +216,37 @@ describe("P-02 Outcome Gateway admission", () => {
       }),
     ).rejects.toThrow("authenticated request authority expired");
     expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("refuses an exact create replay after effective write authority is revoked", async () => {
+    const { context } = registerHarness();
+    const request = {
+      id: outcomeId,
+      title: "Ship safely",
+      objective: "Ship the Outcome beta safely",
+      criteria: [
+        {
+          id: "123e4567-e89b-42d3-a456-426614174001",
+          text: "Hosted evidence is available",
+          required: true,
+        },
+      ],
+    };
+    await expect(
+      dispatch({
+        client: createOperatorClient("manager-a", ["operator.write"]),
+        context,
+        method: "outcomes.create",
+        request,
+      }),
+    ).resolves.toMatchObject({ outcome: { id: outcomeId }, replayed: false });
+    await expect(
+      dispatch({
+        client: createOperatorClient("manager-a", ["operator.read"]),
+        context,
+        method: "outcomes.create",
+        request,
+      }),
+    ).rejects.toThrow(/scope/i);
   });
 });
