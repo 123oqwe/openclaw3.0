@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
 import { evidenceSetHash } from "./hash.js";
 import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 import { parseOutcomeRecord, planHash, workboardProjectionFingerprint } from "./schema.js";
@@ -333,6 +334,32 @@ describe("Outcome P-01 read model", () => {
     delete input.projections[0]!.errorCode;
     input.projections[0]!.lastSuccessfulAt = 0;
     expect(toOutcomeSummary(valid(input), 24 * 60 * 60 * 1000 + 1).readiness).toBe("stale");
+  });
+
+  it("turns stale exactly at 24 hours and derives the earliest valid recheck time", () => {
+    const input = record();
+    const ref = { owner: "workboard" as const, cardId: "card-fresh", cardCreatedAt: 1, boardIdAtLink: "board" };
+    input.criteria[0]!.workRefs = [ref];
+    input.projections = [
+      {
+        ref,
+        availability: "available",
+        observedAt: 100,
+        lastSuccessfulAt: 100,
+        currentBoardId: "board",
+        status: "done",
+        sourceUpdatedAt: 100,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
+    const parsed = valid(input);
+    expect(toOutcomeSummary(parsed, 100 + OUTCOME_PROJECTION_MAX_AGE_MS - 1).readiness).toBe("incomplete");
+    expect(toOutcomeSummary(parsed, 100 + OUTCOME_PROJECTION_MAX_AGE_MS).readiness).toBe("stale");
+    expect(toOutcomeDetail(parsed, 101).recheckAfter).toBe(100 + OUTCOME_PROJECTION_MAX_AGE_MS);
+    parsed.projections[0]!.upstreamStale = true;
+    expect(toOutcomeSummary(valid(parsed), 101).readiness).toBe("stale");
+    expect(toOutcomeDetail(valid(parsed), 101).recheckAfter).toBeNull();
   });
 
   it.each(["succeeded", "failed"] as const)(

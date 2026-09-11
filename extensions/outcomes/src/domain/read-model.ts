@@ -186,6 +186,9 @@ export function toOutcomeDetail(
   const sourcesByRef = new Map(
     authorizedSources.map((source) => [workRefIdentity(source.ref), source]),
   );
+  const projectionsByRef = new Map(
+    observedProjections.map((projection) => [workRefIdentity(projection.ref), projection]),
+  );
   const criteria = record.criteria.map((criterion) => ({
     ...(() => {
       const visibleRefs = criterion.workRefs.filter((ref) => sourcesByRef.has(workRefIdentity(ref)));
@@ -225,7 +228,7 @@ export function toOutcomeDetail(
       status: source.status,
       observedAt,
       sourceUpdatedAt: source.sourceUpdatedAt,
-      lastSuccessfulAt: observedAt,
+      lastSuccessfulAt: projectionsByRef.get(workRefIdentity(source.ref))?.lastSuccessfulAt,
       upstreamStale: source.upstreamStale,
     }))
     .toSorted((left, right) => {
@@ -258,6 +261,17 @@ export function toOutcomeDetail(
             candidate.criterionId === issue.criterionId && candidate.reason === issue.reason,
         ) === index,
     );
+  const recheckAfter = observedProjections
+    .filter(
+      (projection) =>
+        projection.availability === "available" &&
+        projection.upstreamStale !== true &&
+        projection.lastSuccessfulAt !== undefined,
+    )
+    .map((projection) => projection.lastSuccessfulAt! + OUTCOME_PROJECTION_MAX_AGE_MS)
+    .reduce<number | null>((earliest, candidate) =>
+      earliest === null || candidate < earliest ? candidate : earliest,
+    , null);
   return {
     ...summary,
     objective: record.objective,
@@ -278,7 +292,7 @@ export function toOutcomeDetail(
         : {}),
     },
     observedAt,
-    recheckAfter: null,
+    recheckAfter,
     closureHash: null,
     attention: [],
     nextActions: summary.phase === "cancelled" ? [] : ["refresh", "cancel"],
