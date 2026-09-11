@@ -42,10 +42,19 @@ suite.define(() => {
             // Exercise secure-origin browser behavior while serving only this test's local bundle.
             await page.route(`${origin}/**`, async (route) => {
               const requested = new URL(route.request().url());
-              trace("broad-enter", requested.pathname);
+              const isDiagnosticPath =
+                requested.pathname === "/avatar/main" ||
+                requested.pathname === "/.well-known/openclaw/browser-bootstrap";
+              if (isDiagnosticPath) trace("broad-enter", requested.pathname);
               if (requested.pathname === "/.well-known/openclaw/browser-bootstrap") {
                 trace("broad-fallback", requested.pathname);
                 await route.fallback();
+                return;
+              }
+              if (requested.pathname === "/avatar/main") {
+                trace("avatar-fulfill-before", requested.pathname);
+                await route.fulfill({ status: 404, body: "" });
+                trace("avatar-fulfill-after", requested.pathname);
                 return;
               }
               const upstream = new URL(
@@ -53,10 +62,10 @@ suite.define(() => {
                 suite.server.baseUrl,
               );
               const response = await route.fetch({ url: upstream.href });
-              trace("broad-fetch-complete", requested.pathname);
-              trace("broad-fulfill-before", requested.pathname);
+              if (isDiagnosticPath) trace("broad-fetch-complete", requested.pathname);
+              if (isDiagnosticPath) trace("broad-fulfill-before", requested.pathname);
               await route.fulfill({ response });
-              trace("broad-fulfill-after", requested.pathname);
+              if (isDiagnosticPath) trace("broad-fulfill-after", requested.pathname);
             });
             const gateway = await installMockGateway(page, {
               sessionKey,
