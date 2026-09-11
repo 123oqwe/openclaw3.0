@@ -1,4 +1,5 @@
 import type { OpenClawPluginApi } from "../../api.js";
+import { registerOutcomeFirstPackageMethods } from "./methods.js";
 
 const CAPABILITY_STORE_OPTIONS = {
   namespace: "outcomes-capability-v1",
@@ -52,4 +53,5 @@ export function registerOutcomeGatewayMethods(api: OpenClawPluginApi): void {
     },
     { scope: "operator.read" },
   );
+  registerOutcomeFirstPackageMethods(api);
 }

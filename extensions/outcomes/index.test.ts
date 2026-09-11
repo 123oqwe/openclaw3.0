@@ -66,7 +66,7 @@ describe("Outcome plugin shell", () => {
     ]);
   });
 
-  it("registers only the content-free operator.read health method", async () => {
+  it("keeps the content-free operator.read health method in the first package", async () => {
     const registerGatewayMethod = vi.fn();
     const registerTool = vi.fn();
     const registerCli = vi.fn();
@@ -96,8 +96,10 @@ describe("Outcome plugin shell", () => {
       }),
     );
 
-    expect(registerGatewayMethod).toHaveBeenCalledOnce();
-    const [method, handler, options] = registerGatewayMethod.mock.calls[0] ?? [];
+    const healthRegistration = registerGatewayMethod.mock.calls.find(
+      ([method]) => method === "outcomes.health",
+    );
+    const [method, handler, options] = healthRegistration ?? [];
     expect(method).toBe("outcomes.health");
     expect(options).toEqual({ scope: "operator.read" });
 
