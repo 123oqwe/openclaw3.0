@@ -98,9 +98,7 @@ describe("Outcome create schema and canonical hash", () => {
     expect(createRequestHash(createRequest)).toBe(
       "7ef9b61b47edc77f8f0fb2e7f9905769a1689efa8c215e1a41e33a1a6d36cdf9",
     );
-    expect(planHash(plan)).toBe(
-      "2e11edc825a85302952b3487badf8ea73bcb227c7c49d25c2f873a83252fb2c8",
-    );
+    expect(planHash(plan)).toBe("2e11edc825a85302952b3487badf8ea73bcb227c7c49d25c2f873a83252fb2c8");
     expect(evidenceSetHash(evidence)).toBe(
       "3ce75240d716ece2ed727bd4caac9b8ece37b2f5b97fc492f46e98011ca7f027",
     );
