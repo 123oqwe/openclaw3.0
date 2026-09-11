@@ -186,6 +186,19 @@ describe("Outcome create schema and canonical hash", () => {
     ).toThrow();
   });
 
+  it("uses Unicode code points for persisted Outcome text limits", () => {
+    const request = {
+      id: "o-emoji",
+      title: "🙂".repeat(160),
+      objective: "Objective",
+      criteria: [{ id: "c-emoji", text: "Complete", required: true, workRefs: [] }],
+    };
+    expect(createRequestSchema.safeParse(request).success).toBe(true);
+    expect(
+      createRequestSchema.safeParse({ ...request, title: "🙂".repeat(161) }).success,
+    ).toBe(false);
+  });
+
   it("bounds canonical historical plan references by card identity", () => {
     const ref = (index: number) => ({
       owner: "workboard" as const,

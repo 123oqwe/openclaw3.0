@@ -9,6 +9,25 @@ import {
 } from "./constants.js";
 import type { Criterion, PersistedOutcomeRecord, WorkProjection } from "./types.js";
 
+function codePointText(max: number) {
+  return z
+    .string()
+    .min(1)
+    .max(max * 2)
+    .refine((value) => Array.from(value).length <= max, {
+      message: `must contain at most ${max} Unicode code points`,
+    });
+}
+
+function codePointString(max: number) {
+  return z
+    .string()
+    .max(max * 2)
+    .refine((value) => Array.from(value).length <= max, {
+      message: `must contain at most ${max} Unicode code points`,
+    });
+}
+
 export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
   cardId: z.string().min(1),
@@ -17,17 +36,17 @@ export const workboardRefSchema = z.strictObject({
 });
 
 export const criterionSchema = z.strictObject({
-  id: z.string().min(1).max(160),
-  text: z.string().min(1).max(1000),
+  id: codePointText(160),
+  text: codePointText(1000),
   required: z.boolean(),
   workRefs: z.array(workboardRefSchema),
 });
 
 export const createRequestSchema = z
   .strictObject({
-    id: z.string().min(1).max(160),
-    title: z.string().min(1).max(160),
-    objective: z.string().min(1).max(4000),
+    id: codePointText(160),
+    title: codePointText(160),
+    objective: codePointText(4000),
     criteria: z.array(criterionSchema).min(1).max(OUTCOME_MAX_CRITERIA),
   })
   .refine((request) => request.criteria.some((criterion) => criterion.required), {
@@ -206,7 +225,7 @@ const decisionSchema = z.strictObject({
   decidedPlan: z
     .strictObject({
       outcomeId: z.string().min(1),
-      objective: z.string().min(1).max(4000),
+      objective: codePointText(4000),
       contractRevision: z.number().int().positive(),
       planGeneration: z.number().int().positive(),
       criteria: z.array(criterionSchema).min(1).max(5),
@@ -215,7 +234,7 @@ const decisionSchema = z.strictObject({
       message: "at least one criterion must be required",
     }),
   evidenceSetHash: z.string().regex(/^[0-9a-f]{64}$/),
-  note: z.string().max(2000).optional(),
+  note: codePointString(2000).optional(),
   decidedAt: z.number().finite(),
 });
 
@@ -245,7 +264,7 @@ const acceptanceSchema = z.strictObject({
   acceptedPlan: z
     .strictObject({
       outcomeId: z.string().min(1),
-      objective: z.string().min(1),
+      objective: codePointText(4000),
       contractRevision: z.number().int().positive(),
       planGeneration: z.number().int().positive(),
       criteria: z.array(criterionSchema).min(1).max(5),
@@ -267,11 +286,11 @@ function safePlanHash(input: CanonicalPlan): string | null {
 export const outcomeRecordSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
-    id: z.string().min(1).max(160),
+    id: codePointText(160),
     createRequestHash: z.string().regex(/^[0-9a-f]{64}$/),
     managerProfileId: z.string().min(1),
-    title: z.string().min(1).max(160),
-    objective: z.string().min(1).max(4000),
+    title: codePointText(160),
+    objective: codePointText(4000),
     phase: z.enum(["draft", "active", "accepted", "cancelled"]),
     revision: z.number().int().positive(),
     contractRevision: z.number().int().positive(),
@@ -478,8 +497,8 @@ export type CanonicalPlan = {
 
 export const canonicalPlanSchema = z
   .strictObject({
-    outcomeId: z.string().min(1).max(160),
-    objective: z.string().min(1).max(4000),
+    outcomeId: codePointText(160),
+    objective: codePointText(4000),
     contractRevision: z.number().int().positive(),
     planGeneration: z.number().int().positive(),
     criteria: z.array(criterionSchema).min(1).max(5),
