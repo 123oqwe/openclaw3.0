@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { evidenceSetHash } from "./hash.js";
 import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 import { parseOutcomeRecord, planHash } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
@@ -47,6 +48,74 @@ function valid(input: OutcomeRecord): OutcomeRecord {
     criteria: input.criteria,
   });
   return parseOutcomeRecord(input);
+}
+
+function withCurrentVerifiedEvidence(input: OutcomeRecord): OutcomeRecord {
+  const ref = {
+    owner: "workboard" as const,
+    cardId: "card-current",
+    cardCreatedAt: 1,
+    boardIdAtLink: "board-link",
+  };
+  const criterion = first(input.criteria);
+  criterion.workRefs = [ref];
+  input.planHash = planHash({
+    outcomeId: input.id,
+    objective: input.objective,
+    contractRevision: input.contractRevision,
+    planGeneration: input.planGeneration,
+    criteria: input.criteria,
+  });
+  input.projections = [
+    {
+      ref,
+      availability: "available",
+      currentBoardId: "board-current",
+      status: "done",
+      observedAt: 10,
+      lastSuccessfulAt: 10,
+      proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+      artifacts: [],
+    },
+  ];
+  input.evidence = [
+    {
+      id: "evidence-1",
+      criterionId: criterion.id,
+      planGeneration: input.planGeneration,
+      workRef: ref,
+      kind: "workboard-proof",
+      sourceId: "proof-1",
+      sourceDigest: "proof-digest-1",
+      observedAt: 10,
+    },
+  ];
+  input.decisions = [
+    {
+      id: "decision-verified",
+      criterionId: criterion.id,
+      planGeneration: input.planGeneration,
+      decidedRevision: input.revision,
+      status: "verified",
+      requestHash: "d".repeat(64),
+      profileId: input.managerProfileId,
+      planHash: input.planHash!,
+      decidedPlan: {
+        outcomeId: input.id,
+        objective: input.objective,
+        contractRevision: input.contractRevision,
+        planGeneration: input.planGeneration,
+        criteria: input.criteria,
+      },
+      evidenceSetHash: evidenceSetHash({
+        criterionId: criterion.id,
+        planGeneration: input.planGeneration,
+        sourceDigests: ["proof-digest-1"],
+      }),
+      decidedAt: 10,
+    },
+  ];
+  return valid(input);
 }
 
 describe("Outcome P-01 read model", () => {
@@ -261,6 +330,33 @@ describe("Outcome P-01 read model", () => {
       },
     ];
     expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
+  });
+
+  it("selects only current verified evidence and decision snapshots for readiness", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    expect(toOutcomeSummary(input, 10).readiness).toBe("ready");
+
+    input.projections[0]!.ref = {
+      ...input.projections[0]!.ref,
+      boardIdAtLink: "board-moved-after-link",
+    };
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
+
+    input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
+  });
+
+  it("lets the newest current decision supersede history but blocks a current rejection", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const current = first(input.decisions);
+    input.decisions = [
+      { ...current, id: "decision-old-rejected", decidedRevision: 1, status: "rejected" },
+      current,
+    ];
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
+
+    input.decisions = [{ ...current, id: "decision-current-rejected", status: "rejected" }];
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
   });
 
   it("uses last successful observation and the inclusive 24-hour boundary", () => {
