@@ -41,7 +41,7 @@ export type OutcomeRepository = {
   transactOwned<T>(
     managerProfileId: string,
     id: string,
-    decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },
+    decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord },
   ): Promise<T>;
   deleteOwnedIf(
     managerProfileId: string,

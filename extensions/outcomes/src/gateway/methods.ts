@@ -7,6 +7,7 @@ import type {
   OutcomeUpdateParams,
 } from "@openclaw/outcomes-contract";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
+import type { GatewayRequestHandlerOptions } from "openclaw/plugin-sdk/gateway-runtime";
 import { Value } from "typebox/value";
 import type { OpenClawPluginApi } from "../../api.js";
 import {
@@ -67,9 +68,10 @@ type PublicCriterion = OutcomeCriterionInput;
 type PublicCreate = OutcomeCreateParams;
 type PublicPatch = OutcomeUpdateParams["patch"];
 type PublicWorkboardLink = OutcomeWorkboardLinkParams;
+type GatewayRespond = GatewayRequestHandlerOptions["respond"];
 
 function fail(
-  respond: (ok: false, payload?: undefined, error?: unknown) => void,
+  respond: GatewayRespond,
   code: keyof typeof OutcomeErrorCodes,
 ): void {
   respond(false, undefined, outcomeError(OutcomeErrorCodes[code]));
@@ -101,12 +103,15 @@ function normalizedText(value: unknown, min: number, max: number): string | unde
   const length = Array.from(text).length;
   return length >= min && length <= max ? text : undefined;
 }
+function positiveSafeInteger(value: unknown): value is number {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
+}
 function normalizeCriteria(value: unknown): PublicCriterion[] | undefined {
   if (!Array.isArray(value) || value.length < 1 || value.length > 5) return undefined;
   const criteria: PublicCriterion[] = [];
   for (const item of value) {
     if (!item || typeof item !== "object") return undefined;
-    const input = item as Record<string, unknown>;
+    const input = item as Record<string, unknown>; // SAFETY: item passed the object guard above.
     const id = normalizedUuid(input.id);
     const text = normalizedText(input.text, 1, 1000);
     if (!id || !text || typeof input.required !== "boolean") return undefined;
@@ -122,7 +127,7 @@ function withinBudget(value: unknown): boolean {
 }
 function normalizeCreate(params: unknown): PublicCreate | undefined {
   if (!params || typeof params !== "object") return undefined;
-  const input = params as Record<string, unknown>;
+  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
   const id = normalizedUuid(input.id);
   const title = normalizedText(input.title, 1, 160);
   const objective = normalizedText(input.objective, 1, 4000);
@@ -135,18 +140,17 @@ function normalizePatch(
   params: unknown,
 ): { id: string; expectedRevision: number; patch: PublicPatch } | undefined {
   if (!params || typeof params !== "object") return undefined;
-  const input = params as Record<string, unknown>;
+  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
   const id = normalizedUuid(input.id);
   const patchInput = input.patch;
   if (
     !id ||
-    !Number.isSafeInteger(input.expectedRevision) ||
-    (input.expectedRevision as number) < 1 ||
+    !positiveSafeInteger(input.expectedRevision) ||
     !patchInput ||
     typeof patchInput !== "object"
   )
     return undefined;
-  const raw = patchInput as Record<string, unknown>;
+  const raw = patchInput as Record<string, unknown>; // SAFETY: patchInput passed the object guard above.
   const patch: PublicPatch = {};
   if (Object.hasOwn(raw, "title")) {
     const title = normalizedText(raw.title, 1, 160);
@@ -163,12 +167,12 @@ function normalizePatch(
     if (!criteria) return undefined;
     patch.criteria = criteria;
   }
-  const result = { id, expectedRevision: input.expectedRevision as number, patch };
+  const result = { id, expectedRevision: input.expectedRevision, patch };
   return Object.keys(patch).length > 0 && withinBudget(result) ? result : undefined;
 }
 function normalizeWorkboardLink(params: unknown): PublicWorkboardLink | undefined {
   if (!params || typeof params !== "object") return undefined;
-  const input = params as Record<string, unknown>;
+  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
   const id = normalizedUuid(input.id);
   const criterionId = normalizedUuid(input.criterionId);
   const cardId = typeof input.cardId === "string" ? input.cardId.trim() : "";
@@ -176,12 +180,11 @@ function normalizeWorkboardLink(params: unknown): PublicWorkboardLink | undefine
     !id ||
     !criterionId ||
     !cardId ||
-    !Number.isSafeInteger(input.expectedRevision) ||
-    (input.expectedRevision as number) < 1
+    !positiveSafeInteger(input.expectedRevision)
   ) {
     return undefined;
   }
-  const result = { id, expectedRevision: input.expectedRevision as number, criterionId, cardId };
+  const result = { id, expectedRevision: input.expectedRevision, criterionId, cardId };
   return withinBudget(result) ? result : undefined;
 }
 function withRefs(criteria: PublicCriterion[], current: Criterion[]): Criterion[] {
@@ -191,7 +194,7 @@ function withRefs(criteria: PublicCriterion[], current: Criterion[]): Criterion[
   }));
 }
 function respondMutation(
-  respond: (ok: boolean, payload?: unknown, error?: unknown) => void,
+  respond: GatewayRespond,
   decision: { kind: "updated" | "noop" | "conflict" | "rejected"; record: OutcomeRecord },
   now: number,
 ): void {

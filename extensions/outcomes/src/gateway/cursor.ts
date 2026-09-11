@@ -37,17 +37,20 @@ export function decodeOutcomeCursor(
 ): Pick<OutcomeCursor, "updatedAt" | "id"> | undefined {
   try {
     const parsed: unknown = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8"));
+    // SAFETY: the object guard below is followed by field-by-field runtime validation.
+    const candidate = parsed as Partial<OutcomeCursor>;
     if (
       !parsed ||
       typeof parsed !== "object" ||
-      (parsed as Partial<OutcomeCursor>).v !== 1 ||
-      !Number.isFinite((parsed as Partial<OutcomeCursor>).updatedAt) ||
-      typeof (parsed as Partial<OutcomeCursor>).id !== "string" ||
-      (parsed as Partial<OutcomeCursor>).profileDigest !== profileDigest(profileId)
+      candidate.v !== 1 ||
+      typeof candidate.updatedAt !== "number" ||
+      !Number.isFinite(candidate.updatedAt) ||
+      typeof candidate.id !== "string" ||
+      candidate.profileDigest !== profileDigest(profileId)
     ) {
       return undefined;
     }
-    return { updatedAt: (parsed as OutcomeCursor).updatedAt, id: (parsed as OutcomeCursor).id };
+    return { updatedAt: candidate.updatedAt, id: candidate.id };
   } catch {
     return undefined;
   }
