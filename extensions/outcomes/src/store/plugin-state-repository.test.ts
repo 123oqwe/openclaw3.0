@@ -815,8 +815,11 @@ describe("Outcome repository host adapter", () => {
           });
         }
         expect(warnings).toEqual([]);
+        const reopenedRepository = createOutcomeRepository(store, {
+          onCapacityWarning: (warning) => warnings.push(warning),
+        });
         await expect(
-          repository.create(draftRecord(`capacity-${OUTCOME_CAPACITY_WARNING_ENTRIES - 1}`)),
+          reopenedRepository.create(draftRecord(`capacity-${OUTCOME_CAPACITY_WARNING_ENTRIES - 1}`)),
         ).resolves.toEqual({ created: true });
         expect(warnings).toContainEqual({
           kind: "entry-count",
@@ -824,29 +827,29 @@ describe("Outcome repository host adapter", () => {
           threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
         });
         for (let index = OUTCOME_CAPACITY_WARNING_ENTRIES; index < OUTCOME_MAX_ENTRIES; index += 1) {
-          await expect(repository.create(draftRecord(`capacity-${index}`))).resolves.toEqual({
+          await expect(reopenedRepository.create(draftRecord(`capacity-${index}`))).resolves.toEqual({
             created: true,
           });
         }
-        const replay = await repository.createOwned("alice", draftRecord("capacity-0"));
+        const replay = await reopenedRepository.createOwned("alice", draftRecord("capacity-0"));
         expect(replay).toMatchObject({ created: false, replayed: true });
         expect(replay.record).toEqual(draftRecord("capacity-0"));
         await expect(
-          repository.createOwned("alice", {
+          reopenedRepository.createOwned("alice", {
             ...draftRecord("capacity-0"),
             createRequestHash: "f".repeat(64),
           }),
         ).rejects.toMatchObject({ code: "outcome-create-conflict" });
-        await expect(repository.create(draftRecord("capacity-overflow"))).rejects.toMatchObject({
+        await expect(reopenedRepository.create(draftRecord("capacity-overflow"))).rejects.toMatchObject({
           code: "outcome-capacity-exceeded",
         });
         await expect(
-          repository.createOwned("alice", draftRecord("capacity-owned-overflow")),
+          reopenedRepository.createOwned("alice", draftRecord("capacity-owned-overflow")),
         ).rejects.toMatchObject({ code: "outcome-capacity-exceeded" });
         await expect(store.lookup("capacity-owned-overflow")).resolves.toBeUndefined();
-        await expect(repository.get("capacity-0")).resolves.toBeDefined();
-        await expect(repository.get("capacity-499")).resolves.toBeDefined();
-        const retained = await repository.list();
+        await expect(reopenedRepository.get("capacity-0")).resolves.toBeDefined();
+        await expect(reopenedRepository.get("capacity-499")).resolves.toBeDefined();
+        const retained = await reopenedRepository.list();
         expect(retained).toHaveLength(500);
         expect(new Set(retained.map((entry) => entry.id))).toEqual(
           new Set(Array.from({ length: 500 }, (_, index) => `capacity-${index}`)),
