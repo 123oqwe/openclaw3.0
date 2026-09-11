@@ -1,7 +1,12 @@
 import { createHash } from "node:crypto";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { z } from "zod";
-import { OUTCOME_MAX_CRITERIA, OUTCOME_MAX_RECORD_BYTES } from "./constants.js";
+import {
+  OUTCOME_MAX_CRITERIA,
+  OUTCOME_MAX_DISTINCT_WORK_REFS,
+  OUTCOME_MAX_RECORD_BYTES,
+  OUTCOME_MAX_WORK_REFS_PER_CRITERION,
+} from "./constants.js";
 import type { Criterion, PersistedOutcomeRecord, WorkProjection } from "./types.js";
 
 export const workboardRefSchema = z.strictObject({
@@ -39,12 +44,13 @@ export const createRequestSchema = z
     if (
       request.criteria.some(
         (criterion) =>
-          new Set(criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`)).size > 10,
+          new Set(criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`)).size >
+          OUTCOME_MAX_WORK_REFS_PER_CRITERION,
       )
     ) {
       ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
     }
-    if (new Set(refs).size > 20) {
+    if (new Set(refs).size > OUTCOME_MAX_DISTINCT_WORK_REFS) {
       ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
     }
   });

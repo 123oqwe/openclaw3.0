@@ -1,5 +1,9 @@
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { planHash } from "./canonical-plan.js";
+import {
+  OUTCOME_MAX_DISTINCT_WORK_REFS,
+  OUTCOME_MAX_WORK_REFS_PER_CRITERION,
+} from "./constants.js";
 import type { Criterion, OutcomeRecord, WorkboardRef } from "./types.js";
 
 export type OutcomeMutation = {
@@ -42,6 +46,23 @@ export type OutcomeActivateResult =
   | { kind: "updated"; record: OutcomeRecord };
 
 export type OutcomeLinkMutation = { expectedRevision: number; criterionId: string; ref: WorkboardRef; serverTime: number };
+
+function workRefIdentity(ref: WorkboardRef): string {
+  return `${ref.cardId}\0${ref.cardCreatedAt}`;
+}
+
+function reduceWorkboardRefContract(
+  current: OutcomeRecord,
+  mutation: OutcomeLinkMutation,
+  criteria: Criterion[],
+): OutcomeMutationResult {
+  return reduceOutcomeContract(current, {
+    expectedRevision: mutation.expectedRevision,
+    objective: current.objective,
+    criteria,
+    serverTime: mutation.serverTime,
+  });
+}
 
 function hasInFlightOperation(current: OutcomeRecord): boolean {
   return (
@@ -244,8 +265,28 @@ export function reduceOutcomeLink(
   if (current.phase === "cancelled" || hasInFlightOperation(current)) return { kind: "rejected", record: current };
   const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
   if (!criterion) return { kind: "rejected", record: current };
-  if (criterion.workRefs.some((ref) => ref.cardId === mutation.ref.cardId && ref.cardCreatedAt === mutation.ref.cardCreatedAt)) return { kind: "noop", record: current };
-  return { kind: "updated", record: { ...current, criteria: current.criteria.map((item) => item.id === mutation.criterionId ? { ...item, workRefs: [...item.workRefs, mutation.ref] } : item), revision: current.revision + 1, updatedAt: mutation.serverTime } };
+  const refIdentity = workRefIdentity(mutation.ref);
+  if (criterion.workRefs.some((ref) => workRefIdentity(ref) === refIdentity)) {
+    return { kind: "noop", record: current };
+  }
+  if (criterion.workRefs.length >= OUTCOME_MAX_WORK_REFS_PER_CRITERION) {
+    return { kind: "rejected", record: current };
+  }
+  const existingRefs = new Set(
+    current.criteria.flatMap((item) => item.workRefs.map(workRefIdentity)),
+  );
+  if (!existingRefs.has(refIdentity) && existingRefs.size >= OUTCOME_MAX_DISTINCT_WORK_REFS) {
+    return { kind: "rejected", record: current };
+  }
+  return reduceWorkboardRefContract(
+    current,
+    mutation,
+    current.criteria.map((item) =>
+      item.id === mutation.criterionId
+        ? { ...item, workRefs: [...item.workRefs, mutation.ref] }
+        : item,
+    ),
+  );
 }
 
 /** Atomically removes one current Workboard identity without erasing history. */
@@ -258,9 +299,13 @@ export function reduceOutcomeUnlink(
   if (current.phase === "cancelled" || hasInFlightOperation(current)) return { kind: "rejected", record: current };
   const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
   if (!criterion) return { kind: "rejected", record: current };
-  const workRefs = criterion.workRefs.filter((ref) => ref.cardId !== mutation.ref.cardId || ref.cardCreatedAt !== mutation.ref.cardCreatedAt);
+  const workRefs = criterion.workRefs.filter((ref) => workRefIdentity(ref) !== workRefIdentity(mutation.ref));
   if (workRefs.length === criterion.workRefs.length) return { kind: "noop", record: current };
-  return { kind: "updated", record: { ...current, criteria: current.criteria.map((item) => item.id === mutation.criterionId ? { ...item, workRefs } : item), revision: current.revision + 1, updatedAt: mutation.serverTime } };
+  return reduceWorkboardRefContract(
+    current,
+    mutation,
+    current.criteria.map((item) => (item.id === mutation.criterionId ? { ...item, workRefs } : item)),
+  );
 }
 
 export function reduceOutcomeCancel(

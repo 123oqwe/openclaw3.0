@@ -14,5 +14,19 @@ describe("Workboard adapter", () => {
   it("fails closed for a malformed owner identity or ambiguous card identity", () => {
     expect(() => readWorkboardCards({ cards: [{ ...fixture.cards[0], id: "" }] })).toThrow();
     expect(() => readWorkboardCards({ cards: [fixture.cards[0], fixture.cards[0]] })).toThrow();
+    expect(() => readWorkboardCards({ cards: [{ ...fixture.cards[0], status: "unrecognized" }] })).toThrow();
+    expect(() =>
+      readWorkboardCards({
+        cards: [
+          {
+            ...fixture.cards[0],
+            metadata: {
+              ...fixture.cards[0].metadata,
+              proof: [fixture.cards[0].metadata.proof[0], fixture.cards[0].metadata.proof[0]],
+            },
+          },
+        ],
+      }),
+    ).toThrow(/duplicate/i);
   });
 });

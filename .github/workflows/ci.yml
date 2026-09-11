@@ -2042,7 +2042,11 @@ jobs:
             extensions/outcomes/src/gateway/p02-admission.contract.md \
             extensions/outcomes/src/gateway/registrar.ts \
             extensions/outcomes/src/gateway/schemas.ts \
+            extensions/outcomes/src/adapters/workboard-adapter.test.ts \
+            extensions/outcomes/src/adapters/workboard-adapter.ts \
             extensions/outcomes/src/adapters/fixtures/workboard-list.v1.json \
+            extensions/outcomes/src/assurance/evidence.test.ts \
+            extensions/outcomes/src/assurance/evidence.ts \
             extensions/outcomes/src/runtime-capabilities.test.ts \
             extensions/outcomes/src/domain/read-model.test.ts \
             extensions/outcomes/src/domain/read-model.ts \

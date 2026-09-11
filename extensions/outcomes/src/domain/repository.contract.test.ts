@@ -206,6 +206,93 @@ describe("Outcome repository atomic contract", () => {
     expect(reduceOutcomeUnlink({ ...linked, revision: 2, criteria: [{ ...first(linked.criteria), workRefs: [] }] }, mutation).kind).toBe("noop");
   });
 
+  it("treats link and unlink as generation-changing contract mutations outside draft", () => {
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "card-1",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board-1",
+    };
+    const linked = reduceOutcomeLink(activeRecord("active-link"), {
+      expectedRevision: 1,
+      criterionId: "c-1",
+      ref,
+      serverTime: 42,
+    });
+    expect(linked).toMatchObject({
+      kind: "updated",
+      record: {
+        phase: "active",
+        revision: 2,
+        contractRevision: 2,
+        planGeneration: 2,
+        updatedAt: 42,
+      },
+    });
+    if (linked.kind !== "updated") return;
+    expect(linked.record.planHash).toMatch(/^[0-9a-f]{64}$/);
+
+    const accepted = { ...activeRecord("accepted-unlink"), phase: "accepted" as const };
+    const acceptedLinked = {
+      ...accepted,
+      criteria: [{ ...first(accepted.criteria), workRefs: [ref] }],
+    };
+    const unlinked = reduceOutcomeUnlink(acceptedLinked, {
+      expectedRevision: 1,
+      criterionId: "c-1",
+      ref,
+      serverTime: 43,
+    });
+    expect(unlinked).toMatchObject({
+      kind: "updated",
+      record: {
+        phase: "active",
+        revision: 2,
+        contractRevision: 2,
+        planGeneration: 2,
+        updatedAt: 43,
+      },
+    });
+  });
+
+  it("rejects link mutations that exceed either current-reference bound without changing the record", () => {
+    const makeRef = (id: number) => ({
+      owner: "workboard" as const,
+      cardId: `card-${id}`,
+      cardCreatedAt: id,
+      boardIdAtLink: "board-1",
+    });
+    const perCriterion = {
+      ...validRecord("per-criterion"),
+      criteria: [{ ...first(validRecord("per-criterion").criteria), workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index)) }],
+    };
+    expect(
+      reduceOutcomeLink(perCriterion, {
+        expectedRevision: 1,
+        criterionId: "c-1",
+        ref: makeRef(10),
+        serverTime: 42,
+      }),
+    ).toEqual({ kind: "rejected", record: perCriterion });
+
+    const total = {
+      ...validRecord("total-refs"),
+      criteria: [
+        { ...first(validRecord("total-refs").criteria), workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index)) },
+        { id: "c-2", text: "second", required: false, workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index + 10)) },
+        { id: "c-3", text: "third", required: false, workRefs: [] },
+      ],
+    };
+    expect(
+      reduceOutcomeLink(total, {
+        expectedRevision: 1,
+        criterionId: "c-3",
+        ref: makeRef(20),
+        serverTime: 42,
+      }),
+    ).toEqual({ kind: "rejected", record: total });
+  });
+
   it("rejects a duplicate create without a second write", async () => {
     const { repository, writes } = fixture();
     const record = validRecord();
