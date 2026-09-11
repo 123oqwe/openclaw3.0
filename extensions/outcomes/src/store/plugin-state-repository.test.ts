@@ -492,6 +492,10 @@ describe("Outcome repository host adapter", () => {
           })),
         ).rejects.toBeInstanceOf(OutcomeRepositoryNotFoundError);
         await expect(repository.get(record.id)).resolves.toEqual(record);
+        await expect(repository.deleteOwnedIf("   ", record.id, () => true)).rejects.toThrow(
+          "non-empty",
+        );
+        await expect(repository.get(record.id)).resolves.toEqual(record);
         await expect(repository.deleteOwnedIf("bob", record.id, () => true)).resolves.toBe(false);
         await expect(repository.deleteOwnedIf("alice", record.id, () => true)).resolves.toBe(true);
         await expect(repository.get(record.id)).resolves.toBeUndefined();
