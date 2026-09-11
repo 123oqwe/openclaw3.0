@@ -81,6 +81,7 @@ async function dispatch(params: {
   context: GatewayRequestContext;
   method: string;
   request: Record<string, unknown>;
+  revoked?: boolean;
 }) {
   const authority = new AbortController();
   return await withPluginRuntimeGatewayRequestScope(
@@ -91,7 +92,10 @@ async function dispatch(params: {
       authenticatedRequestAuthority: {
         profileId: params.client.authenticatedUserProfile!.profileId,
         signal: authority.signal,
-        assertCurrent: () => authority.signal.throwIfAborted(),
+        assertCurrent: () => {
+          if (params.revoked) throw new Error("authenticated request authority expired");
+          authority.signal.throwIfAborted();
+        },
       },
     },
     async () =>
@@ -146,5 +150,29 @@ describe("P-02 Outcome Gateway admission", () => {
       dispatch({ client: createOperatorClient("manager-a", ["operator.write"]), context, method: "outcomes.get", request: { id: outcomeId } }),
     ).rejects.toMatchObject({ code: "OUTCOME_NOT_FOUND" });
     expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it("refuses an expired authenticated authority before its handler runs", async () => {
+    const { context, registrations } = registerHarness();
+    const handler = vi.fn(registrations.find(({ method }) => method === "outcomes.get")?.handler);
+    context.getGatewayMethodRegistry = () =>
+      createGatewayMethodRegistry([
+        {
+          name: "outcomes.get",
+          handler: handler as never,
+          scope: "operator.read",
+          owner: { kind: "plugin", pluginId: "outcomes" },
+        },
+      ]);
+    await expect(
+      dispatch({
+        client: createOperatorClient("manager-a", ["operator.read"]),
+        context,
+        method: "outcomes.get",
+        request: { id: outcomeId },
+        revoked: true,
+      }),
+    ).rejects.toThrow("authenticated request authority expired");
+    expect(handler).not.toHaveBeenCalled();
   });
 });
