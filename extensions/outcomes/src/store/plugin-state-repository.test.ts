@@ -1,5 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { mkdirSync, writeFileSync } from "node:fs";
+import path from "node:path";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import {
@@ -114,6 +116,15 @@ function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
     throw new Error(`unable to construct ${targetBytes}-byte Outcome record; got ${actualBytes}`);
   }
   return record;
+}
+
+function writeOutcomeBenchmarkArtifact(report: object): void {
+  const artifactPath = process.env.OPENCLAW_OUTCOME_BENCHMARK_ARTIFACT_PATH;
+  if (!artifactPath) {
+    return;
+  }
+  mkdirSync(path.dirname(artifactPath), { recursive: true });
+  writeFileSync(artifactPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
 }
 
 afterEach(() => resetPluginStateStoreForTests());
@@ -739,19 +750,35 @@ describe("Outcome repository host adapter", () => {
     );
 
     expect(reports).toHaveLength(OUTCOME_PERFORMANCE_SCENARIOS.length);
-    console.info(
-      `[outcome-plugin-state-benchmark] ${JSON.stringify({
-        schemaVersion: 1,
-        sourceSha: process.env.GITHUB_SHA ?? "local",
-        runner: {
-          arch: process.arch,
-          image: process.env.ImageOS ?? process.env.RUNNER_IMAGE ?? null,
-          node: process.version,
-          platform: process.platform,
-        },
-        reports,
-      })}`,
-    );
+    const report = {
+      schemaVersion: 1,
+      job: {
+        id: process.env.GITHUB_JOB ?? "local",
+        name: process.env.OPENCLAW_OUTCOME_BENCHMARK_JOB_NAME ?? "local",
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? "local",
+        runId: process.env.GITHUB_RUN_ID ?? "local",
+        shard: process.env.OPENCLAW_OUTCOME_BENCHMARK_SHARD ?? "local",
+      },
+      measurementDefinition: {
+        eventLoopAndHeap: "whole-scenario-including-validation",
+        listWarmupSamples: 1,
+        mutationWarmupSamples: 0,
+        samplesPerOperation: OUTCOME_PERFORMANCE_SAMPLES,
+        scenarios: OUTCOME_PERFORMANCE_SCENARIOS,
+      },
+      runner: {
+        arch: process.arch,
+        image: process.env.ImageOS ?? process.env.RUNNER_IMAGE ?? null,
+        node: process.version,
+        platform: process.platform,
+      },
+      testedCheckoutSha:
+        process.env.OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA ?? process.env.GITHUB_SHA ?? "local",
+      workflowSha: process.env.OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA ?? "local",
+      reports,
+    };
+    writeOutcomeBenchmarkArtifact(report);
+    console.info(`[outcome-plugin-state-benchmark] ${JSON.stringify(report)}`);
   });
 
   it("enforces the 500-record reject-new capacity without evicting", async () => {

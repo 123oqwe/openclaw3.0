@@ -3463,6 +3463,11 @@ jobs:
           OPENCLAW_VITEST_NO_OUTPUT_TIMEOUT_MS: ${{ needs.preflight.outputs.compatibility_target == 'true' && '660000' || '300000' }}
           OPENCLAW_VITEST_NO_OUTPUT_RETRY: "1"
           OPENCLAW_NODE_TEST_PLAN_CONCURRENCY: ${{ matrix.plan_concurrency }}
+          OPENCLAW_OUTCOME_BENCHMARK_ARTIFACT_PATH: .artifacts/outcomes-benchmark/${{ github.job }}-${{ matrix.shard_name }}.json
+          OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA: ${{ needs.preflight.outputs.checkout_revision }}
+          OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          OPENCLAW_OUTCOME_BENCHMARK_JOB_NAME: ${{ matrix.check_name || 'checks-node-core-test-nondist-shard' }}
+          OPENCLAW_OUTCOME_BENCHMARK_SHARD: ${{ matrix.shard_name }}
         shell: bash
         run: |
           set -euo pipefail
@@ -3472,6 +3477,15 @@ jobs:
             [[ -f "$runner" ]]
           fi
           node --import tsx "$runner"
+
+      - name: Upload Outcome plugin-state benchmark
+        if: always() && hashFiles('.artifacts/outcomes-benchmark/*.json') != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: outcomes-plugin-state-benchmark-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.shard_name }}
+          path: .artifacts/outcomes-benchmark/*.json
+          if-no-files-found: error
+          retention-days: 14
 
       - &runner_memory_peak_step
         name: Record runner memory peak
