@@ -36,6 +36,18 @@ export const createRequestSchema = z
     const refs = request.criteria.flatMap((criterion) =>
       criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`),
     );
+    if (
+      request.criteria.some(
+        (criterion) =>
+          new Set(
+            criterion.workRefs.map(
+              (ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`,
+            ),
+          ).size > 10,
+      )
+    ) {
+      ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
+    }
     if (new Set(refs).size > 20) {
       ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
     }
