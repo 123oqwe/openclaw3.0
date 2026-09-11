@@ -195,7 +195,9 @@ export const outcomeRecordSchema = z
       }
       criterionIds.add(criterion.id);
       const criterionRefs = new Set(
-        criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`),
+        criterion.workRefs.map(
+          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`,
+        ),
       );
       if (criterionRefs.size !== criterion.workRefs.length) {
         ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });

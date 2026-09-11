@@ -55,15 +55,17 @@ describe("Outcome create schema and canonical hash", () => {
     expect(() =>
       createRequestSchema.parse({
         ...base,
-        criteria: [{
-          ...base.criteria[0],
-          workRefs: Array.from({ length: 21 }, (_, i) => ({
-            owner: "workboard" as const,
-            cardId: `card-${i}`,
-            cardCreatedAt: i,
-            boardIdAtLink: "b",
-          })),
-        }],
+        criteria: [
+          {
+            ...base.criteria[0],
+            workRefs: Array.from({ length: 21 }, (_, i) => ({
+              owner: "workboard" as const,
+              cardId: `card-${i}`,
+              cardCreatedAt: i,
+              boardIdAtLink: "b",
+            })),
+          },
+        ],
       }),
     ).toThrow();
   });
@@ -333,7 +335,8 @@ describe("Outcome create schema and canonical hash", () => {
       updatedAt: 1,
     };
     expect(
-      outcomeRecordSchema.safeParse({ ...base, criteria: [base.criteria[0], base.criteria[0]] }).success,
+      outcomeRecordSchema.safeParse({ ...base, criteria: [base.criteria[0], base.criteria[0]] })
+        .success,
     ).toBe(false);
     const refs = Array.from({ length: 21 }, (_, index) => ({
       owner: "workboard" as const,
@@ -350,10 +353,12 @@ describe("Outcome create schema and canonical hash", () => {
     expect(
       outcomeRecordSchema.safeParse({
         ...base,
-        criteria: [{
-          ...base.criteria[0],
-          workRefs: [refs[0], refs[0]],
-        }],
+        criteria: [
+          {
+            ...base.criteria[0],
+            workRefs: [refs[0], refs[0]],
+          },
+        ],
       }).success,
     ).toBe(false);
   });
