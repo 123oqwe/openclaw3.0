@@ -162,6 +162,48 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(writesAfterPatch);
   });
 
+  it("does not write when cancellation is terminal or an operation is in flight", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const created = harness.records.get(id)!;
+    harness.records.set(id, { ...created, phase: "cancelled" });
+    const writes = harness.writes();
+    expect(await harness.call("outcomes.cancel", { id, expectedRevision: 1 })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_STATE" },
+    ]);
+    expect(harness.writes()).toBe(writes);
+
+    harness.records.set(id, {
+      ...created,
+      operations: [
+        {
+          id: "123e4567-e89b-42d3-a456-426614174099",
+          kind: "workboard-card-start",
+          criterionId,
+          planGeneration: 0,
+          createdRevision: 1,
+          requestHash: "a".repeat(64),
+          state: "may-have-crossed",
+          target: {
+            owner: "workboard",
+            cardId: "card-a",
+            cardCreatedAt: 1,
+            boardIdAtLink: "board-a",
+          },
+        },
+      ],
+    });
+    expect(await harness.call("outcomes.cancel", { id, expectedRevision: 1 })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_STATE" },
+    ]);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("paginates the authenticated stable list without a write or repeated row", async () => {
     const harness = createHarness();
     for (const id of outcomeIds) await harness.call("outcomes.create", createParams(id, id));
