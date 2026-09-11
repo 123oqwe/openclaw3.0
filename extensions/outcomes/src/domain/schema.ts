@@ -163,6 +163,27 @@ export const outcomeRecordSchema = z
     updatedAt: z.number().finite(),
   })
   .superRefine((record, ctx) => {
+    const criterionIds = new Set<string>();
+    const linkedRefs = new Set<string>();
+    for (const criterion of record.criteria) {
+      if (criterionIds.has(criterion.id)) {
+        ctx.addIssue({ code: "custom", message: "criterion ids must be unique" });
+      }
+      criterionIds.add(criterion.id);
+      const criterionRefs = new Set(
+        criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`),
+      );
+      if (criterionRefs.size > 10) {
+        ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
+      }
+      for (const ref of criterionRefs) linkedRefs.add(ref);
+    }
+    if (linkedRefs.size > 20) {
+      ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
+    }
+    if (record.revision < record.contractRevision) {
+      ctx.addIssue({ code: "custom", message: "revision cannot be below contractRevision" });
+    }
     if (!record.criteria.some((criterion) => criterion.required)) {
       ctx.addIssue({ code: "custom", message: "at least one criterion must be required" });
     }

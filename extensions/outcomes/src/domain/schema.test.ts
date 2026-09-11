@@ -281,6 +281,45 @@ describe("Outcome create schema and canonical hash", () => {
     expect(outcomeRecordSchema.safeParse(future).success).toBe(false);
   });
 
+  it("rejects duplicate criteria and overlinked work references", () => {
+    const base = {
+      schemaVersion: 1 as const,
+      id: "o-links",
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "manager-1",
+      title: "Links",
+      objective: "Validate links",
+      phase: "draft" as const,
+      revision: 1,
+      contractRevision: 1,
+      planGeneration: 0,
+      planHash: null,
+      criteria: [{ id: "c-1", text: "Done", required: true, workRefs: [] }],
+      projections: [],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+    expect(
+      outcomeRecordSchema.safeParse({ ...base, criteria: [base.criteria[0], base.criteria[0]] }).success,
+    ).toBe(false);
+    const refs = Array.from({ length: 21 }, (_, index) => ({
+      owner: "workboard" as const,
+      cardId: `card-${index}`,
+      cardCreatedAt: index,
+      boardIdAtLink: "board",
+    }));
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...base,
+        criteria: [{ ...base.criteria[0], workRefs: refs }],
+      }).success,
+    ).toBe(false);
+  });
+
   it("canonicalizes evidence and closure hashes deterministically", () => {
     expect(
       evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["b", "a", "a"] }),
