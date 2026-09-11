@@ -69,17 +69,12 @@ suite.define(() => {
                 `${requested.pathname}${requested.search}`,
                 suite.server.baseUrl,
               );
+              trace("broad-fetch-before", `${requestId}:${requested.pathname}`);
               const response = await route.fetch({ url: upstream.href });
-              if (isDiagnosticPath) {
-                trace("broad-fetch-complete", `${requestId}:${requested.pathname}`);
-              }
-              if (isDiagnosticPath) {
-                trace("broad-fulfill-before", `${requestId}:${requested.pathname}`);
-              }
+              trace("broad-fetch-complete", `${requestId}:${requested.pathname}`);
+              trace("broad-fulfill-before", `${requestId}:${requested.pathname}`);
               await route.fulfill({ response });
-              if (isDiagnosticPath) {
-                trace("broad-fulfill-after", `${requestId}:${requested.pathname}`);
-              }
+              trace("broad-fulfill-after", `${requestId}:${requested.pathname}`);
               } catch (error) {
                 trace("broad-error", `${requestId}:${requested.pathname}`);
                 throw error;
