@@ -1,5 +1,9 @@
 import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-runtime";
-import { assertOutcomeRecordSize, parseOutcomeRecord } from "../domain/schema.js";
+import {
+  assertOutcomeRecordSize,
+  OutcomeRecordSizeError,
+  parseOutcomeRecord,
+} from "../domain/schema.js";
 import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
 
 export class OutcomeRepositoryCapacityError extends Error {
@@ -18,6 +22,32 @@ export class OutcomeRepositoryConflictError extends Error {
     super("Outcome create request conflicts with existing record");
     this.name = "OutcomeRepositoryConflictError";
   }
+}
+
+/** Deliberately merges missing and foreign records at the repository boundary. */
+export class OutcomeRepositoryNotFoundError extends Error {
+  readonly code = "outcome-not-found" as const;
+
+  constructor() {
+    super("Outcome is unavailable to the requested manager");
+    this.name = "OutcomeRepositoryNotFoundError";
+  }
+}
+
+function isHostCapacityError(error: unknown): boolean {
+  return (
+    error !== null &&
+    typeof error === "object" &&
+    "code" in error &&
+    error.code === "PLUGIN_STATE_LIMIT_EXCEEDED"
+  );
+}
+
+function rethrowKnownCapacity(error: unknown): never {
+  if (error instanceof OutcomeRecordSizeError || isHostCapacityError(error)) {
+    throw new OutcomeRepositoryCapacityError();
+  }
+  throw error;
 }
 
 function createLegacyOutcomeRepository(
@@ -106,9 +136,11 @@ function createLegacyOutcomeRepository(
     ) => {
       requireManager(managerProfileId);
       let result!: T;
+      let unavailable = false;
       await store.update!(id, (current) => {
         if (!current || current.managerProfileId !== managerProfileId) {
-          throw new Error("Outcome is not owned by the requested manager");
+          unavailable = true;
+          return undefined;
         }
         const decision = decide(current);
         result = decision.result;
@@ -117,6 +149,9 @@ function createLegacyOutcomeRepository(
         }
         return decision.next;
       });
+      if (unavailable) {
+        throw new OutcomeRepositoryNotFoundError();
+      }
       return result;
     },
     deleteOwnedIf: async (managerProfileId, id, predicate) => {
@@ -152,35 +187,20 @@ function createStrictOutcomeRepository(
       try {
         return await base.create(parseOutcomeRecord(record));
       } catch (error) {
-        if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "PLUGIN_STATE_LIMIT_EXCEEDED"
-        ) {
-          throw new OutcomeRepositoryCapacityError();
-        }
-        throw error;
+        return rethrowKnownCapacity(error);
       }
     },
     createOwned: async (owner, record) => {
       if (!owner.trim() || record.managerProfileId !== owner) {
         throw new Error("Outcome manager profile does not match authenticated owner");
       }
-      const parsed = parseOutcomeRecord(record);
+      let parsed: OutcomeRecord;
       let created: boolean;
       try {
+        parsed = parseOutcomeRecord(record);
         created = await store.registerIfAbsent(parsed.id, parsed);
       } catch (error) {
-        if (
-          error &&
-          typeof error === "object" &&
-          "code" in error &&
-          error.code === "PLUGIN_STATE_LIMIT_EXCEEDED"
-        ) {
-          throw new OutcomeRepositoryCapacityError();
-        }
-        throw error;
+        return rethrowKnownCapacity(error);
       }
       if (created) {
         return { created: true, replayed: false, record: parsed };
@@ -205,26 +225,60 @@ function createStrictOutcomeRepository(
     transact: async <T>(
       id: string,
       decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },
-    ) =>
-      base.transact(id, (current) => {
+    ) => {
+      let capacityExceeded = false;
+      const result = await base.transact(id, (current) => {
         const decision = decide(strict(current));
+        let next: OutcomeRecord | undefined;
+        try {
+          next = decision.next === undefined ? undefined : parseOutcomeRecord(decision.next);
+        } catch (error) {
+          if (error instanceof OutcomeRecordSizeError) {
+            capacityExceeded = true;
+            next = undefined;
+          } else {
+            throw error;
+          }
+        }
         return {
           result: decision.result,
-          next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next),
+          next,
         };
-      }),
+      });
+      if (capacityExceeded) {
+        throw new OutcomeRepositoryCapacityError();
+      }
+      return result;
+    },
     transactOwned: async <T>(
       owner: string,
       id: string,
       decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord },
-    ) =>
-      base.transactOwned(owner, id, (current) => {
+    ) => {
+      let capacityExceeded = false;
+      const result = await base.transactOwned(owner, id, (current) => {
         const decision = decide(parseOutcomeRecord(current));
+        let next: OutcomeRecord | undefined;
+        try {
+          next = decision.next === undefined ? undefined : parseOutcomeRecord(decision.next);
+        } catch (error) {
+          if (error instanceof OutcomeRecordSizeError) {
+            capacityExceeded = true;
+            next = undefined;
+          } else {
+            throw error;
+          }
+        }
         return {
           result: decision.result,
-          next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next),
+          next,
         };
-      }),
+      });
+      if (capacityExceeded) {
+        throw new OutcomeRepositoryCapacityError();
+      }
+      return result;
+    },
     deleteIf: async (id, predicate) =>
       deleteIf(id, (current) => {
         const parsed = parseOutcomeRecord(current);

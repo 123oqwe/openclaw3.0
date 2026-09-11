@@ -21,6 +21,7 @@ import { createRequestHash, planHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
+  OutcomeRepositoryNotFoundError,
   createOutcomeRepository,
 } from "./plugin-state-repository.js";
 
@@ -478,7 +479,13 @@ describe("Outcome repository host adapter", () => {
             result: "must-not-run",
             next: record,
           })),
-        ).rejects.toThrow("Failed to update plugin state entry");
+        ).rejects.toMatchObject({ code: "outcome-not-found" });
+        await expect(
+          repository.transactOwned("alice", "missing", () => ({
+            result: "must-not-run",
+            next: record,
+          })),
+        ).rejects.toBeInstanceOf(OutcomeRepositoryNotFoundError);
         await expect(repository.get(record.id)).resolves.toEqual(record);
         await expect(repository.deleteOwnedIf("bob", record.id, () => true)).resolves.toBe(false);
         await expect(repository.deleteOwnedIf("alice", record.id, () => true)).resolves.toBe(true);
@@ -587,7 +594,7 @@ describe("Outcome repository host adapter", () => {
               ],
             },
           })),
-        ).rejects.toThrow("Failed to update plugin state entry");
+        ).rejects.toMatchObject({ code: "outcome-capacity-exceeded" });
         await expect(repository.get(existing.id)).resolves.toEqual(existing);
       },
     );
@@ -845,7 +852,7 @@ describe("Outcome repository host adapter", () => {
             called = true;
             return { result: "unexpected" };
           }),
-        ).rejects.toThrow();
+        ).rejects.toMatchObject({ code: "PLUGIN_STATE_WRITE_FAILED" });
         expect(called).toBe(false);
         await expect(
           repository.deleteIf(corrupt.id, () => {

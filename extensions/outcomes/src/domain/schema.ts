@@ -471,12 +471,21 @@ export function closureHash(input: {
     .digest("hex");
 }
 
+export class OutcomeRecordSizeError extends Error {
+  readonly code = "outcome-record-too-large" as const;
+
+  constructor(maxBytes: number) {
+    super(`Outcome record exceeds ${maxBytes}-byte limit`);
+    this.name = "OutcomeRecordSizeError";
+  }
+}
+
 export function assertOutcomeRecordSize(
   record: unknown,
   maxBytes = OUTCOME_MAX_RECORD_BYTES,
 ): void {
   const bytes = Buffer.byteLength(stableStringify(record), "utf8");
   if (bytes > maxBytes) {
-    throw new Error(`Outcome record exceeds ${maxBytes}-byte limit`);
+    throw new OutcomeRecordSizeError(maxBytes);
   }
 }

@@ -589,6 +589,97 @@ describe("Outcome create schema and canonical hash", () => {
     ).toBe(true);
   });
 
+  it("deep-clones historical plans and counts them against the aggregate limit", () => {
+    const snapshot = {
+      outcomeId: "o-history-isolation",
+      objective: "Preserve the original contract",
+      contractRevision: 1,
+      planGeneration: 1,
+      criteria: [{ id: "c-1", text: "done", required: true, workRefs: [] }],
+    };
+    const record = {
+      schemaVersion: 1,
+      id: "o-history-isolation",
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "manager-1",
+      title: "History",
+      objective: "Preserve the original contract",
+      phase: "active" as const,
+      revision: 3,
+      contractRevision: 1,
+      planGeneration: 1,
+      planHash: planHash(snapshot),
+      criteria: [{ ...snapshot.criteria[0], workRefs: [] }],
+      projections: [],
+      evidence: [],
+      decisions: [
+        {
+          id: "decision-1",
+          criterionId: "c-1",
+          planGeneration: 1,
+          decidedRevision: 2,
+          status: "verified" as const,
+          requestHash: "b".repeat(64),
+          profileId: "manager-1",
+          planHash: planHash(snapshot),
+          decidedPlan: snapshot,
+          evidenceSetHash: "c".repeat(64),
+          decidedAt: 2,
+        },
+      ],
+      operations: [],
+      acceptances: [
+        {
+          id: "acceptance-1",
+          requestHash: "d".repeat(64),
+          acceptedRevision: 3,
+          profileId: "manager-1",
+          acceptedAt: 3,
+          planGeneration: 1,
+          planHash: planHash(snapshot),
+          closureHash: "e".repeat(64),
+          acceptedPlan: snapshot,
+        },
+      ],
+      createdAt: 1,
+      updatedAt: 3,
+    };
+    const parsed = parseOutcomeRecord(record);
+    snapshot.criteria[0].text = "mutated after parsing";
+    expect(parsed.decisions[0].decidedPlan.criteria[0].text).toBe("done");
+    expect(parsed.acceptances[0].acceptedPlan.criteria[0].text).toBe("done");
+
+    const oversizedSnapshot = {
+      ...snapshot,
+      objective: "x".repeat(4000),
+      criteria: Array.from({ length: 5 }, (_, index) => ({
+        id: `c-${index}`,
+        text: "x".repeat(1000),
+        required: index === 0,
+        workRefs: [],
+      })),
+    };
+    const oversizedAcceptances = Array.from({ length: 20 }, (_, index) => ({
+      id: `acceptance-${index}`,
+      requestHash: `${index}`.padStart(64, "a"),
+      acceptedRevision: index + 1,
+      profileId: "manager-1",
+      acceptedAt: index + 1,
+      planGeneration: 1,
+      planHash: planHash(oversizedSnapshot),
+      closureHash: "e".repeat(64),
+      acceptedPlan: oversizedSnapshot,
+    }));
+    const oversizedRecord = {
+      ...record,
+      revision: 20,
+      decisions: [],
+      acceptances: oversizedAcceptances,
+    };
+    expect(outcomeRecordSchema.safeParse(oversizedRecord).success).toBe(true);
+    expect(() => parseOutcomeRecord(oversizedRecord)).toThrow("131072-byte");
+  });
+
   it("preserves only coherent cancelled plan state", () => {
     const draft = {
       schemaVersion: 1,
