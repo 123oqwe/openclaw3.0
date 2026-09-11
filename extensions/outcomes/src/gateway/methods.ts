@@ -611,12 +611,16 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       const request = normalizeWorkboardLink(params);
       const owner = authenticatedProfileId(client);
       if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+      let record: OutcomeRecord | undefined;
       try {
-        if (!(await repository.getOwned(owner, request.id))) return fail(respond, "NOT_FOUND");
+        record = await repository.getOwned(owner, request.id);
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
         return;
       }
+      if (!record) return fail(respond, "NOT_FOUND");
+      if (record.revision !== request.expectedRevision) return fail(respond, "REVISION_CONFLICT");
+      if (record.phase === "cancelled") return fail(respond, "INVALID_STATE");
       let card: Awaited<ReturnType<typeof readAuthorizedWorkboardCard>>;
       try {
         card = await readAuthorizedWorkboardCard(api, request.cardId);
@@ -659,12 +663,16 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       const request = normalizeWorkboardLink(params);
       const owner = authenticatedProfileId(client);
       if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+      let record: OutcomeRecord | undefined;
       try {
-        if (!(await repository.getOwned(owner, request.id))) return fail(respond, "NOT_FOUND");
+        record = await repository.getOwned(owner, request.id);
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
         return;
       }
+      if (!record) return fail(respond, "NOT_FOUND");
+      if (record.revision !== request.expectedRevision) return fail(respond, "REVISION_CONFLICT");
+      if (record.phase === "cancelled") return fail(respond, "INVALID_STATE");
       let card: Awaited<ReturnType<typeof readAuthorizedWorkboardCard>>;
       try {
         card = await readAuthorizedWorkboardCard(api, request.cardId);

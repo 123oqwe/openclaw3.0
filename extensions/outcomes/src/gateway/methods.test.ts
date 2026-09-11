@@ -683,6 +683,45 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(0);
   });
 
+  it("rejects stale and cancelled link mutations before reading Workboard", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const created = harness.records.get(id)!;
+    harness.gatewayRequest.mockClear();
+    const writes = harness.writes();
+    const stale = {
+      id,
+      expectedRevision: 2,
+      criterionId,
+      cardId: "card-a",
+    };
+    expect(await harness.call("outcomes.linkWorkboard", stale)).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_REVISION_CONFLICT" },
+    ]);
+    expect(await harness.call("outcomes.unlinkWorkboard", stale)).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_REVISION_CONFLICT" },
+    ]);
+    harness.records.set(id, { ...created, phase: "cancelled" });
+    const cancelled = { ...stale, expectedRevision: 1 };
+    expect(await harness.call("outcomes.linkWorkboard", cancelled)).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_STATE" },
+    ]);
+    expect(await harness.call("outcomes.unlinkWorkboard", cancelled)).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_STATE" },
+    ]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("rejects a duplicate owner card ID with different creation identities without writing", async () => {
     const card = {
       id: "card-a",
