@@ -71,7 +71,7 @@ describe("type suppression inventory", () => {
         .filter((finding) => finding.kind === "expect-error")
         .map((finding) => `${finding.file}:${finding.line}:${finding.excerpt}`),
     ).toEqual([
-      "extensions/outcomes/src/store/plugin-state-repository.test.ts:50:@ts-expect-error negative contract: persisted records require an owner identity.",
+      "extensions/outcomes/src/store/plugin-state-repository.test.ts:90:@ts-expect-error negative contract: persisted records require an owner identity.",
       "src/infra/kysely-sync.types.test.ts:49:@ts-expect-error Kysely checks selected column string literals.",
       "src/infra/kysely-sync.types.test.ts:52:@ts-expect-error Kysely checks table string literals.",
       "src/infra/kysely-sync.types.test.ts:55:@ts-expect-error Kysely checks where-reference string literals.",

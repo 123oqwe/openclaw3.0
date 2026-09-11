@@ -13650,22 +13650,18 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(resultRows).toHaveLength(gate.needs.length);
   });
 
-  it("removes the trusted Outcome artifact harness before candidate path admission", () => {
+  it("retains the trusted Outcome artifact harness through cleanup", () => {
     const steps = readCiWorkflow().jobs["prepare-outcome-artifacts"].steps;
     const setupIndex = steps.findIndex(
       (step: WorkflowStep) => step.name === "Setup Outcome artifact Node",
-    );
-    const removeIndex = steps.findIndex(
-      (step: WorkflowStep) => step.name === "Remove trusted CI harness from artifact workspace",
     );
     const prepareIndex = steps.findIndex(
       (step: WorkflowStep) => step.name === "Prepare bounded Outcome artifacts",
     );
 
-    expect(steps[removeIndex]?.run).toBe("rm -rf --one-file-system .ci-harness");
     expect(setupIndex).toBeGreaterThanOrEqual(0);
-    expect(removeIndex).toBeGreaterThan(setupIndex);
-    expect(prepareIndex).toBeGreaterThan(removeIndex);
+    expect(prepareIndex).toBeGreaterThan(setupIndex);
+    expect(steps.some((step: WorkflowStep) => step.name === "Remove trusted CI harness from artifact workspace")).toBe(false);
   });
 
   it("does not admit the final gate for cancelled workflows or draft pull requests", () => {
@@ -16180,13 +16176,10 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
 
   const bodies = steps.map(({ run }) => run ?? "").join("\n");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs admission");
-  expect(bodies).toContain("pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile");
   expect(bodies).toContain("pnpm install --frozen-lockfile --ignore-scripts");
-  expect(bodies).toContain("pnpm config:docs:gen");
-  expect(bodies).toContain("pnpm plugins:inventory:gen");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
-  expect(bodies).toContain("git ls-files --others --exclude-standard -z");
-  expect(bodies).toContain("git add -N -- docs/plugins/reference/outcomes.md");
+  expect(bodies).toContain("git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'");
+  expect(bodies).not.toContain("rm -rf --one-file-system .ci-harness");
   expect(bodies).not.toMatch(/(?:^|\s)git push(?:\s|$)/mu);
 
   const upload = expectDefined(

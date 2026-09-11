@@ -20,7 +20,7 @@ describe("outcomes public contract", () => {
   });
 
   it("keeps core detail views free of persistence identity and internal history", () => {
-    expect(Object.keys(contract).sort()).toEqual(
+    expect(Object.keys(contract).toSorted()).toEqual(
       [
         "OUTCOME_ACCEPTANCE_VALIDITY",
         "OUTCOME_ATTENTION_CODES",
@@ -34,7 +34,7 @@ describe("outcomes public contract", () => {
         "OUTCOME_READINESS",
         "OUTCOME_SOURCE_ISSUE_REASONS",
         "OUTCOME_SOURCE_VISIBILITY",
-      ].sort(),
+      ].toSorted(),
     );
   });
 });
