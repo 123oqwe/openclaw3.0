@@ -11,6 +11,7 @@ import {
   outcomeRecordSchema,
   parseOutcomeRecord,
   planHash,
+  workboardProjectionFingerprint,
 } from "./schema.js";
 
 function malformedSnapshotPlanHash(plan: {
@@ -297,6 +298,17 @@ describe("Outcome create schema and canonical hash", () => {
       planGeneration: 1,
       criteria: [{ id: "c-1", text: "done", required: true, workRefs: [ref] }],
     };
+    const projection = {
+      ref,
+      availability: "available" as const,
+      currentBoardId: "board-1",
+      status: "done",
+      sourceUpdatedAt: 2,
+      observedAt: 2,
+      lastSuccessfulAt: 2,
+      proofs: [{ sourceId: "proof-1", digest: "proof-digest" }],
+      artifacts: [{ sourceId: "artifact-1", digest: "artifact-digest" }],
+    };
     const record = {
       schemaVersion: 1,
       id: plan.outcomeId,
@@ -310,20 +322,7 @@ describe("Outcome create schema and canonical hash", () => {
       planGeneration: plan.planGeneration,
       planHash: planHash(plan),
       criteria: plan.criteria,
-      projections: [
-        {
-          ref,
-          availability: "available" as const,
-          currentBoardId: "board-1",
-          status: "done",
-          sourceUpdatedAt: 2,
-          observedAt: 2,
-          lastSuccessfulAt: 2,
-          proofs: [{ sourceId: "proof-1", digest: "proof-digest" }],
-          artifacts: [{ sourceId: "artifact-1", digest: "artifact-digest" }],
-          sourceFingerprint: "f".repeat(64),
-        },
-      ],
+      projections: [{ ...projection, sourceFingerprint: workboardProjectionFingerprint(projection) }],
       evidence: [],
       decisions: [],
       operations: [],
@@ -332,7 +331,13 @@ describe("Outcome create schema and canonical hash", () => {
       updatedAt: 2,
     };
 
-    expect(outcomeRecordSchema.safeParse(record).success).toBe(false);
+    expect(outcomeRecordSchema.safeParse(record).success).toBe(true);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [{ ...record.projections[0]!, sourceFingerprint: "f".repeat(64) }],
+      }).success,
+    ).toBe(false);
   });
 
   it("applies the aggregate byte limit at the strict parse boundary", () => {
