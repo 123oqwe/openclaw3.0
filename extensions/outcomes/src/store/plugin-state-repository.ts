@@ -1,10 +1,22 @@
+import { performance } from "node:perf_hooks";
 import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-runtime";
+import {
+  OUTCOME_CAPACITY_WARNING_ENTRIES,
+  OUTCOME_CAPACITY_WARNING_RECORD_BYTES,
+  OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS,
+} from "../domain/constants.js";
 import {
   assertOutcomeRecordSize,
   OutcomeRecordSizeError,
+  outcomeRecordByteLength,
   parseOutcomeRecord,
 } from "../domain/schema.js";
-import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
+import type {
+  OutcomeCapacityWarning,
+  OutcomeRecord,
+  OutcomeRepository,
+  OutcomeRepositoryOptions,
+} from "./outcome-repository.js";
 
 export class OutcomeRepositoryCapacityError extends Error {
   readonly code = "outcome-capacity-exceeded" as const;
@@ -173,6 +185,7 @@ function createStrictOutcomeRepository(
     PluginStateKeyedStore<OutcomeRecord>,
     "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf"
   >,
+  options: OutcomeRepositoryOptions = {},
 ): OutcomeRepository {
   if (typeof store.deleteIf !== "function") {
     throw new Error("Outcome repository requires atomic keyed-store deleteIf");
@@ -181,11 +194,18 @@ function createStrictOutcomeRepository(
   const base = createLegacyOutcomeRepository(store);
   const strict = (value: OutcomeRecord | undefined) =>
     value === undefined ? undefined : parseOutcomeRecord(value);
+  const diagnostics = createCapacityDiagnostics(store, options);
   return {
     ...base,
     create: async (record) => {
+      const startedAt = diagnostics.now();
       try {
-        return await base.create(parseOutcomeRecord(record));
+        const parsed = parseOutcomeRecord(record);
+        const created = await base.create(parsed);
+        if (created.created) {
+          await diagnostics.observeCommitted(parsed, true, diagnostics.now() - startedAt);
+        }
+        return created;
       } catch (error) {
         return rethrowKnownCapacity(error);
       }
@@ -194,6 +214,7 @@ function createStrictOutcomeRepository(
       if (!owner.trim() || record.managerProfileId !== owner) {
         throw new Error("Outcome manager profile does not match authenticated owner");
       }
+      const startedAt = diagnostics.now();
       let parsed: OutcomeRecord;
       let created: boolean;
       try {
@@ -203,6 +224,7 @@ function createStrictOutcomeRepository(
         return rethrowKnownCapacity(error);
       }
       if (created) {
+        await diagnostics.observeCommitted(parsed, true, diagnostics.now() - startedAt);
         return { created: true, replayed: false, record: parsed };
       }
       const rawExisting = await store.lookup(parsed.id);
@@ -226,12 +248,15 @@ function createStrictOutcomeRepository(
       id: string,
       decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },
     ) => {
+      const startedAt = diagnostics.now();
       let capacityExceeded = false;
+      let committed: OutcomeRecord | undefined;
       const result = await base.transact(id, (current) => {
         const decision = decide(strict(current));
         let next: OutcomeRecord | undefined;
         try {
           next = decision.next === undefined ? undefined : parseOutcomeRecord(decision.next);
+          committed = next;
         } catch (error) {
           if (error instanceof OutcomeRecordSizeError) {
             capacityExceeded = true;
@@ -248,6 +273,9 @@ function createStrictOutcomeRepository(
       if (capacityExceeded) {
         throw new OutcomeRepositoryCapacityError();
       }
+      if (committed !== undefined) {
+        await diagnostics.observeCommitted(committed, false, diagnostics.now() - startedAt);
+      }
       return result;
     },
     transactOwned: async <T>(
@@ -255,12 +283,15 @@ function createStrictOutcomeRepository(
       id: string,
       decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord },
     ) => {
+      const startedAt = diagnostics.now();
       let capacityExceeded = false;
+      let committed: OutcomeRecord | undefined;
       const result = await base.transactOwned(owner, id, (current) => {
         const decision = decide(parseOutcomeRecord(current));
         let next: OutcomeRecord | undefined;
         try {
           next = decision.next === undefined ? undefined : parseOutcomeRecord(decision.next);
+          committed = next;
         } catch (error) {
           if (error instanceof OutcomeRecordSizeError) {
             capacityExceeded = true;
@@ -276,6 +307,9 @@ function createStrictOutcomeRepository(
       });
       if (capacityExceeded) {
         throw new OutcomeRepositoryCapacityError();
+      }
+      if (committed !== undefined) {
+        await diagnostics.observeCommitted(committed, false, diagnostics.now() - startedAt);
       }
       return result;
     },
@@ -289,6 +323,74 @@ function createStrictOutcomeRepository(
         const parsed = parseOutcomeRecord(current);
         return parsed.managerProfileId === owner && predicate(parsed);
       }),
+  };
+}
+
+function createCapacityDiagnostics(
+  store: Pick<PluginStateKeyedStore<OutcomeRecord>, "entries">,
+  options: OutcomeRepositoryOptions,
+) {
+  const now = options.now ?? performance.now;
+  let entryCountHint: number | undefined;
+  let entryWarningSent = false;
+
+  const warn = (warning: OutcomeCapacityWarning) => {
+    try {
+      options.onCapacityWarning?.(warning);
+    } catch {
+      // A post-commit observer must never alter the acknowledged write result.
+    }
+  };
+
+  const sampleEntryCountAfterCreate = async () => {
+    if (!options.onCapacityWarning || entryWarningSent) {
+      return;
+    }
+    if (entryCountHint === undefined || entryCountHint + 1 >= OUTCOME_CAPACITY_WARNING_ENTRIES) {
+      try {
+        entryCountHint = (await store.entries()).length;
+      } catch {
+        // Diagnostics are best effort and must not fail a committed mutation.
+        return;
+      }
+    } else {
+      entryCountHint += 1;
+    }
+    if (entryCountHint >= OUTCOME_CAPACITY_WARNING_ENTRIES) {
+      entryWarningSent = true;
+      warn({
+        kind: "entry-count",
+        observed: entryCountHint,
+        threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
+      });
+    }
+  };
+
+  return {
+    now,
+    observeCommitted: async (record: OutcomeRecord, created: boolean, writeDuration: number) => {
+      if (!options.onCapacityWarning) {
+        return;
+      }
+      const bytes = outcomeRecordByteLength(record);
+      if (bytes >= OUTCOME_CAPACITY_WARNING_RECORD_BYTES) {
+        warn({
+          kind: "record-bytes",
+          observed: bytes,
+          threshold: OUTCOME_CAPACITY_WARNING_RECORD_BYTES,
+        });
+      }
+      if (writeDuration >= OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS) {
+        warn({
+          kind: "write-duration",
+          observed: writeDuration,
+          threshold: OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS,
+        });
+      }
+      if (created) {
+        await sampleEntryCountAfterCreate();
+      }
+    },
   };
 }
 

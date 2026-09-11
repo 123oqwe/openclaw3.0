@@ -11,7 +11,12 @@ import {
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { summarizeBenchmarkTimings } from "../../../../scripts/lib/benchmark-harness.mts";
-import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
+import {
+  OUTCOME_CAPACITY_WARNING_ENTRIES,
+  OUTCOME_CAPACITY_WARNING_RECORD_BYTES,
+  OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS,
+  OUTCOME_MAX_ENTRIES,
+} from "../domain/constants.js";
 import {
   reduceOutcomeActivate,
   reduceOutcomeTitle,
@@ -800,8 +805,25 @@ describe("Outcome repository host adapter", () => {
           overflowPolicy: "reject-new",
           env: state.env,
         });
-        const repository = createOutcomeRepository(store);
-        for (let index = 0; index < 500; index += 1) {
+        const warnings: Array<{ kind: string; observed: number; threshold: number }> = [];
+        const repository = createOutcomeRepository(store, {
+          onCapacityWarning: (warning) => warnings.push(warning),
+        });
+        for (let index = 0; index < OUTCOME_CAPACITY_WARNING_ENTRIES - 1; index += 1) {
+          await expect(repository.create(draftRecord(`capacity-${index}`))).resolves.toEqual({
+            created: true,
+          });
+        }
+        expect(warnings).toEqual([]);
+        await expect(
+          repository.create(draftRecord(`capacity-${OUTCOME_CAPACITY_WARNING_ENTRIES - 1}`)),
+        ).resolves.toEqual({ created: true });
+        expect(warnings).toContainEqual({
+          kind: "entry-count",
+          observed: OUTCOME_CAPACITY_WARNING_ENTRIES,
+          threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
+        });
+        for (let index = OUTCOME_CAPACITY_WARNING_ENTRIES; index < OUTCOME_MAX_ENTRIES; index += 1) {
           await expect(repository.create(draftRecord(`capacity-${index}`))).resolves.toEqual({
             created: true,
           });
@@ -829,6 +851,73 @@ describe("Outcome repository host adapter", () => {
         expect(new Set(retained.map((entry) => entry.id))).toEqual(
           new Set(Array.from({ length: 500 }, (_, index) => `capacity-${index}`)),
         );
+      },
+    );
+  });
+
+  it("emits post-commit record-size and write-duration warnings without changing writes", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-capacity-warnings", applyEnv: false },
+      async (state) => {
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace: `outcomes-v1-${randomUUID()}`,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const warnings: Array<{ kind: string; observed: number; threshold: number }> = [];
+        let now = 0;
+        const repository = createOutcomeRepository(store, {
+          now: () => {
+            now += OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS;
+            return now;
+          },
+          onCapacityWarning: (warning) => warnings.push(warning),
+        });
+        const nearLimit = activeRecordAtSize(
+          "capacity-warning-record",
+          OUTCOME_CAPACITY_WARNING_RECORD_BYTES,
+        );
+        expect(serializedBytes(nearLimit)).toBe(OUTCOME_CAPACITY_WARNING_RECORD_BYTES);
+
+        await expect(repository.create(nearLimit)).resolves.toEqual({ created: true });
+        await expect(repository.get(nearLimit.id)).resolves.toEqual(nearLimit);
+        expect(warnings).toContainEqual({
+          kind: "record-bytes",
+          observed: OUTCOME_CAPACITY_WARNING_RECORD_BYTES,
+          threshold: OUTCOME_CAPACITY_WARNING_RECORD_BYTES,
+        });
+        expect(warnings).toContainEqual({
+          kind: "write-duration",
+          observed: OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS,
+          threshold: OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS,
+        });
+      },
+    );
+  });
+
+  it("does not let a capacity observer change an acknowledged write", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-capacity-observer-failure", applyEnv: false },
+      async (state) => {
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace: `outcomes-v1-${randomUUID()}`,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const record = activeRecordAtSize(
+          "capacity-warning-observer-failure",
+          OUTCOME_CAPACITY_WARNING_RECORD_BYTES,
+        );
+        const repository = createOutcomeRepository(store, {
+          onCapacityWarning: () => {
+            throw new Error("observer unavailable");
+          },
+        });
+
+        await expect(repository.create(record)).resolves.toEqual({ created: true });
+        await expect(repository.get(record.id)).resolves.toEqual(record);
       },
     );
   });

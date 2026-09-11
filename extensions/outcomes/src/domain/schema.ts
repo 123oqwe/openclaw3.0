@@ -484,8 +484,12 @@ export function assertOutcomeRecordSize(
   record: unknown,
   maxBytes = OUTCOME_MAX_RECORD_BYTES,
 ): void {
-  const bytes = Buffer.byteLength(stableStringify(record), "utf8");
+  const bytes = outcomeRecordByteLength(record);
   if (bytes > maxBytes) {
     throw new OutcomeRecordSizeError(maxBytes);
   }
+}
+
+export function outcomeRecordByteLength(record: unknown): number {
+  return Buffer.byteLength(stableStringify(record), "utf8");
 }
