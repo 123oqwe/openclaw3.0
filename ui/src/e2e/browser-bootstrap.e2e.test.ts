@@ -48,33 +48,33 @@ suite.define(() => {
               activeBroadRequests.add(requestId);
               trace("broad-enter", `${requestId}:${requested.pathname}`);
               try {
-              const isDiagnosticPath =
-                requested.pathname === "/avatar/main" ||
-                requested.pathname === "/.well-known/openclaw/browser-bootstrap";
-              if (isDiagnosticPath) {
-                trace("broad-diagnostic", `${requestId}:${requested.pathname}`);
-              }
-              if (requested.pathname === "/.well-known/openclaw/browser-bootstrap") {
-                trace("broad-fallback", `${requestId}:${requested.pathname}`);
-                await route.fallback();
-                return;
-              }
-              if (requested.pathname === "/avatar/main") {
-                trace("avatar-fulfill-before", `${requestId}:${requested.pathname}`);
-                await route.fulfill({ status: 404, body: "" });
-                trace("avatar-fulfill-after", `${requestId}:${requested.pathname}`);
-                return;
-              }
-              const upstream = new URL(
-                `${requested.pathname}${requested.search}`,
-                suite.server.baseUrl,
-              );
-              trace("broad-fetch-before", `${requestId}:${requested.pathname}`);
-              const response = await route.fetch({ url: upstream.href });
-              trace("broad-fetch-complete", `${requestId}:${requested.pathname}`);
-              trace("broad-fulfill-before", `${requestId}:${requested.pathname}`);
-              await route.fulfill({ response });
-              trace("broad-fulfill-after", `${requestId}:${requested.pathname}`);
+                const isDiagnosticPath =
+                  requested.pathname === "/avatar/main" ||
+                  requested.pathname === "/.well-known/openclaw/browser-bootstrap";
+                if (isDiagnosticPath) {
+                  trace("broad-diagnostic", `${requestId}:${requested.pathname}`);
+                }
+                if (requested.pathname === "/.well-known/openclaw/browser-bootstrap") {
+                  trace("broad-fallback", `${requestId}:${requested.pathname}`);
+                  await route.fallback();
+                  return;
+                }
+                if (requested.pathname === "/avatar/main") {
+                  trace("avatar-fulfill-before", `${requestId}:${requested.pathname}`);
+                  await route.fulfill({ status: 404, body: "" });
+                  trace("avatar-fulfill-after", `${requestId}:${requested.pathname}`);
+                  return;
+                }
+                const upstream = new URL(
+                  `${requested.pathname}${requested.search}`,
+                  suite.server.baseUrl,
+                );
+                trace("broad-fetch-before", `${requestId}:${requested.pathname}`);
+                const response = await route.fetch({ url: upstream.href });
+                trace("broad-fetch-complete", `${requestId}:${requested.pathname}`);
+                trace("broad-fulfill-before", `${requestId}:${requested.pathname}`);
+                await route.fulfill({ response });
+                trace("broad-fulfill-after", `${requestId}:${requested.pathname}`);
               } catch (error) {
                 trace("broad-error", `${requestId}:${requested.pathname}`);
                 throw error;
@@ -172,7 +172,10 @@ suite.define(() => {
           },
           // Drain active interception handlers before withPage closes the context.
           async () => {
-            trace("cleanup-before-unroute", `active=${[...activeBroadRequests].join(",") || "none"}`);
+            trace(
+              "cleanup-before-unroute",
+              `active=${[...activeBroadRequests].join(",") || "none"}`,
+            );
             await page.unrouteAll({ behavior: "wait" });
             trace("cleanup-after-unroute", "none");
           },

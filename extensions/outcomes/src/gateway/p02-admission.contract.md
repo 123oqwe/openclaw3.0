@@ -47,10 +47,10 @@ The first executable package is the complete P-02 method set:
    identity-conflict distinctly; a failed refresh preserves displayable cached projection
    fields but cannot make prior evidence current.
 10. `cancel` requires expectedRevision, permits only draft/active records, preserves
-   history and plan identity, rejects accepted/cancelled or in-flight operations,
-   and performs no write on every rejection.
+    history and plan identity, rejects accepted/cancelled or in-flight operations,
+    and performs no write on every rejection.
 11. Typed mappings distinguish unauthenticated/forbidden/not-found/revision-conflict/
-   invalid-input/capacity/internal without leaking underlying exceptions.
+    invalid-input/capacity/internal without leaking underlying exceptions.
 
 ## Evidence requirements
 
