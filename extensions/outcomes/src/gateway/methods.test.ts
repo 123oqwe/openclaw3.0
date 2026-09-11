@@ -187,6 +187,33 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(writesAfterPatch);
   });
 
+  it("preserves linked refs for an unchanged criterion identity during a definition patch", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const created = harness.records.get(id)!;
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "card-a",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board-a",
+    };
+    harness.records.set(id, {
+      ...created,
+      criteria: [{ ...created.criteria[0]!, workRefs: [ref] }],
+    });
+    expect(
+      await harness.call("outcomes.update", {
+        id,
+        expectedRevision: 1,
+        patch: {
+          criteria: [{ id: criterionId, text: "Reworded criterion", required: true }],
+        },
+      }),
+    ).toMatchObject([true, { outcome: { revision: 2 } }]);
+    expect(harness.records.get(id)?.criteria[0]?.workRefs).toEqual([ref]);
+  });
+
   it("does not write when cancellation is terminal or an operation is in flight", async () => {
     const harness = createHarness();
     const id = outcomeIds[0]!;
