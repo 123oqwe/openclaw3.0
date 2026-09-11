@@ -35,7 +35,10 @@ function createBundledGatewayHarness() {
     },
     lookup: async (id: string) => records.get(id),
     entries: async () => [...records].map(([key, value]) => ({ key, value, createdAt: 0 })),
-    update: async (id: string, decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined) => {
+    update: async (
+      id: string,
+      decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined,
+    ) => {
       const next = decide(records.get(id));
       if (next === undefined) return false;
       records.set(id, next);
@@ -81,7 +84,9 @@ describe("Outcome bundled Workboard Gateway integration", () => {
     });
     harness.publicWorkboardRequest.mockClear();
 
-    expect(await harness.call("outcomes.refresh", { id: outcomeId, expectedRevision: 2 })).toMatchObject([
+    expect(
+      await harness.call("outcomes.refresh", { id: outcomeId, expectedRevision: 2 }),
+    ).toMatchObject([
       true,
       {
         outcome: {

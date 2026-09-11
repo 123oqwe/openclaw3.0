@@ -488,16 +488,21 @@ describe("P-02 Outcome handlers", () => {
       updatedAt: 9,
       metadata: {
         ...cards[0]!.metadata,
-        proof: [
-          { id: "proof-a", status: "passed", createdAt: 3, label: "Replacement proof" },
-        ],
+        proof: [{ id: "proof-a", status: "passed", createdAt: 3, label: "Replacement proof" }],
       },
     };
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
     const response = await harness.call("outcomes.get", { id });
     expect(response).toMatchObject([true, { outcome: { evidence: [{ sourceId: "proof-a" }] } }]);
-    const outcome = (response[1] as { outcome: { criteria: Array<{ evidenceSetHash: string | null }>; evidence: Array<{ sourceDigest: string }> } }).outcome;
+    const outcome = (
+      response[1] as {
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string | null }>;
+          evidence: Array<{ sourceDigest: string }>;
+        };
+      }
+    ).outcome;
     expect(outcome.evidence[0]!.sourceDigest).not.toBe(persistedDigest);
     expect(outcome.criteria[0]!.evidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
     expect(harness.gatewayRequest).toHaveBeenCalledOnce();
