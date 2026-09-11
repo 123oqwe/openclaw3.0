@@ -2011,9 +2011,6 @@ jobs:
           install-bun: "false"
           install-deps: "false"
 
-      - name: Remove trusted CI harness from artifact workspace
-        run: rm -rf --one-file-system .ci-harness
-
       - name: Prepare bounded Outcome artifacts
         env:
           TARGET_REF: ${{ inputs.target_ref }}
