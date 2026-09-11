@@ -203,6 +203,22 @@ describe("Outcome create schema and canonical hash", () => {
     };
     const valid = { ...record, decisions: [decision] };
     expect(outcomeRecordSchema.safeParse(valid).success).toBe(true);
+    const duplicateCriterionPlan = {
+      ...plan,
+      criteria: [...plan.criteria, { ...plan.criteria[0] }],
+    };
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        decisions: [
+          {
+            ...decision,
+            decidedPlan: duplicateCriterionPlan,
+            planHash: planHash(duplicateCriterionPlan),
+          },
+        ],
+      }).success,
+    ).toBe(false);
     const malformed = {
       ...record,
       decisions: [{ ...decision, criterionId: "missing" }],

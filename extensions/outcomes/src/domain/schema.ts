@@ -364,6 +364,22 @@ export const canonicalPlanSchema = z
   })
   .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
     message: "at least one criterion must be required",
+  })
+  .superRefine((plan, ctx) => {
+    const criterionIds = new Set(plan.criteria.map((criterion) => criterion.id));
+    if (criterionIds.size !== plan.criteria.length) {
+      ctx.addIssue({ code: "custom", message: "criterion ids must be unique" });
+    }
+    for (const criterion of plan.criteria) {
+      const refs = new Set(
+        criterion.workRefs.map(
+          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`,
+        ),
+      );
+      if (refs.size !== criterion.workRefs.length) {
+        ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });
+      }
+    }
   });
 
 export function planHash(input: CanonicalPlan): string {
