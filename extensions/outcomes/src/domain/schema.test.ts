@@ -219,6 +219,40 @@ describe("Outcome create schema and canonical hash", () => {
         ],
       }).success,
     ).toBe(false);
+    const duplicateRefPlan = {
+      ...plan,
+      criteria: [
+        {
+          ...plan.criteria[0],
+          workRefs: [
+            {
+              owner: "workboard" as const,
+              cardId: "card-1",
+              cardCreatedAt: 1,
+              boardIdAtLink: "board-1",
+            },
+            {
+              owner: "workboard" as const,
+              cardId: "card-1",
+              cardCreatedAt: 1,
+              boardIdAtLink: "board-1",
+            },
+          ],
+        },
+      ],
+    };
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        decisions: [
+          {
+            ...decision,
+            decidedPlan: duplicateRefPlan,
+            planHash: planHash(duplicateRefPlan),
+          },
+        ],
+      }).success,
+    ).toBe(false);
     const malformed = {
       ...record,
       decisions: [{ ...decision, criterionId: "missing" }],
