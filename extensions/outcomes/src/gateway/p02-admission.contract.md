@@ -16,8 +16,10 @@ first real P-02 handler and must use the host registrar/authentication fixtures.
 
 ## First handler package
 
-The first executable package is `outcomes.create`, `outcomes.get`, `outcomes.list`,
-`outcomes.update`, and `outcomes.cancel` only. It must cover:
+The first executable package is the complete P-02 method set:
+`outcomes.create`, `outcomes.get`, `outcomes.list`, `outcomes.update`,
+`outcomes.linkWorkboard`, `outcomes.unlinkWorkboard`, `outcomes.activate`,
+`outcomes.refresh`, and `outcomes.cancel`. It must cover:
 
 1. Strict TypeBox request DTOs reject unknown fields, invalid UUIDs, invalid limits,
    oversized UTF-8 payloads, duplicate criteria, and missing required criteria.
@@ -33,10 +35,21 @@ The first executable package is `outcomes.create`, `outcomes.get`, `outcomes.lis
 6. `update` requires expectedRevision, rejects an old revision atomically, preserves
    existing links when patching definitions, and treats an empty patch/duplicate ids
    as typed invalid input with zero writes.
-7. `cancel` requires expectedRevision, permits only draft/active records, preserves
+7. `linkWorkboard` and `unlinkWorkboard` require expectedRevision and obtain card identity
+   only through the authenticated Workboard adapter. They retain historical evidence while
+   changing active/accepted contracts into the next active generation, and reject missing,
+   inaccessible, colliding, or stale card identity without a write.
+8. `activate` requires expectedRevision and only accepts a draft whose required criteria
+   have at least one link. It freezes generation one and the canonical plan hash; it never
+   accepts a caller-supplied phase, generation, hash, or timestamp.
+9. `refresh` requires expectedRevision and performs at most one authenticated
+   `workboard.cards.list` request per Outcome. It maps disabled, timeout, not-found, and
+   identity-conflict distinctly; a failed refresh preserves displayable cached projection
+   fields but cannot make prior evidence current.
+10. `cancel` requires expectedRevision, permits only draft/active records, preserves
    history and plan identity, rejects accepted/cancelled or in-flight operations,
    and performs no write on every rejection.
-8. Typed mappings distinguish unauthenticated/forbidden/not-found/revision-conflict/
+11. Typed mappings distinguish unauthenticated/forbidden/not-found/revision-conflict/
    invalid-input/capacity/internal without leaking underlying exceptions.
 
 ## Evidence requirements
