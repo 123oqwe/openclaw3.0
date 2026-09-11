@@ -10515,6 +10515,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       historicalCompatibility: false,
       releaseGate: true,
       runnerProfile: "github",
+      changedPaths: [],
     });
     expect(releaseGate.status, releaseGate.output).toBe(0);
     expect(
@@ -12155,6 +12156,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
           historicalCompatibility: false,
           runnerBackend,
           uiE2eProjectsCapability,
+          changedPaths: [],
         });
         expect(manifest.status, manifest.output).toBe(0);
         expect(manifest.outputs.frozen_target).toBe("true");
