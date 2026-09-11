@@ -82,6 +82,16 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(0);
   });
 
+  it("maps an unknown storage failure to the non-leaking internal code", async () => {
+    const harness = createHarness({ registerError: new Error("/private/sqlite/outcomes.db") });
+    expect(await harness.call("outcomes.create", createParams(outcomeIds[0]!))).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INTERNAL", message: "Outcome request could not be completed" },
+    ]);
+    expect(harness.writes()).toBe(0);
+  });
+
   it("replays an identical owner create but makes a foreign record unavailable", async () => {
     const harness = createHarness();
     const params = createParams(outcomeIds[0]!);
