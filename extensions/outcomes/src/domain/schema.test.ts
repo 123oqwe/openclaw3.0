@@ -347,16 +347,36 @@ describe("Outcome create schema and canonical hash", () => {
     expect(workboardProjectionFingerprint({ ...projection, currentBoardId: "board-2" })).not.toBe(
       fingerprint,
     );
+    const unavailableCache = {
+      ...record.projections[0]!,
+      availability: "unavailable" as const,
+      errorCode: "timeout" as const,
+      observedAt: 3,
+      sourceFingerprint: undefined,
+    };
+    expect(
+      outcomeRecordSchema.safeParse({ ...record, projections: [unavailableCache] }).success,
+    ).toBe(true);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [{ ...unavailableCache, errorCode: undefined }],
+      }).success,
+    ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [{ ...unavailableCache, availability: "identity-conflict" }],
+      }).success,
+    ).toBe(false);
     expect(
       outcomeRecordSchema.safeParse({
         ...record,
         projections: [
           {
-            ...record.projections[0]!,
-            availability: "unavailable",
-            errorCode: "timeout",
-            observedAt: 3,
-            sourceFingerprint: undefined,
+            ...unavailableCache,
+            availability: "identity-conflict",
+            errorCode: "identity-conflict",
           },
         ],
       }).success,
