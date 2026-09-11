@@ -1973,7 +1973,9 @@ jobs:
       - name: Checkout exact Outcome artifact target
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.target_ref }}
+          # The target is admitted as the exact workflow SHA below; using the
+          # workflow SHA directly avoids treating a commit hash as a branch.
+          ref: ${{ github.workflow_sha }}
           fetch-depth: 2
           persist-credentials: false
 
