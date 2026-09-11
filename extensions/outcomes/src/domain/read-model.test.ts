@@ -118,6 +118,26 @@ function withCurrentVerifiedEvidence(input: OutcomeRecord): OutcomeRecord {
   return valid(input);
 }
 
+function syncCurrentDecisionPlan(input: OutcomeRecord): OutcomeRecord {
+  input.planHash = planHash({
+    outcomeId: input.id,
+    objective: input.objective,
+    contractRevision: input.contractRevision,
+    planGeneration: input.planGeneration,
+    criteria: input.criteria,
+  });
+  const decision = first(input.decisions);
+  decision.planHash = input.planHash;
+  decision.decidedPlan = {
+    outcomeId: input.id,
+    objective: input.objective,
+    contractRevision: input.contractRevision,
+    planGeneration: input.planGeneration,
+    criteria: input.criteria,
+  };
+  return valid(input);
+}
+
 describe("Outcome P-01 read model", () => {
   it("derives a redacted summary and detail", () => {
     const summary = toOutcomeSummary(record(), 10);
@@ -332,31 +352,69 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
   });
 
-  it("selects only current verified evidence and decision snapshots for readiness", () => {
+  it("does not promote persisted verification to ready before P-02 source authorization", () => {
     const input = withCurrentVerifiedEvidence(record());
-    expect(toOutcomeSummary(input, 10).readiness).toBe("ready");
+    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
 
     input.projections[0]!.ref = {
       ...input.projections[0]!.ref,
       boardIdAtLink: "board-moved-after-link",
     };
-    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
 
     input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
 
-  it("lets the newest current decision supersede history but blocks a current rejection", () => {
+  it("blocks only a current rejected decision whose evidence still matches", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const current = first(input.decisions);
+    input.decisions = [{ ...current, id: "decision-current-rejected", status: "rejected" }];
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
+
+    input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
+  });
+
+  it.each(["missing projection", "source from another linked card"])(
+    "does not select a rejected decision with %s",
+    (caseName) => {
+      const input = withCurrentVerifiedEvidence(record());
+      const criterion = first(input.criteria);
+      const secondRef = {
+        owner: "workboard" as const,
+        cardId: "card-second",
+        cardCreatedAt: 2,
+        boardIdAtLink: "board-link",
+      };
+      criterion.workRefs.push(secondRef);
+      const current = first(input.decisions);
+      input.decisions = [{ ...current, id: `decision-rejected-${caseName}`, status: "rejected" }];
+      if (caseName === "source from another linked card") {
+        input.projections.push({
+          ref: secondRef,
+          availability: "available",
+          currentBoardId: "board-current",
+          status: "done",
+          observedAt: 10,
+          lastSuccessfulAt: 10,
+          proofs: [],
+          artifacts: [],
+        });
+        first(input.evidence).workRef = secondRef;
+      }
+      expect(toOutcomeSummary(syncCurrentDecisionPlan(input), 10).readiness).toBe("incomplete");
+    },
+  );
+
+  it("lets the newest current decision supersede historical rejection", () => {
     const input = withCurrentVerifiedEvidence(record());
     const current = first(input.decisions);
     input.decisions = [
       { ...current, id: "decision-old-rejected", decidedRevision: 1, status: "rejected" },
       current,
     ];
-    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
-
-    input.decisions = [{ ...current, id: "decision-current-rejected", status: "rejected" }];
-    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
 
   it("uses last successful observation and the inclusive 24-hour boundary", () => {

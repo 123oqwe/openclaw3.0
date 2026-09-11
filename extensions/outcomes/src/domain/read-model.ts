@@ -40,17 +40,32 @@ function currentEvidenceSourceDigests(
   record: OutcomeRecord,
   criterion: OutcomeRecord["criteria"][number],
   projections: CurrentProjection[],
-): string[] {
-  const linked = new Set(criterion.workRefs.map(workRefIdentity));
+  observedAt: number,
+): string[] | undefined {
+  const linked = new Map(criterion.workRefs.map((ref) => [workRefIdentity(ref), ref]));
+  const linkedProjections = new Map(
+    projections
+      .filter((projection) => linked.has(workRefIdentity(projection.ref)))
+      .map((projection) => [workRefIdentity(projection.ref), projection]),
+  );
+  if (
+    linkedProjections.size !== linked.size ||
+    Array.from(linkedProjections.values()).some(
+      (projection) =>
+        projection.availability !== "available" || isStaleProjection(projection, observedAt),
+    )
+  ) {
+    return undefined;
+  }
   const sources = new Set(
-    projections.flatMap((projection) => {
-      if (projection.availability !== "available" || !linked.has(workRefIdentity(projection.ref))) {
-        return [];
-      }
+    Array.from(linkedProjections.values()).flatMap((projection) => {
+      const identity = workRefIdentity(projection.ref);
       return [
-        ...projection.proofs.map((source) => `workboard-proof\0${source.sourceId}\0${source.digest}`),
+        ...projection.proofs.map(
+          (source) => `${identity}\0workboard-proof\0${source.sourceId}\0${source.digest}`,
+        ),
         ...projection.artifacts.map(
-          (source) => `workboard-artifact\0${source.sourceId}\0${source.digest}`,
+          (source) => `${identity}\0workboard-artifact\0${source.sourceId}\0${source.digest}`,
         ),
       ];
     }),
@@ -61,23 +76,38 @@ function currentEvidenceSourceDigests(
         evidence.planGeneration === record.planGeneration &&
         evidence.criterionId === criterion.id &&
         linked.has(workRefIdentity(evidence.workRef)) &&
-        sources.has(`${evidence.kind}\0${evidence.sourceId}\0${evidence.sourceDigest}`),
+        sources.has(
+          `${workRefIdentity(evidence.workRef)}\0${evidence.kind}\0${evidence.sourceId}\0${evidence.sourceDigest}`,
+        ),
     )
     .map((evidence) => evidence.sourceDigest);
 }
 
 function currentDecision(
   record: OutcomeRecord,
-  criterionId: string,
-): OutcomeRecord["decisions"][number] | undefined {
-  return record.decisions
+  criterion: OutcomeRecord["criteria"][number],
+  projections: CurrentProjection[],
+  observedAt: number,
+): { decision: OutcomeRecord["decisions"][number]; sourceDigests: string[] } | undefined {
+  const sourceDigests = currentEvidenceSourceDigests(record, criterion, projections, observedAt);
+  if (sourceDigests === undefined) {
+    return undefined;
+  }
+  const expectedEvidenceSetHash = evidenceSetHash({
+    criterionId: criterion.id,
+    planGeneration: record.planGeneration,
+    sourceDigests,
+  });
+  const decision = record.decisions
     .filter(
       (decision) =>
-        decision.criterionId === criterionId &&
+        decision.criterionId === criterion.id &&
         decision.planGeneration === record.planGeneration &&
-        decision.planHash === record.planHash,
+        decision.planHash === record.planHash &&
+        decision.evidenceSetHash === expectedEvidenceSetHash,
     )
     .toSorted((a, b) => b.decidedRevision - a.decidedRevision)[0];
+  return decision === undefined ? undefined : { decision, sourceDigests };
 }
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
@@ -95,29 +125,9 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
   const hasUncertainOperation = record.operations.some((operation) =>
     ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
   );
-  const requiredCriteriaReady = record.criteria
-    .filter((criterion) => criterion.required)
-    .every((criterion) => {
-      if (criterion.workRefs.length === 0) {
-        return false;
-      }
-      const sourceDigests = currentEvidenceSourceDigests(record, criterion, projections);
-      if (sourceDigests.length === 0) {
-        return false;
-      }
-      const decision = currentDecision(record, criterion.id);
-      return (
-        decision?.status === "verified" &&
-        decision.evidenceSetHash ===
-          evidenceSetHash({
-            criterionId: criterion.id,
-            planGeneration: record.planGeneration,
-            sourceDigests,
-          })
-      );
-    });
   const hasCurrentRejectedDecision = record.criteria.some(
-    (criterion) => currentDecision(record, criterion.id)?.status === "rejected",
+    (criterion) =>
+      currentDecision(record, criterion, projections, observedAt)?.decision.status === "rejected",
   );
   const readiness = hasUnavailableSource
     ? "unavailable"
@@ -125,9 +135,7 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
       ? "stale"
       : hasBlockedSource || hasUncertainOperation || hasCurrentRejectedDecision || record.phase === "cancelled"
         ? "blocked"
-        : record.phase === "draft" || !requiredCriteriaReady
-          ? "incomplete"
-          : "ready";
+        : "incomplete";
   const acceptanceValidity = record.acceptances.length === 0 ? "none" : "needs-review";
   return {
     id: record.id,
