@@ -62,6 +62,8 @@ describe("Outcome plugin shell", () => {
       { method: "outcomes.get", options: { scope: "operator.read" } },
       { method: "outcomes.list", options: { scope: "operator.read" } },
       { method: "outcomes.update", options: { scope: "operator.write" } },
+      { method: "outcomes.linkWorkboard", options: { scope: "operator.write" } },
+      { method: "outcomes.unlinkWorkboard", options: { scope: "operator.write" } },
       { method: "outcomes.cancel", options: { scope: "operator.write" } },
     ]);
   });

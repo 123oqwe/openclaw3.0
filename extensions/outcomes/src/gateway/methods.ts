@@ -2,16 +2,18 @@ import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import type {
   OutcomeCreateParams,
   OutcomeCriterionInput,
+  OutcomeWorkboardLinkParams,
   OutcomeUpdateParams,
 } from "@openclaw/outcomes-contract";
 import type { OpenClawPluginApi } from "../../api.js";
 import { Value } from "typebox/value";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
-import { reduceOutcomeCancel, reduceOutcomePatch } from "../domain/reducer.js";
+import { reduceOutcomeCancel, reduceOutcomeLink, reduceOutcomePatch, reduceOutcomeUnlink } from "../domain/reducer.js";
 import { createRequestHash } from "../domain/schema.js";
 import { toOutcomeDetail, toOutcomeSummary } from "../domain/read-model.js";
 import type { Criterion, OutcomeRecord } from "../domain/types.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
+import { readWorkboardCards } from "../adapters/workboard-adapter.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
 import { OutcomeErrorCodes, outcomeError, outcomeStorageError } from "./errors.js";
 import {
@@ -20,6 +22,8 @@ import {
   outcomeIdParamsSchema,
   outcomeListParamsSchema,
   outcomeUpdateParamsSchema,
+  outcomeWorkboardLinkParamsSchema,
+  outcomeWorkboardUnlinkParamsSchema,
 } from "./schemas.js";
 
 const OUTCOME_STORE = { namespace: "outcomes-v1", maxEntries: OUTCOME_MAX_ENTRIES, overflowPolicy: OUTCOME_OVERFLOW_POLICY };
@@ -27,6 +31,7 @@ const MAX_REQUEST_BYTES = 64 * 1024;
 type PublicCriterion = OutcomeCriterionInput;
 type PublicCreate = OutcomeCreateParams;
 type PublicPatch = OutcomeUpdateParams["patch"];
+type PublicWorkboardLink = OutcomeWorkboardLinkParams;
 
 function fail(respond: (ok: false, payload?: undefined, error?: unknown) => void, code: keyof typeof OutcomeErrorCodes): void {
   respond(false, undefined, outcomeError(OutcomeErrorCodes[code]));
@@ -79,6 +84,24 @@ function normalizePatch(params: unknown): { id: string; expectedRevision: number
   const result = { id, expectedRevision: input.expectedRevision as number, patch };
   return Object.keys(patch).length > 0 && withinBudget(result) ? result : undefined;
 }
+function normalizeWorkboardLink(params: unknown): PublicWorkboardLink | undefined {
+  if (!params || typeof params !== "object") return undefined;
+  const input = params as Record<string, unknown>;
+  const id = normalizedUuid(input.id);
+  const criterionId = normalizedUuid(input.criterionId);
+  const cardId = typeof input.cardId === "string" ? input.cardId.trim() : "";
+  if (
+    !id ||
+    !criterionId ||
+    !cardId ||
+    !Number.isSafeInteger(input.expectedRevision) ||
+    (input.expectedRevision as number) < 1
+  ) {
+    return undefined;
+  }
+  const result = { id, expectedRevision: input.expectedRevision as number, criterionId, cardId };
+  return withinBudget(result) ? result : undefined;
+}
 function withRefs(criteria: PublicCriterion[], current: Criterion[]): Criterion[] {
   return criteria.map((criterion) => ({ ...criterion, workRefs: current.find((item) => item.id === criterion.id)?.workRefs ?? [] }));
 }
@@ -88,6 +111,15 @@ function respondMutation(
 ): void {
   if (decision.kind === "updated" || decision.kind === "noop") return respond(true, { outcome: toOutcomeDetail(decision.record, now) });
   respond(false, undefined, outcomeError(decision.kind === "conflict" ? OutcomeErrorCodes.REVISION_CONFLICT : OutcomeErrorCodes.INVALID_STATE));
+}
+
+async function readAuthorizedWorkboardCard(api: OpenClawPluginApi, cardId: string) {
+  const response = await api.runtime.gateway.request(
+    "workboard.cards.list",
+    {},
+    { scopes: ["operator.read"], requireAuthenticatedRequest: true, timeoutMs: 10_000 },
+  );
+  return readWorkboardCards(response).find((card) => card.id === cardId);
 }
 
 /** Register the P-02 first package; every persisted access is scoped to the authenticated owner. */
@@ -119,6 +151,46 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
     const request = normalizePatch(params); const owner = authenticatedProfileId(client); if (!request || !owner) return fail(respond, "INVALID_REQUEST"); const now = Date.now();
     try { const decision = await repository.transactOwned(owner, request.id, (current) => { const mutation = reduceOutcomePatch(current, { expectedRevision: request.expectedRevision, ...(request.patch.title === undefined ? {} : { title: request.patch.title }), ...(request.patch.objective === undefined ? {} : { objective: request.patch.objective }), ...(request.patch.criteria === undefined ? {} : { criteria: withRefs(request.patch.criteria, current.criteria) }), serverTime: now }); return { result: mutation, ...(mutation.kind === "updated" ? { next: mutation.record } : {}) }; }); respondMutation(respond, decision, now); }
     catch (error) { respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation"))); }
+  }, { scope: "operator.write" });
+  api.registerGatewayMethod("outcomes.linkWorkboard", async ({ client, params, respond }) => {
+    if (!Value.Check(outcomeWorkboardLinkParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+    const request = normalizeWorkboardLink(params); const owner = authenticatedProfileId(client); if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+    try {
+      if (!(await repository.getOwned(owner, request.id))) return fail(respond, "NOT_FOUND");
+      const card = await readAuthorizedWorkboardCard(api, request.cardId);
+      if (!card) return fail(respond, "NOT_FOUND");
+      const now = Date.now();
+      const decision = await repository.transactOwned(owner, request.id, (current) => {
+        const mutation = reduceOutcomeLink(current, {
+          expectedRevision: request.expectedRevision,
+          criterionId: request.criterionId,
+          ref: { owner: "workboard", cardId: card.id, cardCreatedAt: card.createdAt, boardIdAtLink: card.boardId },
+          serverTime: now,
+        });
+        return { result: mutation, ...(mutation.kind === "updated" ? { next: mutation.record } : {}) };
+      });
+      respondMutation(respond, decision, now);
+    } catch (error) { respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation"))); }
+  }, { scope: "operator.write" });
+  api.registerGatewayMethod("outcomes.unlinkWorkboard", async ({ client, params, respond }) => {
+    if (!Value.Check(outcomeWorkboardUnlinkParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+    const request = normalizeWorkboardLink(params); const owner = authenticatedProfileId(client); if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+    try {
+      if (!(await repository.getOwned(owner, request.id))) return fail(respond, "NOT_FOUND");
+      const card = await readAuthorizedWorkboardCard(api, request.cardId);
+      if (!card) return fail(respond, "NOT_FOUND");
+      const now = Date.now();
+      const decision = await repository.transactOwned(owner, request.id, (current) => {
+        const mutation = reduceOutcomeUnlink(current, {
+          expectedRevision: request.expectedRevision,
+          criterionId: request.criterionId,
+          ref: { owner: "workboard", cardId: card.id, cardCreatedAt: card.createdAt, boardIdAtLink: card.boardId },
+          serverTime: now,
+        });
+        return { result: mutation, ...(mutation.kind === "updated" ? { next: mutation.record } : {}) };
+      });
+      respondMutation(respond, decision, now);
+    } catch (error) { respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation"))); }
   }, { scope: "operator.write" });
   api.registerGatewayMethod("outcomes.cancel", async ({ client, params, respond }) => {
     if (!Value.Check(outcomeCancelParamsSchema, params)) return fail(respond, "INVALID_REQUEST");

@@ -41,8 +41,19 @@ function createHarness(options: { registerError?: unknown } = {}) {
     },
     deleteIf: async () => false,
   };
+  const gatewayRequest = vi.fn(async () => ({
+    cards: [
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 2,
+        metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] },
+      },
+    ],
+  }));
   const api = {
-    runtime: { state: { openKeyedStore: () => store } },
+    runtime: { state: { openKeyedStore: () => store }, gateway: { request: gatewayRequest } },
     registerGatewayMethod: (method: string, handler: unknown) => {
       handlers.set(method, handler as RegisteredHandler);
     },
@@ -55,7 +66,7 @@ function createHarness(options: { registerError?: unknown } = {}) {
     await handler({ client, params, respond });
     return respond.mock.calls[0];
   }
-  return { call, records, writes: () => writes };
+  return { call, gatewayRequest, records, writes: () => writes };
 }
 
 function createParams(id: string, title = "Outcome title") {
@@ -224,6 +235,49 @@ describe("P-02 Outcome handlers", () => {
       }),
     ).toMatchObject([true, { outcome: { revision: 2 } }]);
     expect(harness.records.get(id)?.criteria[0]?.workRefs).toEqual([ref]);
+  });
+
+  it("links and unlinks only the authorized owner card identity with one Workboard read", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    expect(
+      await harness.call("outcomes.linkWorkboard", {
+        id,
+        expectedRevision: 1,
+        criterionId,
+        cardId: "card-a",
+      }),
+    ).toMatchObject([true, { outcome: { revision: 2, contractRevision: 2 } }]);
+    expect(harness.records.get(id)?.criteria[0]?.workRefs).toEqual([
+      { owner: "workboard", cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledWith(
+      "workboard.cards.list",
+      {},
+      { scopes: ["operator.read"], requireAuthenticatedRequest: true, timeoutMs: 10_000 },
+    );
+    expect(
+      await harness.call("outcomes.unlinkWorkboard", {
+        id,
+        expectedRevision: 2,
+        criterionId,
+        cardId: "card-a",
+      }),
+    ).toMatchObject([true, { outcome: { revision: 3, contractRevision: 3 } }]);
+  });
+
+  it("does not consult Workboard or write before owner membership is established", async () => {
+    const harness = createHarness();
+    const response = await harness.call("outcomes.linkWorkboard", {
+      id: outcomeIds[0],
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    expect(response).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.writes()).toBe(0);
   });
 
   it("does not write when cancellation is terminal or an operation is in flight", async () => {

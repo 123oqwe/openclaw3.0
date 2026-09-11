@@ -60,3 +60,19 @@ export const outcomeCancelParamsSchema = Type.Object(
   },
   { additionalProperties: false },
 );
+
+const outcomeWorkboardLinkFields = {
+  id: outcomeId,
+  expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+  criterionId: Type.String({ pattern: UUID_PATTERN }),
+  // Workboard IDs are opaque owner values: validate only non-emptiness here.
+  cardId: Type.String({ minLength: 1 }),
+};
+
+export const outcomeWorkboardLinkParamsSchema = Type.Object(outcomeWorkboardLinkFields, {
+  additionalProperties: false,
+});
+
+export const outcomeWorkboardUnlinkParamsSchema = Type.Object(outcomeWorkboardLinkFields, {
+  additionalProperties: false,
+});

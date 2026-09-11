@@ -184,6 +184,14 @@ export type OutcomeUpdateParams = {
 
 export type OutcomeRevisionParams = { id: string; expectedRevision: number };
 
+/** Client may name a card, but the server derives its immutable Workboard identity. */
+export type OutcomeWorkboardLinkParams = OutcomeRevisionParams & {
+  criterionId: string;
+  cardId: string;
+};
+
+export type OutcomeWorkboardUnlinkParams = OutcomeWorkboardLinkParams;
+
 export type OutcomeCreateResult = {
   outcome: OutcomeDetail;
   replayed: boolean;
