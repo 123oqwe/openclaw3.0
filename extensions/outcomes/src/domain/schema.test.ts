@@ -239,7 +239,9 @@ describe("Outcome create schema and canonical hash", () => {
     };
     expect(outcomeRecordSchema.safeParse(draft).success).toBe(true);
     expect(outcomeRecordSchema.safeParse({ ...draft, planGeneration: 1 }).success).toBe(false);
-    expect(outcomeRecordSchema.safeParse({ ...draft, planHash: "a".repeat(64) }).success).toBe(false);
+    expect(outcomeRecordSchema.safeParse({ ...draft, planHash: "a".repeat(64) }).success).toBe(
+      false,
+    );
     const planned = {
       ...draft,
       planGeneration: 1,
@@ -280,8 +282,9 @@ describe("Outcome create schema and canonical hash", () => {
   });
 
   it("canonicalizes evidence and closure hashes deterministically", () => {
-    expect(evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["b", "a", "a"] }))
-      .toBe(evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["a", "b"] }));
+    expect(
+      evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["b", "a", "a"] }),
+    ).toBe(evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["a", "b"] }));
     const input = {
       outcomeId: "o",
       planGeneration: 2,
@@ -291,6 +294,8 @@ describe("Outcome create schema and canonical hash", () => {
         { criterionId: "a", decisionId: "d1", decidedRevision: 3, evidenceSetHash: "e1" },
       ],
     };
-    expect(closureHash(input)).toBe(closureHash({ ...input, requiredCriteria: [...input.requiredCriteria].reverse() }));
+    expect(closureHash(input)).toBe(
+      closureHash({ ...input, requiredCriteria: [...input.requiredCriteria].reverse() }),
+    );
   });
 });

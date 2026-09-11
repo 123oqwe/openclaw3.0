@@ -1,10 +1,7 @@
 import { createHash } from "node:crypto";
-import { z } from "zod";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
-import {
-  OUTCOME_MAX_CRITERIA,
-  OUTCOME_MAX_RECORD_BYTES,
-} from "./constants.js";
+import { z } from "zod";
+import { OUTCOME_MAX_CRITERIA, OUTCOME_MAX_RECORD_BYTES } from "./constants.js";
 import type { Criterion, PersistedOutcomeRecord } from "./types.js";
 
 export const workboardRefSchema = z.strictObject({
@@ -21,14 +18,16 @@ export const criterionSchema = z.strictObject({
   workRefs: z.array(workboardRefSchema),
 });
 
-export const createRequestSchema = z.strictObject({
-  id: z.string().min(1).max(160),
-  title: z.string().min(1).max(160),
-  objective: z.string().min(1).max(4000),
-  criteria: z.array(criterionSchema).min(1).max(OUTCOME_MAX_CRITERIA),
-}).refine((request) => request.criteria.some((criterion) => criterion.required), {
-  message: "at least one criterion must be required",
-});
+export const createRequestSchema = z
+  .strictObject({
+    id: z.string().min(1).max(160),
+    title: z.string().min(1).max(160),
+    objective: z.string().min(1).max(4000),
+    criteria: z.array(criterionSchema).min(1).max(OUTCOME_MAX_CRITERIA),
+  })
+  .refine((request) => request.criteria.some((criterion) => criterion.required), {
+    message: "at least one criterion must be required",
+  });
 
 const projectionSchema = z.strictObject({
   ref: workboardRefSchema,
@@ -41,8 +40,20 @@ const projectionSchema = z.strictObject({
   lastSuccessfulAt: z.number().finite().optional(),
   sourceUpdatedAt: z.number().finite().optional(),
   upstreamStale: z.boolean().optional(),
-  sourceFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
-  errorCode: z.enum(["workboard-disabled", "not-found", "forbidden", "timeout", "invalid-response", "identity-conflict"]).optional(),
+  sourceFingerprint: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/)
+    .optional(),
+  errorCode: z
+    .enum([
+      "workboard-disabled",
+      "not-found",
+      "forbidden",
+      "timeout",
+      "invalid-response",
+      "identity-conflict",
+    ])
+    .optional(),
 });
 
 const evidenceSchema = z.strictObject({
@@ -65,15 +76,17 @@ const decisionSchema = z.strictObject({
   requestHash: z.string().regex(/^[0-9a-f]{64}$/),
   profileId: z.string().min(1),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
-  decidedPlan: z.strictObject({
-    outcomeId: z.string().min(1),
-    objective: z.string().min(1).max(4000),
-    contractRevision: z.number().int().positive(),
-    planGeneration: z.number().int().positive(),
-    criteria: z.array(criterionSchema).min(1).max(5),
-  }).refine((plan) => plan.criteria.some((criterion) => criterion.required), {
-    message: "at least one criterion must be required",
-  }),
+  decidedPlan: z
+    .strictObject({
+      outcomeId: z.string().min(1),
+      objective: z.string().min(1).max(4000),
+      contractRevision: z.number().int().positive(),
+      planGeneration: z.number().int().positive(),
+      criteria: z.array(criterionSchema).min(1).max(5),
+    })
+    .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
+      message: "at least one criterion must be required",
+    }),
   evidenceSetHash: z.string().regex(/^[0-9a-f]{64}$/),
   note: z.string().max(2000).optional(),
   decidedAt: z.number().finite(),
@@ -102,15 +115,17 @@ const acceptanceSchema = z.strictObject({
   planGeneration: z.number().int().nonnegative(),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
   closureHash: z.string().regex(/^[0-9a-f]{64}$/),
-  acceptedPlan: z.strictObject({
-    outcomeId: z.string().min(1),
-    objective: z.string().min(1),
-    contractRevision: z.number().int().positive(),
-    planGeneration: z.number().int().positive(),
-    criteria: z.array(criterionSchema).min(1).max(5),
-  }).refine((plan) => plan.criteria.some((criterion) => criterion.required), {
-    message: "at least one criterion must be required",
-  }),
+  acceptedPlan: z
+    .strictObject({
+      outcomeId: z.string().min(1),
+      objective: z.string().min(1),
+      contractRevision: z.number().int().positive(),
+      planGeneration: z.number().int().positive(),
+      criteria: z.array(criterionSchema).min(1).max(5),
+    })
+    .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
+      message: "at least one criterion must be required",
+    }),
 });
 
 /** Strict persisted aggregate contract; adapters should parse before exposing records. */
@@ -122,81 +137,119 @@ function safePlanHash(input: CanonicalPlan): string | null {
   }
 }
 
-export const outcomeRecordSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  id: z.string().min(1).max(160),
-  createRequestHash: z.string().regex(/^[0-9a-f]{64}$/),
-  managerProfileId: z.string().min(1),
-  title: z.string().min(1).max(160),
-  objective: z.string().min(1).max(4000),
-  phase: z.enum(["draft", "active", "accepted", "cancelled"]),
-  revision: z.number().int().positive(),
-  contractRevision: z.number().int().positive(),
-  planGeneration: z.number().int().nonnegative(),
-  planHash: z.string().regex(/^[0-9a-f]{64}$/).nullable(),
-  criteria: z.array(criterionSchema).min(1).max(5),
-  projections: z.array(projectionSchema),
-  evidence: z.array(evidenceSchema).max(100),
-  decisions: z.array(decisionSchema).max(100),
-  operations: z.array(operationSchema).max(20),
-  acceptances: z.array(acceptanceSchema).max(20),
-  createdAt: z.number().finite(),
-  updatedAt: z.number().finite(),
-}).superRefine((record, ctx) => {
-  if (!record.criteria.some((criterion) => criterion.required)) {
-    ctx.addIssue({ code: "custom", message: "at least one criterion must be required" });
-  }
-  if (record.phase === "draft" && (record.planGeneration !== 0 || record.planHash !== null)) {
-    ctx.addIssue({ code: "custom", message: "draft records must have generation 0 and null planHash" });
-  }
-  if (record.phase === "active" || record.phase === "accepted") {
-    if (record.planGeneration < 1 || record.planHash === null) {
-      ctx.addIssue({ code: "custom", message: "active and accepted records require a plan" });
-    } else if (
-      record.planHash !== safePlanHash({
-        outcomeId: record.id,
-        objective: record.objective,
-        contractRevision: record.contractRevision,
-        planGeneration: record.planGeneration,
-        criteria: record.criteria,
-      })
-    ) {
-      ctx.addIssue({ code: "custom", message: "record planHash does not match its canonical plan" });
+export const outcomeRecordSchema = z
+  .strictObject({
+    schemaVersion: z.literal(1),
+    id: z.string().min(1).max(160),
+    createRequestHash: z.string().regex(/^[0-9a-f]{64}$/),
+    managerProfileId: z.string().min(1),
+    title: z.string().min(1).max(160),
+    objective: z.string().min(1).max(4000),
+    phase: z.enum(["draft", "active", "accepted", "cancelled"]),
+    revision: z.number().int().positive(),
+    contractRevision: z.number().int().positive(),
+    planGeneration: z.number().int().nonnegative(),
+    planHash: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .nullable(),
+    criteria: z.array(criterionSchema).min(1).max(5),
+    projections: z.array(projectionSchema),
+    evidence: z.array(evidenceSchema).max(100),
+    decisions: z.array(decisionSchema).max(100),
+    operations: z.array(operationSchema).max(20),
+    acceptances: z.array(acceptanceSchema).max(20),
+    createdAt: z.number().finite(),
+    updatedAt: z.number().finite(),
+  })
+  .superRefine((record, ctx) => {
+    if (!record.criteria.some((criterion) => criterion.required)) {
+      ctx.addIssue({ code: "custom", message: "at least one criterion must be required" });
     }
-  }
-  if (record.phase === "cancelled") {
-    const validDraftCancellation = record.planGeneration === 0 && record.planHash === null;
-    const validPlannedCancellation = record.planGeneration > 0 && record.planHash === safePlanHash({
-      outcomeId: record.id,
-      objective: record.objective,
-      contractRevision: record.contractRevision,
-      planGeneration: record.planGeneration,
-      criteria: record.criteria,
-    });
-    if (!validDraftCancellation && !validPlannedCancellation) {
-      ctx.addIssue({ code: "custom", message: "cancelled record must preserve a valid plan or draft state" });
+    if (record.phase === "draft" && (record.planGeneration !== 0 || record.planHash !== null)) {
+      ctx.addIssue({
+        code: "custom",
+        message: "draft records must have generation 0 and null planHash",
+      });
     }
-  }
-  for (const decision of record.decisions) {
-    if (decision.decidedPlan.outcomeId !== record.id || decision.decidedPlan.planGeneration !== decision.planGeneration) {
-      ctx.addIssue({ code: "custom", message: "decision snapshot does not match its outcome/generation" });
+    if (record.phase === "active" || record.phase === "accepted") {
+      if (record.planGeneration < 1 || record.planHash === null) {
+        ctx.addIssue({ code: "custom", message: "active and accepted records require a plan" });
+      } else if (
+        record.planHash !==
+        safePlanHash({
+          outcomeId: record.id,
+          objective: record.objective,
+          contractRevision: record.contractRevision,
+          planGeneration: record.planGeneration,
+          criteria: record.criteria,
+        })
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "record planHash does not match its canonical plan",
+        });
+      }
     }
-    if (!decision.decidedPlan.criteria.some((criterion) => criterion.id === decision.criterionId)) {
-      ctx.addIssue({ code: "custom", message: "decision criterion is absent from its plan snapshot" });
+    if (record.phase === "cancelled") {
+      const validDraftCancellation = record.planGeneration === 0 && record.planHash === null;
+      const validPlannedCancellation =
+        record.planGeneration > 0 &&
+        record.planHash ===
+          safePlanHash({
+            outcomeId: record.id,
+            objective: record.objective,
+            contractRevision: record.contractRevision,
+            planGeneration: record.planGeneration,
+            criteria: record.criteria,
+          });
+      if (!validDraftCancellation && !validPlannedCancellation) {
+        ctx.addIssue({
+          code: "custom",
+          message: "cancelled record must preserve a valid plan or draft state",
+        });
+      }
     }
-    if (decision.planHash !== safePlanHash(decision.decidedPlan)) {
-      ctx.addIssue({ code: "custom", message: "decision planHash does not match its snapshot" });
+    for (const decision of record.decisions) {
+      if (
+        decision.decidedPlan.outcomeId !== record.id ||
+        decision.decidedPlan.planGeneration !== decision.planGeneration
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "decision snapshot does not match its outcome/generation",
+        });
+      }
+      if (
+        !decision.decidedPlan.criteria.some((criterion) => criterion.id === decision.criterionId)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "decision criterion is absent from its plan snapshot",
+        });
+      }
+      if (decision.planHash !== safePlanHash(decision.decidedPlan)) {
+        ctx.addIssue({ code: "custom", message: "decision planHash does not match its snapshot" });
+      }
     }
-  }
-  for (const acceptance of record.acceptances) {
-    if (acceptance.acceptedPlan.outcomeId !== record.id || acceptance.acceptedPlan.planGeneration !== acceptance.planGeneration) {
-      ctx.addIssue({ code: "custom", message: "acceptance snapshot does not match its outcome/generation" });
+    for (const acceptance of record.acceptances) {
+      if (
+        acceptance.acceptedPlan.outcomeId !== record.id ||
+        acceptance.acceptedPlan.planGeneration !== acceptance.planGeneration
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "acceptance snapshot does not match its outcome/generation",
+        });
+      }
+      if (acceptance.planHash !== safePlanHash(acceptance.acceptedPlan)) {
+        ctx.addIssue({
+          code: "custom",
+          message: "acceptance planHash does not match its snapshot",
+        });
+      }
     }
-    if (acceptance.planHash !== safePlanHash(acceptance.acceptedPlan)) {
-      ctx.addIssue({ code: "custom", message: "acceptance planHash does not match its snapshot" });
-    }
-  }
-});
+  });
 
 export function parseOutcomeRecord(input: unknown): PersistedOutcomeRecord {
   const record = outcomeRecordSchema.parse(input);
@@ -238,15 +291,17 @@ export type CanonicalPlan = {
   criteria: Criterion[];
 };
 
-export const canonicalPlanSchema = z.strictObject({
-  outcomeId: z.string().min(1).max(160),
-  objective: z.string().min(1).max(4000),
-  contractRevision: z.number().int().positive(),
-  planGeneration: z.number().int().positive(),
-  criteria: z.array(criterionSchema).min(1).max(5),
-}).refine((plan) => plan.criteria.some((criterion) => criterion.required), {
-  message: "at least one criterion must be required",
-});
+export const canonicalPlanSchema = z
+  .strictObject({
+    outcomeId: z.string().min(1).max(160),
+    objective: z.string().min(1).max(4000),
+    contractRevision: z.number().int().positive(),
+    planGeneration: z.number().int().positive(),
+    criteria: z.array(criterionSchema).min(1).max(5),
+  })
+  .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
+    message: "at least one criterion must be required",
+  });
 
 export function planHash(input: CanonicalPlan): string {
   const plan = canonicalPlanSchema.parse(input);
@@ -316,7 +371,10 @@ export function closureHash(input: {
     .digest("hex");
 }
 
-export function assertOutcomeRecordSize(record: unknown, maxBytes = OUTCOME_MAX_RECORD_BYTES): void {
+export function assertOutcomeRecordSize(
+  record: unknown,
+  maxBytes = OUTCOME_MAX_RECORD_BYTES,
+): void {
   const bytes = Buffer.byteLength(stableStringify(record), "utf8");
   if (bytes > maxBytes) {
     throw new Error(`Outcome record exceeds ${maxBytes}-byte limit`);

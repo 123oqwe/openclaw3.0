@@ -1,6 +1,6 @@
-import type { Criterion, OutcomeRecord } from "./types.js";
-import { planHash } from "./canonical-plan.js";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
+import { planHash } from "./canonical-plan.js";
+import type { Criterion, OutcomeRecord } from "./types.js";
 
 export type OutcomeMutation = {
   expectedRevision: number;
@@ -33,9 +33,11 @@ export type OutcomeActivateResult =
   | { kind: "updated"; record: OutcomeRecord };
 
 function hasInFlightOperation(current: OutcomeRecord): boolean {
-  return current.operations?.some((operation) =>
-    ["prepared", "unknown", "may-have-crossed"].includes(operation.state),
-  ) ?? false;
+  return (
+    current.operations?.some((operation) =>
+      ["prepared", "unknown", "may-have-crossed"].includes(operation.state),
+    ) ?? false
+  );
 }
 
 function assertServerTime(serverTime: number): void {
@@ -92,13 +94,16 @@ export function reduceOutcomeContract(
       phase,
       contractRevision: current.contractRevision + 1,
       planGeneration,
-      planHash: planGeneration === 0 ? null : planHash({
-        outcomeId: current.id,
-        objective: mutation.objective,
-        contractRevision: current.contractRevision + 1,
-        planGeneration,
-        criteria,
-      }),
+      planHash:
+        planGeneration === 0
+          ? null
+          : planHash({
+              outcomeId: current.id,
+              objective: mutation.objective,
+              contractRevision: current.contractRevision + 1,
+              planGeneration,
+              criteria,
+            }),
       revision: current.revision + 1,
       updatedAt: mutation.serverTime,
     },

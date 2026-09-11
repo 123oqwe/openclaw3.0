@@ -21,7 +21,13 @@ export type WorkProjection = {
   sourceUpdatedAt?: number;
   upstreamStale?: boolean;
   sourceFingerprint?: string;
-  errorCode?: "workboard-disabled" | "not-found" | "forbidden" | "timeout" | "invalid-response" | "identity-conflict";
+  errorCode?:
+    | "workboard-disabled"
+    | "not-found"
+    | "forbidden"
+    | "timeout"
+    | "invalid-response"
+    | "identity-conflict";
 };
 
 export type OutcomePlanSnapshot = {

@@ -1,6 +1,6 @@
 import type { PluginStateKeyedStore } from "openclaw/plugin-sdk/plugin-state-runtime";
-import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
 import { assertOutcomeRecordSize, parseOutcomeRecord } from "../domain/schema.js";
+import type { OutcomeRecord, OutcomeRepository } from "./outcome-repository.js";
 
 export class OutcomeRepositoryCapacityError extends Error {
   readonly code = "outcome-capacity-exceeded" as const;
@@ -134,14 +134,18 @@ function createLegacyOutcomeRepository(
 
 /** Strict storage boundary for production records; rejects sparse or corrupt persisted values. */
 function createStrictOutcomeRepository(
-  store: Pick<PluginStateKeyedStore<OutcomeRecord>, "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf">,
+  store: Pick<
+    PluginStateKeyedStore<OutcomeRecord>,
+    "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf"
+  >,
 ): OutcomeRepository {
   if (typeof store.deleteIf !== "function") {
     throw new Error("Outcome repository requires atomic keyed-store deleteIf");
   }
   const deleteIf = store.deleteIf;
   const base = createLegacyOutcomeRepository(store);
-  const strict = (value: OutcomeRecord | undefined) => (value === undefined ? undefined : parseOutcomeRecord(value));
+  const strict = (value: OutcomeRecord | undefined) =>
+    value === undefined ? undefined : parseOutcomeRecord(value);
   return {
     ...base,
     create: async (record) => {
@@ -198,22 +202,39 @@ function createStrictOutcomeRepository(
     list: async () => (await base.list()).map(parseOutcomeRecord),
     getOwned: async (owner, id) => strict(await base.getOwned(owner, id)),
     listOwned: async (owner) => (await base.listOwned(owner)).map(parseOutcomeRecord),
-    transact: async <T>(id: string, decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord }) => base.transact(id, (current) => {
-      const decision = decide(strict(current));
-      return { result: decision.result, next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next) };
-    }),
-    transactOwned: async <T>(owner: string, id: string, decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord }) => base.transactOwned(owner, id, (current) => {
-      const decision = decide(parseOutcomeRecord(current));
-      return { result: decision.result, next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next) };
-    }),
-    deleteIf: async (id, predicate) => deleteIf(id, (current) => {
-      const parsed = parseOutcomeRecord(current);
-      return predicate(parsed);
-    }),
-    deleteOwnedIf: async (owner, id, predicate) => deleteIf(id, (current) => {
-      const parsed = parseOutcomeRecord(current);
-      return parsed.managerProfileId === owner && predicate(parsed);
-    }),
+    transact: async <T>(
+      id: string,
+      decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },
+    ) =>
+      base.transact(id, (current) => {
+        const decision = decide(strict(current));
+        return {
+          result: decision.result,
+          next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next),
+        };
+      }),
+    transactOwned: async <T>(
+      owner: string,
+      id: string,
+      decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord },
+    ) =>
+      base.transactOwned(owner, id, (current) => {
+        const decision = decide(parseOutcomeRecord(current));
+        return {
+          result: decision.result,
+          next: decision.next === undefined ? undefined : parseOutcomeRecord(decision.next),
+        };
+      }),
+    deleteIf: async (id, predicate) =>
+      deleteIf(id, (current) => {
+        const parsed = parseOutcomeRecord(current);
+        return predicate(parsed);
+      }),
+    deleteOwnedIf: async (owner, id, predicate) =>
+      deleteIf(id, (current) => {
+        const parsed = parseOutcomeRecord(current);
+        return parsed.managerProfileId === owner && predicate(parsed);
+      }),
   };
 }
 

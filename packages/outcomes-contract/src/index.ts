@@ -1,6 +1,12 @@
 /** Public P-01 Outcome views. Persisted records and manager identity stay private. */
 export const OUTCOME_PHASES = ["draft", "active", "accepted", "cancelled"] as const;
-export const OUTCOME_READINESS = ["incomplete", "blocked", "ready", "stale", "unavailable"] as const;
+export const OUTCOME_READINESS = [
+  "incomplete",
+  "blocked",
+  "ready",
+  "stale",
+  "unavailable",
+] as const;
 export const OUTCOME_ACCEPTANCE_VALIDITY = ["none", "current", "needs-review"] as const;
 export const OUTCOME_SOURCE_VISIBILITY = ["complete", "restricted"] as const;
 export const OUTCOME_SOURCE_ISSUE_REASONS = [

@@ -8,8 +8,8 @@ function first<T>(items: T[]): T {
   }
   return item;
 }
-import type { OutcomeRecord } from "./types.js";
 import { parseOutcomeRecord, planHash } from "./schema.js";
+import type { OutcomeRecord } from "./types.js";
 
 const record = (): OutcomeRecord => ({
   schemaVersion: 1,

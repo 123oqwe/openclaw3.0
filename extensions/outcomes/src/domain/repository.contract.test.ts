@@ -1,7 +1,5 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
-import type { OutcomeRecord } from "./types.js";
-import { parseOutcomeRecord } from "./schema.js";
 import { createRequestHash, planHash } from "./hash.js";
 import {
   reduceOutcomeActivate,
@@ -10,6 +8,8 @@ import {
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "./reducer.js";
+import { parseOutcomeRecord } from "./schema.js";
+import type { OutcomeRecord } from "./types.js";
 
 // P-01 contract cases exercise the repository boundary through the formal
 // strict adapter and keep reducer behavior independently observable.
@@ -76,8 +76,7 @@ describe("Outcome repository atomic contract", () => {
         return true;
       },
       lookup: async (id) => records.get(id),
-      entries: async () =>
-        Array.from(records, ([key, value]) => ({ key, value, createdAt: 0 })),
+      entries: async () => Array.from(records, ([key, value]) => ({ key, value, createdAt: 0 })),
       update: async (id, decide) => {
         const next = decide(records.get(id));
         if (next === undefined) {
@@ -112,7 +111,19 @@ describe("Outcome repository atomic contract", () => {
     const draft = validRecord("activate-1");
     const linked = {
       ...draft,
-      criteria: [{ ...first(draft.criteria), workRefs: [{ owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }] }],
+      criteria: [
+        {
+          ...first(draft.criteria),
+          workRefs: [
+            {
+              owner: "workboard" as const,
+              cardId: "card-1",
+              cardCreatedAt: 1,
+              boardIdAtLink: "board-1",
+            },
+          ],
+        },
+      ],
     };
     const activated = reduceOutcomeActivate(linked, linked.revision, 42);
     expect(activated.kind).toBe("updated");
@@ -129,15 +140,44 @@ describe("Outcome repository atomic contract", () => {
     expect(reduceOutcomeActivate(linked, linked.revision - 1, 42).kind).toBe("conflict");
     const optionalOnly = {
       ...draft,
-      criteria: [{ ...first(draft.criteria), required: false, workRefs: [] }, { id: "c-2", text: "optional", required: true, workRefs: first(linked.criteria).workRefs }],
+      criteria: [
+        { ...first(draft.criteria), required: false, workRefs: [] },
+        { id: "c-2", text: "optional", required: true, workRefs: first(linked.criteria).workRefs },
+      ],
     };
     expect(reduceOutcomeActivate(optionalOnly, optionalOnly.revision, 42).kind).toBe("updated");
     expect(reduceOutcomeActivate(activeRecord("active-1"), 1, 42).kind).toBe("rejected");
 
     for (const state of ["prepared", "unknown", "may-have-crossed"] as const) {
-      const withOperation = { ...activeRecord(`active-${state}`), criteria: linked.criteria, operations: [{ id: state, kind: "workboard-card-start" as const, criterionId: "c-1", planGeneration: 1, createdRevision: 1, requestHash: "a".repeat(64), state, target: first(first(linked.criteria).workRefs) }] };
-      expect(reduceOutcomeContract(withOperation, { expectedRevision: 1, serverTime: 42, objective: "changed", criteria: withOperation.criteria }).kind).toBe("rejected");
-      const titleUpdate = reduceOutcomeTitle(withOperation, { expectedRevision: 1, title: "new", serverTime: 42 });
+      const withOperation = {
+        ...activeRecord(`active-${state}`),
+        criteria: linked.criteria,
+        operations: [
+          {
+            id: state,
+            kind: "workboard-card-start" as const,
+            criterionId: "c-1",
+            planGeneration: 1,
+            createdRevision: 1,
+            requestHash: "a".repeat(64),
+            state,
+            target: first(first(linked.criteria).workRefs),
+          },
+        ],
+      };
+      expect(
+        reduceOutcomeContract(withOperation, {
+          expectedRevision: 1,
+          serverTime: 42,
+          objective: "changed",
+          criteria: withOperation.criteria,
+        }).kind,
+      ).toBe("rejected");
+      const titleUpdate = reduceOutcomeTitle(withOperation, {
+        expectedRevision: 1,
+        title: "new",
+        serverTime: 42,
+      });
       expect(titleUpdate.kind).toBe("updated");
       if (titleUpdate.kind === "updated") {
         expect(titleUpdate.record.updatedAt).toBe(42);
@@ -155,12 +195,16 @@ describe("Outcome repository atomic contract", () => {
 
   it("rejects an obsolete revision before applying a title change", () => {
     const record = { ...validRecord(), revision: 2, title: "old" };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 1, title: "new", serverTime: 42 })).toEqual({ kind: "conflict", record });
+    expect(
+      reduceOutcomeTitle(record, { expectedRevision: 1, title: "new", serverTime: 42 }),
+    ).toEqual({ kind: "conflict", record });
   });
 
   it("returns no-op without incrementing revision for unchanged title", () => {
     const record = { ...validRecord(), revision: 2, title: "same" };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "same", serverTime: 42 })).toEqual({
+    expect(
+      reduceOutcomeTitle(record, { expectedRevision: 2, title: "same", serverTime: 42 }),
+    ).toEqual({
       kind: "noop",
       record,
     });
@@ -180,7 +224,9 @@ describe("Outcome repository atomic contract", () => {
 
   it("increments only revision when title changes", () => {
     const record = { ...activeRecord(), revision: 2, title: "old" };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new", serverTime: 42 })).toEqual({
+    expect(
+      reduceOutcomeTitle(record, { expectedRevision: 2, title: "new", serverTime: 42 }),
+    ).toEqual({
       kind: "updated",
       record: { ...record, title: "new", revision: 3, updatedAt: 42 },
     });
@@ -317,9 +363,7 @@ describe("Outcome repository atomic contract", () => {
       expectedRevision: 1,
       serverTime: 42,
       objective: "changed",
-      criteria: [
-        { id: "c", text: "criterion", required: true, workRefs: [] },
-      ],
+      criteria: [{ id: "c", text: "criterion", required: true, workRefs: [] }],
     };
     const accepted = { ...activeRecord(), phase: "accepted" as const };
     expect(reduceOutcomeContract(accepted, mutation)).toMatchObject({
@@ -327,11 +371,15 @@ describe("Outcome repository atomic contract", () => {
       record: { phase: "active", planGeneration: accepted.planGeneration + 1 },
     });
     const cancelled = { ...activeRecord(), phase: "cancelled" as const };
-    expect(reduceOutcomeContract(cancelled, mutation)).toEqual({ kind: "rejected", record: cancelled });
+    expect(reduceOutcomeContract(cancelled, mutation)).toEqual({
+      kind: "rejected",
+      record: cancelled,
+    });
     const stale = activeRecord();
-    expect(
-      reduceOutcomeContract({ ...stale, revision: stale.revision + 1 }, mutation),
-    ).toEqual({ kind: "conflict", record: { ...stale, revision: stale.revision + 1 } });
+    expect(reduceOutcomeContract({ ...stale, revision: stale.revision + 1 }, mutation)).toEqual({
+      kind: "conflict",
+      record: { ...stale, revision: stale.revision + 1 },
+    });
   });
 
   it("rejects non-finite trusted mutation time", () => {
@@ -354,7 +402,11 @@ describe("Outcome repository atomic contract", () => {
     await repository.create(record);
     const before = writes();
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
-      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "same", serverTime: 42 });
+      const next = reduceOutcomeTitle(current!, {
+        expectedRevision: 2,
+        title: "same",
+        serverTime: 42,
+      });
       return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
     });
     expect(decision.kind).toBe("noop");
@@ -367,7 +419,11 @@ describe("Outcome repository atomic contract", () => {
     const record = { ...activeRecord(), revision: 2, title: "old" };
     await repository.create(record);
     const decision = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
-      const next = reduceOutcomeTitle(current!, { expectedRevision: 2, title: "new", serverTime: 42 });
+      const next = reduceOutcomeTitle(current!, {
+        expectedRevision: 2,
+        title: "new",
+        serverTime: 42,
+      });
       return next.kind === "updated" ? { result: next, next: next.record } : { result: next };
     });
     expect(decision.kind).toBe("updated");
@@ -382,7 +438,9 @@ describe("Outcome repository atomic contract", () => {
       title: "same",
       phase: "cancelled" as const,
     };
-    expect(reduceOutcomeTitle(record, { expectedRevision: 2, title: "new", serverTime: 42 })).toEqual({ kind: "rejected", record });
+    expect(
+      reduceOutcomeTitle(record, { expectedRevision: 2, title: "new", serverTime: 42 }),
+    ).toEqual({ kind: "rejected", record });
   });
 
   it("cancels only with the current revision and no in-flight operation", () => {
@@ -436,11 +494,11 @@ describe("Outcome repository atomic contract", () => {
           },
         ],
       };
-    const cancelled = reduceOutcomeCancel(settled, 2, 42);
-    expect(cancelled.kind).toBe("updated");
-    if (cancelled.kind === "updated") {
-      expect(cancelled.record.updatedAt).toBe(42);
-    }
+      const cancelled = reduceOutcomeCancel(settled, 2, 42);
+      expect(cancelled.kind).toBe("updated");
+      if (cancelled.kind === "updated") {
+        expect(cancelled.record.updatedAt).toBe(42);
+      }
     }
     const accepted = { ...record, phase: "accepted" as const };
     expect(reduceOutcomeCancel(accepted, 2, 42)).toEqual({
@@ -453,5 +511,4 @@ describe("Outcome repository atomic contract", () => {
       record: cancelled,
     });
   });
-
 });

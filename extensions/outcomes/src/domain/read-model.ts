@@ -1,10 +1,5 @@
-import {
-  OUTCOME_PROJECTION_MAX_AGE_MS,
-} from "@openclaw/outcomes-contract";
-import type {
-  OutcomeDetail,
-  OutcomeSummary,
-} from "@openclaw/outcomes-contract";
+import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
+import type { OutcomeDetail, OutcomeSummary } from "@openclaw/outcomes-contract";
 import type { OutcomeRecord } from "./types.js";
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
@@ -18,7 +13,9 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
           candidate.boardIdAtLink === ref.boardIdAtLink,
       ),
     );
-  const currentProjections = record.projections.filter((projection) => isCurrentRef(projection.ref));
+  const currentProjections = record.projections.filter((projection) =>
+    isCurrentRef(projection.ref),
+  );
   const hasUnavailableSource = currentProjections.some(
     (projection) =>
       projection.availability !== "available" ||
@@ -39,10 +36,7 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
       : record.phase === "cancelled"
         ? "blocked"
         : "incomplete";
-  const acceptanceValidity =
-    record.acceptances.length === 0
-      ? "none"
-      : "needs-review";
+  const acceptanceValidity = record.acceptances.length === 0 ? "none" : "needs-review";
   return {
     id: record.id,
     title: record.title,
@@ -79,24 +73,28 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
       ),
     ),
   );
-  const sourceIssues = currentProjections.flatMap((projection) => {
-    const linkedCriteria = record.criteria.filter((item) =>
-      item.workRefs.some(
-        (ref) =>
-          ref.cardId === projection.ref.cardId &&
-          ref.cardCreatedAt === projection.ref.cardCreatedAt &&
-          ref.boardIdAtLink === projection.ref.boardIdAtLink,
-      ),
+  const sourceIssues = currentProjections
+    .flatMap((projection) => {
+      const linkedCriteria = record.criteria.filter((item) =>
+        item.workRefs.some(
+          (ref) =>
+            ref.cardId === projection.ref.cardId &&
+            ref.cardCreatedAt === projection.ref.cardCreatedAt &&
+            ref.boardIdAtLink === projection.ref.boardIdAtLink,
+        ),
+      );
+      const reason = projection.errorCode;
+      return reason
+        ? linkedCriteria.map((criterion) => ({ criterionId: criterion.id, reason }))
+        : [];
+    })
+    .filter(
+      (issue, index, issues) =>
+        issues.findIndex(
+          (candidate) =>
+            candidate.criterionId === issue.criterionId && candidate.reason === issue.reason,
+        ) === index,
     );
-    const reason = projection.errorCode;
-    return reason ? linkedCriteria.map((criterion) => ({ criterionId: criterion.id, reason })) : [];
-  }).filter(
-    (issue, index, issues) =>
-      issues.findIndex(
-        (candidate) =>
-          candidate.criterionId === issue.criterionId && candidate.reason === issue.reason,
-      ) === index,
-  );
   return {
     ...summary,
     objective: record.objective,
@@ -111,7 +109,9 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
     acceptance: {
       acceptanceValidity: summary.acceptanceValidity,
       ...(summary.acceptanceValidity === "needs-review"
-        ? { reason: summary.readiness === "stale" ? "stale" as const : "not-rechecked" as const }
+        ? {
+            reason: summary.readiness === "stale" ? ("stale" as const) : ("not-rechecked" as const),
+          }
         : {}),
     },
     observedAt,
