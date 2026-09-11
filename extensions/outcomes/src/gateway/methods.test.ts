@@ -124,6 +124,25 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(1);
   });
 
+  it("rejects malformed DTOs, client timestamps, and duplicate criteria before repository access", async () => {
+    const harness = createHarness();
+    const params = createParams(outcomeIds[0]!);
+    const invalidRequests = [
+      { ...params, serverTime: 0 },
+      { ...params, id: "not-a-uuid" },
+      { ...params, criteria: [...params.criteria, { ...params.criteria[0]! }] },
+      { ...params, criteria: [{ ...params.criteria[0]!, required: false }] },
+    ];
+    for (const request of invalidRequests) {
+      expect(await harness.call("outcomes.create", request)).toMatchObject([
+        false,
+        undefined,
+        { code: "OUTCOME_INVALID_REQUEST" },
+      ]);
+    }
+    expect(harness.writes()).toBe(0);
+  });
+
   it("applies a combined patch once and rejects stale or terminal mutations without a write", async () => {
     const harness = createHarness();
     const id = outcomeIds[0]!;
@@ -155,6 +174,22 @@ describe("P-02 Outcome handlers", () => {
     const secondPayload = second?.[1] as { outcomes: Array<{ id: string }> };
     expect(secondPayload.outcomes).toHaveLength(1);
     expect(new Set([...firstPayload.outcomes, ...secondPayload.outcomes].map((outcome) => outcome.id))).toHaveSize(3);
+    expect(harness.writes()).toBe(writes);
+  });
+
+  it("rejects a cursor bound to a different profile without a repository write", async () => {
+    const harness = createHarness();
+    for (const id of outcomeIds) await harness.call("outcomes.create", createParams(id, id));
+    const first = await harness.call("outcomes.list", { limit: 1 });
+    const payload = first?.[1] as { nextCursor: string };
+    const writes = harness.writes();
+    expect(
+      await harness.call(
+        "outcomes.list",
+        { limit: 1, cursor: payload.nextCursor },
+        { authenticatedUserProfile: { profileId: "manager-b" } },
+      ),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_INVALID_CURSOR" }]);
     expect(harness.writes()).toBe(writes);
   });
 });
