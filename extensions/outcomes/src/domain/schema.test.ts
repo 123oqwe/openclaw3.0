@@ -52,6 +52,20 @@ describe("Outcome create schema and canonical hash", () => {
         criteria: Array.from({ length: 6 }, (_, i) => ({ ...base.criteria[0], id: `c-${i}` })),
       }),
     ).toThrow();
+    expect(() =>
+      createRequestSchema.parse({
+        ...base,
+        criteria: [{
+          ...base.criteria[0],
+          workRefs: Array.from({ length: 21 }, (_, i) => ({
+            owner: "workboard" as const,
+            cardId: `card-${i}`,
+            cardCreatedAt: i,
+            boardIdAtLink: "b",
+          })),
+        }],
+      }),
+    ).toThrow();
   });
 
   it("enforces the UTF-8 aggregate size limit", () => {

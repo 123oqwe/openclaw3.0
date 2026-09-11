@@ -27,6 +27,18 @@ export const createRequestSchema = z
   })
   .refine((request) => request.criteria.some((criterion) => criterion.required), {
     message: "at least one criterion must be required",
+  })
+  .superRefine((request, ctx) => {
+    const ids = new Set(request.criteria.map((criterion) => criterion.id));
+    if (ids.size !== request.criteria.length) {
+      ctx.addIssue({ code: "custom", message: "criterion ids must be unique" });
+    }
+    const refs = request.criteria.flatMap((criterion) =>
+      criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`),
+    );
+    if (new Set(refs).size > 20) {
+      ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
+    }
   });
 
 const projectionSchema = z.strictObject({
