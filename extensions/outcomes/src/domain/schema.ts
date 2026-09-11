@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { z } from "zod";
 import { OUTCOME_MAX_CRITERIA, OUTCOME_MAX_RECORD_BYTES } from "./constants.js";
-import type { Criterion, PersistedOutcomeRecord, WorkProjection } from "./types.js";
+import type { Criterion, PersistedOutcomeRecord } from "./types.js";
 
 export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
@@ -96,14 +96,7 @@ const projectionSchema = z
     }
   });
 
-type ProjectionFingerprintInput = Pick<
-  WorkProjection,
-  "ref" | "proofs" | "artifacts" | "currentBoardId" | "status" | "sourceUpdatedAt"
-> & {
-  currentBoardId: string;
-  status: string;
-  sourceUpdatedAt: number;
-};
+type ProjectionFingerprintInput = z.infer<typeof projectionSchema>;
 
 /** Canonical binding for the latest Workboard source material on a projection. */
 export function workboardProjectionFingerprint(projection: ProjectionFingerprintInput): string {
