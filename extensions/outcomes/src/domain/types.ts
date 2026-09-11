@@ -30,7 +30,7 @@ export type WorkProjection = {
     | "identity-conflict";
 };
 
-export type OutcomePlanSnapshot = {
+type OutcomePlanSnapshot = {
   outcomeId: string;
   objective: string;
   contractRevision: number;
@@ -38,7 +38,7 @@ export type OutcomePlanSnapshot = {
   criteria: Criterion[];
 };
 
-export type Acceptance = {
+type Acceptance = {
   id: string;
   requestHash: string;
   acceptedRevision: number;
@@ -50,7 +50,7 @@ export type Acceptance = {
   acceptedPlan: OutcomePlanSnapshot;
 };
 
-export type OutcomeOperation = {
+type OutcomeOperation = {
   id: string;
   kind: "workboard-card-start";
   criterionId: string;
@@ -75,7 +75,7 @@ export type EvidenceRef = {
   observedAt: number;
 };
 
-export type HumanDecision = {
+type HumanDecision = {
   id: string;
   criterionId: string;
   planGeneration: number;
@@ -90,7 +90,7 @@ export type HumanDecision = {
   decidedAt: number;
 };
 
-export type OutcomeRecordDraft = {
+type OutcomeRecordDraft = {
   schemaVersion?: 1;
   id: string;
   createRequestHash?: string;

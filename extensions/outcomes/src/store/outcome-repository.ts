@@ -1,5 +1,5 @@
 import type { OutcomeRecord } from "../domain/types.js";
-export type { OutcomeRecord, PersistedOutcomeRecord } from "../domain/types.js";
+export type { OutcomeRecord } from "../domain/types.js";
 
 export type OutcomeCapacityWarning =
   | { kind: "entry-count"; observed: number; threshold: number }

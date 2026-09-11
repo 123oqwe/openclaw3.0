@@ -25,11 +25,10 @@ import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,
   reduceOutcomeLink,
-  reduceOutcomePatch,
   reduceOutcomeRefresh,
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
-import { createRequestHash, workboardProjectionFingerprint } from "../domain/schema.js";
+import { createRequestHash, workboardProjectionFingerprint } from "../domain/hash.js";
 import type {
   Criterion,
   EvidenceRef,
@@ -40,6 +39,7 @@ import type {
 import type { OutcomeCapacityWarning } from "../store/outcome-repository.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
+import { reduceGatewayOutcomePatch } from "./update-reducer.js";
 import {
   OutcomeErrorCodes,
   outcomeError,
@@ -593,7 +593,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       const now = Date.now();
       try {
         const decision = await repository.transactOwned(owner, request.id, (current) => {
-          const mutation = reduceOutcomePatch(current, {
+          const mutation = reduceGatewayOutcomePatch(current, {
             expectedRevision: request.expectedRevision,
             ...(request.patch.title === undefined ? {} : { title: request.patch.title }),
             ...(request.patch.objective === undefined

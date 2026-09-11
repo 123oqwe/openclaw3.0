@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
-import { createRequestHash, planHash } from "./hash.js";
+import { planHash } from "./canonical-plan.js";
+import { createRequestHash } from "./hash.js";
 import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,
