@@ -288,28 +288,28 @@ describe("Outcome repository atomic contract", () => {
   it("never reuses a generation when a contract cycles A to B to A", () => {
     const initial = activeRecord();
     const criteriaA = initial.criteria;
-    const first = reduceOutcomeContract(initial, {
+    const firstMutation = reduceOutcomeContract(initial, {
       expectedRevision: initial.revision,
       serverTime: 42,
       objective: "B",
       criteria: [{ id: "c-b", text: "B", required: true, workRefs: [] }],
     });
-    expect(first.kind).toBe("updated");
-    if (first.kind !== "updated") {
+    expect(firstMutation.kind).toBe("updated");
+    if (firstMutation.kind !== "updated") {
       return;
     }
-    const second = reduceOutcomeContract(first.record, {
-      expectedRevision: first.record.revision,
+    const secondMutation = reduceOutcomeContract(firstMutation.record, {
+      expectedRevision: firstMutation.record.revision,
       serverTime: 42,
       objective: initial.objective,
       criteria: criteriaA,
     });
-    expect(second.kind).toBe("updated");
-    if (second.kind !== "updated") {
+    expect(secondMutation.kind).toBe("updated");
+    if (secondMutation.kind !== "updated") {
       return;
     }
-    expect(second.record.planGeneration).toBe(initial.planGeneration + 2);
-    expect(second.record.planHash).not.toBe(initial.planHash);
+    expect(secondMutation.record.planGeneration).toBe(initial.planGeneration + 2);
+    expect(secondMutation.record.planHash).not.toBe(initial.planHash);
   });
 
   it("fails closed for terminal phases and stale CAS revisions", () => {
