@@ -45,7 +45,9 @@ suite.define(() => {
               const isDiagnosticPath =
                 requested.pathname === "/avatar/main" ||
                 requested.pathname === "/.well-known/openclaw/browser-bootstrap";
-              if (isDiagnosticPath) trace("broad-enter", requested.pathname);
+              if (isDiagnosticPath) {
+                trace("broad-enter", requested.pathname);
+              }
               if (requested.pathname === "/.well-known/openclaw/browser-bootstrap") {
                 trace("broad-fallback", requested.pathname);
                 await route.fallback();
@@ -62,10 +64,16 @@ suite.define(() => {
                 suite.server.baseUrl,
               );
               const response = await route.fetch({ url: upstream.href });
-              if (isDiagnosticPath) trace("broad-fetch-complete", requested.pathname);
-              if (isDiagnosticPath) trace("broad-fulfill-before", requested.pathname);
+              if (isDiagnosticPath) {
+                trace("broad-fetch-complete", requested.pathname);
+              }
+              if (isDiagnosticPath) {
+                trace("broad-fulfill-before", requested.pathname);
+              }
               await route.fulfill({ response });
-              if (isDiagnosticPath) trace("broad-fulfill-after", requested.pathname);
+              if (isDiagnosticPath) {
+                trace("broad-fulfill-after", requested.pathname);
+              }
             });
             const gateway = await installMockGateway(page, {
               sessionKey,

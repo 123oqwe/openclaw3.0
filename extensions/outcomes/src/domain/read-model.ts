@@ -29,11 +29,15 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
       projection.lastSuccessfulAt === undefined ||
       observedAt - projection.lastSuccessfulAt >= OUTCOME_PROJECTION_MAX_AGE_MS,
   );
+  const hasBlockedSource = currentProjections.some((projection) => projection.status === "blocked");
+  const hasUncertainOperation = record.operations.some((operation) =>
+    ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
+  );
   const readiness = hasUnavailableSource
     ? "unavailable"
     : hasStaleSource
       ? "stale"
-      : record.phase === "cancelled"
+      : hasBlockedSource || hasUncertainOperation || record.phase === "cancelled"
         ? "blocked"
         : "incomplete";
   const acceptanceValidity = record.acceptances.length === 0 ? "none" : "needs-review";

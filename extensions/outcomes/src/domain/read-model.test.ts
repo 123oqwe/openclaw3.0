@@ -82,6 +82,35 @@ describe("Outcome P-01 read model", () => {
     expect(first(criterion.workRefs).cardId).toBe("secret-card");
   });
 
+  it.each([
+    ["required", true],
+    ["optional", false],
+  ])("blocks when a %s linked card is blocked", (_label, required) => {
+    const input = record();
+    input.criteria = [{ id: "c-1", text: "Done", required, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }] }];
+    input.projections = [{ ref: input.criteria[0]!.workRefs[0]!, availability: "available", status: "blocked", observedAt: 1, proofs: [], artifacts: [] }];
+    expect(toOutcomeSummary(input, 10).readiness).toBe("blocked");
+  });
+
+  it.each(["prepared", "may-have-crossed", "unknown"] as const)(
+    "blocks when an operation is %s",
+    (state) => {
+      const input = record();
+      input.operations = [{ id: `op-${state}`, kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" } }];
+      expect(toOutcomeSummary(input, 10).readiness).toBe("blocked");
+    },
+  );
+
+  it("keeps unavailable and stale ahead of blocked", () => {
+    const input = record();
+    input.criteria = [{ id: "c-1", text: "Done", required: true, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }] }];
+    input.projections = [{ ref: input.criteria[0]!.workRefs[0]!, availability: "timeout", status: "blocked", observedAt: 1, proofs: [], artifacts: [] }];
+    expect(toOutcomeSummary(input, 10).readiness).toBe("unavailable");
+    input.projections[0]!.availability = "available";
+    input.projections[0]!.lastSuccessfulAt = 0;
+    expect(toOutcomeSummary(input, 24 * 60 * 60 * 1000 + 1).readiness).toBe("stale");
+  });
+
   it("never treats historical decisions as current readiness", () => {
     const input = record();
     input.planGeneration = 2;
