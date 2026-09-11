@@ -823,7 +823,12 @@ describe("CI changed Node test plan", () => {
     expect(sortArgs(broad.map((group) => group.env))).toEqual(sortArgs(directArgs));
   });
 
-  it.each(["extensions/outcomes/index.ts", "extensions/outcomes/src/runtime-capabilities.ts"])(
+  it.each([
+    "extensions/outcomes/index.ts",
+    "extensions/outcomes/src/runtime-capabilities.ts",
+    "extensions/outcomes/src/domain/read-model.ts",
+    "extensions/outcomes/src/domain/read-model.test.ts",
+  ])(
     "routes an Outcomes change through the extension catch-all with required behavior tests (%s)",
     (changedPath) => {
       const groups = fallbackGroups(createChangedExtensionFallbackShards([changedPath]));
@@ -833,11 +838,22 @@ describe("CI changed Node test plan", () => {
           "extensions/outcomes/index.test.ts",
           "extensions/outcomes/src/runtime-capabilities.test.ts",
           "extensions/outcomes/src/domain/repository.contract.test.ts",
+          "extensions/outcomes/src/domain/read-model.test.ts",
+          "extensions/outcomes/src/domain/schema.test.ts",
+          "extensions/outcomes/src/store/plugin-state-repository.test.ts",
         ]),
       );
-      expect(outcomeTests.length).toBeGreaterThanOrEqual(3);
+      expect(outcomeTests.length).toBeGreaterThanOrEqual(6);
+      const outcomeConfig = resolveExtensionTestConfig("extensions/outcomes");
+      expect(groups.every((group) => group.configs.includes(outcomeConfig))).toBe(true);
+      // The planner's env shard owns the complete config inventory; verify the
+      // required Outcome leaves are in that real inventory rather than a
+      // sentinel includePatterns list.
       expect(
-        groups.every((group) => group.configs[0] === "test/vitest/vitest.extensions.config.ts"),
+        outcomeTests.every(
+          (file) =>
+            resolveExtensionTestConfig(file.split("/").slice(0, 2).join("/")) === outcomeConfig,
+        ),
       ).toBe(true);
       expect(groups.length).toBeGreaterThan(1);
       expect(groups.every((group) => !group.includePatterns)).toBe(true);
