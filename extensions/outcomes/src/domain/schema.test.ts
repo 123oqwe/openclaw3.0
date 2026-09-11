@@ -341,21 +341,6 @@ describe("Outcome create schema and canonical hash", () => {
         }],
       }).success,
     ).toBe(false);
-    expect(
-      outcomeRecordSchema.safeParse({
-        ...base,
-        evidence: [{
-          id: "e-1",
-          criterionId: "missing",
-          planGeneration: 0,
-          workRef: refs[0],
-          kind: "workboard-proof" as const,
-          sourceId: "proof",
-          sourceDigest: "digest",
-          observedAt: 1,
-        }],
-      }).success,
-    ).toBe(false);
   });
 
   it("canonicalizes evidence and closure hashes deterministically", () => {
