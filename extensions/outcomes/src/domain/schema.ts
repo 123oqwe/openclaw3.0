@@ -34,14 +34,14 @@ export const createRequestSchema = z
       ctx.addIssue({ code: "custom", message: "criterion ids must be unique" });
     }
     const refs = request.criteria.flatMap((criterion) =>
-      criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`),
+      criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`),
     );
     if (
       request.criteria.some(
         (criterion) =>
           new Set(
             criterion.workRefs.map(
-              (ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`,
+              (ref) => `${ref.cardId}\0${ref.cardCreatedAt}`,
             ),
           ).size > 10,
       )
@@ -196,7 +196,7 @@ export const outcomeRecordSchema = z
       criterionIds.add(criterion.id);
       const criterionRefs = new Set(
         criterion.workRefs.map(
-          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`,
+          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}`,
         ),
       );
       if (criterionRefs.size !== criterion.workRefs.length) {
@@ -373,7 +373,7 @@ export const canonicalPlanSchema = z
     for (const criterion of plan.criteria) {
       const refs = new Set(
         criterion.workRefs.map(
-          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`,
+          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}`,
         ),
       );
       if (refs.size !== criterion.workRefs.length) {

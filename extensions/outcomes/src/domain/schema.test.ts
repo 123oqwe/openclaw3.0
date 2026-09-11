@@ -219,7 +219,7 @@ describe("Outcome create schema and canonical hash", () => {
         ],
       }).success,
     ).toBe(false);
-    const duplicateRefPlan = {
+    const sharedRefAcrossCriteriaPlan = {
       ...plan,
       criteria: [
         {
@@ -230,6 +230,47 @@ describe("Outcome create schema and canonical hash", () => {
               cardId: "card-1",
               cardCreatedAt: 1,
               boardIdAtLink: "board-1",
+            },
+          ],
+        },
+        {
+          id: "c-2",
+          text: "same card is allowed for another criterion",
+          required: false,
+          workRefs: [
+            {
+              owner: "workboard" as const,
+              cardId: "card-1",
+              cardCreatedAt: 1,
+              boardIdAtLink: "board-2",
+            },
+          ],
+        },
+      ],
+    };
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        decisions: [
+          {
+            ...decision,
+            decidedPlan: sharedRefAcrossCriteriaPlan,
+            planHash: planHash(sharedRefAcrossCriteriaPlan),
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    const duplicateRefPlan = {
+      ...plan,
+      criteria: [
+        {
+          ...plan.criteria[0],
+          workRefs: [
+            {
+              owner: "workboard" as const,
+              cardId: "card-1",
+              cardCreatedAt: 1,
+              boardIdAtLink: "board-2",
             },
             {
               owner: "workboard" as const,
