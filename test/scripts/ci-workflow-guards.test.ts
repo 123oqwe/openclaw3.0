@@ -11162,7 +11162,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(androidRun).toContain("test-play-compat)");
     expect(androidRun).toContain(":app:assemblePlayDebug");
 
-    const legacy = runCiManifestFixture({ bundledPlanner: false });
+    const legacy = runCiManifestFixture({ bundledPlanner: false, changedPaths: [] });
     expect(legacy.status, legacy.output).toBe(0);
     expect(legacy.outputs.historical_target).toBe("true");
     expect(legacy.outputs.use_compatible_android_ci).toBe("true");
@@ -11196,7 +11196,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       }),
     );
 
-    const current = runCiManifestFixture({ bundledPlanner: true });
+    const current = runCiManifestFixture({ bundledPlanner: true, changedPaths: [] });
     expect(current.status, current.output).toBe(0);
     expect(current.outputs.use_compatible_android_ci).toBe("false");
     expect(current.outputs.run_ios_build).toBe("true");
