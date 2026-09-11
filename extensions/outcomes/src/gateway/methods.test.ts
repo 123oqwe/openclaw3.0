@@ -213,10 +213,9 @@ describe("P-02 Outcome handlers", () => {
   it("counts public text limits by Unicode code point rather than UTF-16 code unit", async () => {
     const harness = createHarness();
     const validTitle = "🙂".repeat(160);
-    expect(await harness.call("outcomes.create", createParams(outcomeIds[0]!, validTitle))).toMatchObject([
-      true,
-      { outcome: { title: validTitle } },
-    ]);
+    expect(
+      await harness.call("outcomes.create", createParams(outcomeIds[0]!, validTitle)),
+    ).toMatchObject([true, { outcome: { title: validTitle } }]);
     expect(
       await harness.call("outcomes.create", createParams(outcomeIds[1]!, "🙂".repeat(161))),
     ).toMatchObject([false, undefined, { code: "OUTCOME_INVALID_REQUEST" }]);

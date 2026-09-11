@@ -194,9 +194,9 @@ describe("Outcome create schema and canonical hash", () => {
       criteria: [{ id: "c-emoji", text: "Complete", required: true, workRefs: [] }],
     };
     expect(createRequestSchema.safeParse(request).success).toBe(true);
-    expect(
-      createRequestSchema.safeParse({ ...request, title: "🙂".repeat(161) }).success,
-    ).toBe(false);
+    expect(createRequestSchema.safeParse({ ...request, title: "🙂".repeat(161) }).success).toBe(
+      false,
+    );
   });
 
   it("bounds canonical historical plan references by card identity", () => {
