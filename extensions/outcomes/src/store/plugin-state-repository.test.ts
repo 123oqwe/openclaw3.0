@@ -935,6 +935,41 @@ describe("Outcome repository host adapter", () => {
     );
   });
 
+  it("does not observe replay or no-op decisions as capacity writes", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-capacity-zero-write", applyEnv: false },
+      async (state) => {
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace: `outcomes-v1-${randomUUID()}`,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const warnings: Array<{ kind: string; observed: number; threshold: number }> = [];
+        let now = 0;
+        const repository = createOutcomeRepository(store, {
+          now: () => {
+            now += OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS;
+            return now;
+          },
+          onCapacityWarning: (warning) => warnings.push(warning),
+        });
+        const record = draftRecord("capacity-zero-write");
+
+        await repository.create(record);
+        warnings.splice(0);
+        await expect(repository.createOwned("alice", record)).resolves.toMatchObject({
+          created: false,
+          replayed: true,
+        });
+        await expect(
+          repository.transact(record.id, (current) => ({ result: current?.revision })),
+        ).resolves.toBe(1);
+        expect(warnings).toEqual([]);
+      },
+    );
+  });
+
   it("fails closed on corrupt persisted records without mutation or deletion", async () => {
     await withOpenClawTestState(
       { label: "outcome-repository-corrupt", applyEnv: false },
