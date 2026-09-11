@@ -355,6 +355,51 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.records.get(id)?.projections[0]?.sourceFingerprint).toBeUndefined();
   });
 
+  it("persists a card-identity collision as a non-leaking refresh result", async () => {
+    const card = {
+      id: "card-a",
+      status: "done",
+      createdAt: 1,
+      updatedAt: 2,
+      metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] },
+    };
+    const harness = createHarness({ workboardCards: [card, { ...card, createdAt: 2 }] });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const created = harness.records.get(id)!;
+    const ref = { owner: "workboard" as const, cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" };
+    harness.records.set(id, { ...created, criteria: [{ ...created.criteria[0]!, workRefs: [ref] }] });
+    expect(await harness.call("outcomes.refresh", { id, expectedRevision: 1 })).toMatchObject([
+      true,
+      { outcome: { revision: 2 }, refresh: { status: "identity-conflict", reason: "identity-conflict" } },
+    ]);
+    expect(harness.records.get(id)?.projections).toMatchObject([
+      { availability: "identity-conflict", errorCode: "identity-conflict" },
+    ]);
+  });
+
+  it("rejects terminal and stale refresh requests without owner reads or writes", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const created = harness.records.get(id)!;
+    harness.gatewayRequest.mockClear();
+    const writes = harness.writes();
+    expect(await harness.call("outcomes.refresh", { id, expectedRevision: 2 })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_REVISION_CONFLICT" },
+    ]);
+    harness.records.set(id, { ...created, phase: "cancelled" });
+    expect(await harness.call("outcomes.refresh", { id, expectedRevision: 1 })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_STATE" },
+    ]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("returns available for an unlinked draft without consulting Workboard", async () => {
     const harness = createHarness();
     const id = outcomeIds[0]!;
