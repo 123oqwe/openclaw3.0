@@ -19,7 +19,12 @@ const outcomeIds = [
 ];
 
 function createHarness(
-  options: { registerError?: unknown; workboardCards?: unknown[]; workboardError?: unknown } = {},
+  options: {
+    registerDelayMs?: number;
+    registerError?: unknown;
+    workboardCards?: unknown[];
+    workboardError?: unknown;
+  } = {},
 ) {
   const records = new Map<string, OutcomeRecord>();
   let writes = 0;
@@ -27,6 +32,9 @@ function createHarness(
   const store = {
     registerIfAbsent: async (id: string, record: OutcomeRecord) => {
       if (options.registerError !== undefined) throw options.registerError;
+      if (options.registerDelayMs !== undefined) {
+        await new Promise((resolve) => setTimeout(resolve, options.registerDelayMs));
+      }
       if (records.has(id)) return false;
       records.set(id, record);
       writes += 1;
@@ -61,6 +69,7 @@ function createHarness(
     };
   });
   const api = {
+    logger: { warn: vi.fn() },
     runtime: { state: { openKeyedStore: () => store }, gateway: { request: gatewayRequest } },
     registerGatewayMethod: (method: string, handler: unknown) => {
       handlers.set(method, handler as RegisteredHandler);
@@ -74,7 +83,7 @@ function createHarness(
     await handler({ client, params, respond });
     return respond.mock.calls[0];
   }
-  return { call, gatewayRequest, records, writes: () => writes };
+  return { call, gatewayRequest, logger: api.logger, records, writes: () => writes };
 }
 
 function createParams(id: string, title = "Outcome title") {
@@ -109,6 +118,23 @@ describe("P-02 Outcome handlers", () => {
       { code: "OUTCOME_INTERNAL", message: "Outcome request could not be completed" },
     ]);
     expect(harness.writes()).toBe(0);
+  });
+
+  it("reports sanitized post-commit capacity warnings without warning on a create replay", async () => {
+    const harness = createHarness({ registerDelayMs: 110 });
+    const params = createParams(outcomeIds[0]!);
+    expect(await harness.call("outcomes.create", params)).toMatchObject([
+      true,
+      { outcome: { id: params.id }, replayed: false },
+    ]);
+    expect(harness.logger.warn).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^outcomes: capacity warning kind=write-duration observed=\d+(?:\.\d+)? threshold=100$/,
+      ),
+    );
+    harness.logger.warn.mockClear();
+    expect(await harness.call("outcomes.create", params)).toMatchObject([true, { replayed: true }]);
+    expect(harness.logger.warn).not.toHaveBeenCalled();
   });
 
   it("replays an identical owner create but makes a foreign record unavailable", async () => {
