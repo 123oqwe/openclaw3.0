@@ -357,7 +357,7 @@ describe("Outcome create schema and canonical hash", () => {
       ],
     };
     expect(closureHash(input)).toBe(
-      closureHash({ ...input, requiredCriteria: [...input.requiredCriteria].reverse() }),
+      closureHash({ ...input, requiredCriteria: input.requiredCriteria.toReversed() }),
     );
   });
 });

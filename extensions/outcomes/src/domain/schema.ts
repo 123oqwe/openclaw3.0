@@ -203,7 +203,9 @@ export const outcomeRecordSchema = z
       if (criterionRefs.size > 10) {
         ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
       }
-      for (const ref of criterionRefs) linkedRefs.add(ref);
+      for (const ref of criterionRefs) {
+        linkedRefs.add(ref);
+      }
     }
     if (linkedRefs.size > 20) {
       ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
