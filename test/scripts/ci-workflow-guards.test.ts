@@ -2341,9 +2341,7 @@ NODE
     const changedScopeStep = preflightSteps.find(
       (step: WorkflowStep) => step.name === "Detect changed scopes",
     );
-    expect(changedScopeStep.if).toContain(
-      "github.event_name == 'workflow_dispatch' && inputs.release_gate",
-    );
+    expect(changedScopeStep.if).toContain("github.event_name == 'workflow_dispatch'");
     expect(changedScopeStep.env?.OPENCLAW_ALLOW_RELEASE_GENERATED_MIX).toContain(
       "github.event_name == 'workflow_dispatch'",
     );

@@ -1032,7 +1032,7 @@ jobs:
 
       - name: Detect changed scopes
         id: changed_scope
-        if: (github.event_name != 'workflow_dispatch' && steps.docs_scope.outputs.docs_only != 'true') || (github.event_name == 'workflow_dispatch' && inputs.release_gate)
+        if: (github.event_name != 'workflow_dispatch' && steps.docs_scope.outputs.docs_only != 'true') || github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           OPENCLAW_ALLOW_RELEASE_GENERATED_MIX: ${{ github.event_name == 'push' || github.event_name == 'workflow_dispatch' || github.event.pull_request.head.repo.full_name == github.repository }}
