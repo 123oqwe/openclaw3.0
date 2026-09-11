@@ -720,7 +720,7 @@ describe("Outcome repository host adapter", () => {
             expect(timing).toBeGreaterThanOrEqual(0);
           }
           expect(Number.isFinite(maxMs)).toBe(true);
-          expect(Number.isFinite(heapAfterBytes)).toBe(true);
+          expect(Number.isFinite(heapBeforeBytes)).toBe(true);
           expect(Number.isFinite(heapAfterBytes)).toBe(true);
           const targetsMs = { mutationP95: 100, listP95: 1_000, eventLoopLagDelta: 20 };
           const eventLoopDeltaMs = Math.max(0, maxMs - baselineMaxMs);
