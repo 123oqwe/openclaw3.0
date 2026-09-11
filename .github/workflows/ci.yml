@@ -1421,13 +1421,13 @@ jobs:
           // bounded extension fallback so source-only extension changes are
           // collected instead of silently falling through to the core catalog.
           const changedExtensionValidation =
-            runNodeFull && (changedExtensionPullRequest || (eventName === "workflow_dispatch" && changedPaths !== null));
+            runNodeFull && (changedExtensionPullRequest || eventName === "workflow_dispatch");
           if (changedExtensionValidation) {
             // Every PR plan excludes the full extension catch-all below. Keep changed
             // extension behavior covered even when a private mirror retains the full
             // core plan instead of canonical compact-core targeting.
             if (changedPaths === null) {
-              throw new Error("Current PR CI requires complete changed paths for Node test planning");
+              throw new Error("Current CI requires complete changed paths for Node test planning");
             }
             const requiredPlannerExports = compactPullRequest
               ? ["createChangedNodeTestShards", "createChangedExtensionFallbackShards"]

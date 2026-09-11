@@ -11372,6 +11372,31 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       ]),
     );
 
+    for (const changedPaths of [
+      ["extensions/outcomes/src/domain/read-model.ts"],
+      ["extensions/outcomes/src/domain/read-model.test.ts"],
+      ["docs/ci.md"],
+    ]) {
+      const manual = runCiManifestFixture({
+        bundledPlanner: true,
+        changedPaths,
+        eventName: "workflow_dispatch",
+      });
+      expect(manual.status, manual.output).toBe(0);
+      const matrix = JSON.parse(
+        expectDefined(manual.outputs.checks_node_core_nondist_matrix, "manual node matrix"),
+      ).include as Array<Record<string, unknown>>;
+      if (changedPaths[0]!.startsWith("extensions/")) {
+        expect(matrix).toEqual(
+          expect.arrayContaining([expect.objectContaining({ check_name: "changed-extension-fallback-plan" })]),
+        );
+      } else {
+        expect(matrix).not.toEqual(
+          expect.arrayContaining([expect.objectContaining({ check_name: "changed-extension-fallback-plan" })]),
+        );
+      }
+    }
+
     const matrixFallbackPullRequest = runCiManifestFixture({
       bundledPlanner: true,
       changedPaths: [
@@ -11488,10 +11513,19 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       });
       expect(failure.status, failure.output).toBe(1);
       expect(failure.output).toContain(
-        "Current PR CI requires complete changed paths for Node test planning",
+        "Current CI requires complete changed paths for Node test planning",
       );
       expect(failure.outputs.checks_node_core_nondist_matrix).toBeUndefined();
     }
+    const manualUnknownPaths = runCiManifestFixture({
+      bundledPlanner: true,
+      changedPaths: null,
+      eventName: "workflow_dispatch",
+    });
+    expect(manualUnknownPaths.status, manualUnknownPaths.output).toBe(1);
+    expect(manualUnknownPaths.output).toContain(
+      "Current CI requires complete changed paths for Node test planning",
+    );
 
     const currentMissingIos = runCiManifestFixture({
       bundledPlanner: true,
