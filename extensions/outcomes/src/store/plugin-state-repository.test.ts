@@ -811,7 +811,10 @@ describe("Outcome repository host adapter", () => {
             created: true,
           });
         }
-        await expect(repository.inspectCapacity()).resolves.toEqual({ entryCount: 399, warnings: [] });
+        await expect(repository.inspectCapacity()).resolves.toEqual({
+          entryCount: 399,
+          warnings: [],
+        });
         const reopenedRepository = createOutcomeRepository(store);
         await expect(
           reopenedRepository.create(
