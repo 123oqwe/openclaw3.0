@@ -4,6 +4,7 @@ import {
   OUTCOME_DEFAULT_LIST_LIMIT,
   OUTCOME_MAX_LIST_LIMIT,
   OUTCOME_PHASES,
+  OUTCOME_REFRESH_STATUSES,
   type OutcomeDetail,
 } from "./index.js";
 
@@ -17,6 +18,7 @@ describe("outcomes public contract", () => {
     expect(OUTCOME_PHASES).toEqual(["draft", "active", "accepted", "cancelled"]);
     expect(OUTCOME_DEFAULT_LIST_LIMIT).toBe(25);
     expect(OUTCOME_MAX_LIST_LIMIT).toBe(100);
+    expect(OUTCOME_REFRESH_STATUSES).toEqual(["available", "unavailable", "identity-conflict"]);
   });
 
   it("keeps core detail views free of persistence identity and internal history", () => {
@@ -32,6 +34,7 @@ describe("outcomes public contract", () => {
         "OUTCOME_PROOF_STATUSES",
         "OUTCOME_PROJECTION_MAX_AGE_MS",
         "OUTCOME_READINESS",
+        "OUTCOME_REFRESH_STATUSES",
         "OUTCOME_SOURCE_ISSUE_REASONS",
         "OUTCOME_SOURCE_VISIBILITY",
       ].toSorted(),

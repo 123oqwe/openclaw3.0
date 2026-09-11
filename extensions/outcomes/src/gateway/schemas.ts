@@ -69,6 +69,14 @@ export const outcomeActivateParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const outcomeRefreshParamsSchema = Type.Object(
+  {
+    id: outcomeId,
+    expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+  },
+  { additionalProperties: false },
+);
+
 const outcomeWorkboardLinkFields = {
   id: outcomeId,
   expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),

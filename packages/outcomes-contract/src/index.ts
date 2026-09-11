@@ -42,6 +42,7 @@ export const OUTCOME_NEXT_ACTIONS = [
 ] as const;
 export const OUTCOME_EVIDENCE_KINDS = ["workboard-proof", "workboard-artifact"] as const;
 export const OUTCOME_PROOF_STATUSES = ["passed", "failed", "skipped", "unknown"] as const;
+export const OUTCOME_REFRESH_STATUSES = ["available", "unavailable", "identity-conflict"] as const;
 export const OUTCOME_MAX_LIST_LIMIT = 100;
 export const OUTCOME_DEFAULT_LIST_LIMIT = 25;
 export const OUTCOME_PROJECTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -55,6 +56,7 @@ export type OutcomeAttentionCode = (typeof OUTCOME_ATTENTION_CODES)[number];
 export type OutcomeNextAction = (typeof OUTCOME_NEXT_ACTIONS)[number];
 export type OutcomeEvidenceKind = (typeof OUTCOME_EVIDENCE_KINDS)[number];
 export type OutcomeProofStatus = (typeof OUTCOME_PROOF_STATUSES)[number];
+export type OutcomeRefreshStatus = (typeof OUTCOME_REFRESH_STATUSES)[number];
 export type OutcomeAcceptanceReason =
   | "contract-changed"
   | "evidence-changed"
@@ -183,6 +185,7 @@ export type OutcomeUpdateParams = {
 };
 
 export type OutcomeRevisionParams = { id: string; expectedRevision: number };
+export type OutcomeRefreshParams = OutcomeRevisionParams;
 
 /** Client may name a card, but the server derives its immutable Workboard identity. */
 export type OutcomeWorkboardLinkParams = OutcomeRevisionParams & {
@@ -199,5 +202,9 @@ export type OutcomeCreateResult = {
 };
 
 export type OutcomeMutationResult = { outcome: OutcomeDetail };
+
+export type OutcomeRefreshResult = OutcomeMutationResult & {
+  refresh: { status: OutcomeRefreshStatus; reason?: OutcomeSourceIssueReason };
+};
 
 export type OutcomeListResult = { outcomes: OutcomeSummary[]; nextCursor?: string };

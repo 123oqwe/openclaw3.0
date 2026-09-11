@@ -270,6 +270,102 @@ describe("P-02 Outcome handlers", () => {
     ).toMatchObject([true, { outcome: { revision: 3, contractRevision: 3 } }]);
   });
 
+  it("refreshes all linked Workboard source material with one authorized owner read", async () => {
+    const harness = createHarness({
+      workboardCards: [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 8,
+          metadata: {
+            automation: { boardId: "board-b" },
+            proof: [{ id: "proof-a", status: "passed", createdAt: 3, label: "Hosted proof" }],
+            artifacts: [{ id: "artifact-a", createdAt: 4, label: "Hosted artifact" }],
+          },
+        },
+      ],
+    });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    harness.gatewayRequest.mockClear();
+    expect(await harness.call("outcomes.refresh", { id, expectedRevision: 2 })).toMatchObject([
+      true,
+      { outcome: { revision: 3 }, refresh: { status: "available" } },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.records.get(id)).toMatchObject({
+      revision: 3,
+      projections: [
+        {
+          availability: "available",
+          currentBoardId: "board-b",
+          status: "done",
+          sourceUpdatedAt: 8,
+          sourceFingerprint: expect.stringMatching(/^[0-9a-f]{64}$/),
+        },
+      ],
+      evidence: [
+        expect.objectContaining({ criterionId, sourceId: "proof-a", kind: "workboard-proof" }),
+        expect.objectContaining({ criterionId, sourceId: "artifact-a", kind: "workboard-artifact" }),
+      ],
+    });
+  });
+
+  it("records a failed refresh as unavailable while retaining its display cache", async () => {
+    const harness = createHarness({ workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" } });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const created = harness.records.get(id)!;
+    const ref = { owner: "workboard" as const, cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" };
+    harness.records.set(id, {
+      ...created,
+      criteria: [{ ...created.criteria[0]!, workRefs: [ref] }],
+      projections: [
+        {
+          ref,
+          availability: "available",
+          observedAt: 1,
+          proofs: [{ sourceId: "proof-a", digest: "a".repeat(64) }],
+          artifacts: [],
+          currentBoardId: "board-a",
+          status: "done",
+          sourceUpdatedAt: 1,
+          lastSuccessfulAt: 1,
+          sourceFingerprint: "b".repeat(64),
+        },
+      ],
+    });
+    expect(await harness.call("outcomes.refresh", { id, expectedRevision: 1 })).toMatchObject([
+      true,
+      { outcome: { revision: 2 }, refresh: { status: "unavailable", reason: "timeout" } },
+    ]);
+    expect(harness.records.get(id)?.projections[0]).toMatchObject({
+      availability: "unavailable",
+      errorCode: "timeout",
+      currentBoardId: "board-a",
+      proofs: [{ sourceId: "proof-a", digest: "a".repeat(64) }],
+    });
+    expect(harness.records.get(id)?.projections[0]?.sourceFingerprint).toBeUndefined();
+  });
+
+  it("returns available for an unlinked draft without consulting Workboard", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    expect(await harness.call("outcomes.refresh", { id, expectedRevision: 1 })).toMatchObject([
+      true,
+      { outcome: { revision: 2 }, refresh: { status: "available" } },
+    ]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+  });
+
   it("does not consult Workboard or write before owner membership is established", async () => {
     const harness = createHarness();
     const response = await harness.call("outcomes.linkWorkboard", {
