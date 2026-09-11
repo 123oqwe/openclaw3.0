@@ -49,6 +49,7 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/src/gateway/health.ts",
         "extensions/outcomes/src/gateway/p02-admission.contract.md",
         "pnpm-lock.yaml",
+        "ui/src/e2e/browser-bootstrap.e2e.test.ts",
       ]),
     ).not.toThrow();
     expect(() => assertOutcomeArtifactPaths([".env"])).toThrow();

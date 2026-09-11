@@ -37,6 +37,7 @@ const ALLOWED_PATHS = new Set([
   "src/plugins/contracts/plugin-sdk-runtime-api-guardrails.test.ts",
   "test/scripts/ci-workflow-guards.test.ts",
   "test/scripts/outcome-artifact-policy.test.ts",
+  "ui/src/e2e/browser-bootstrap.e2e.test.ts",
 ]);
 
 export function assertOutcomeArtifactAdmission({ eventName, repository, targetRef, workflowSha }) {
