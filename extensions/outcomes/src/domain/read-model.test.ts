@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { parseOutcomeRecord, planHash } from "./schema.js";
+import type { OutcomeRecord } from "./types.js";
 import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 
 function first<T>(items: T[]): T {
@@ -9,9 +10,6 @@ function first<T>(items: T[]): T {
   }
   return item;
 }
-import { parseOutcomeRecord, planHash } from "./schema.js";
-import type { OutcomeRecord } from "./types.js";
-
 const record = (): OutcomeRecord => ({
   schemaVersion: 1,
   id: "outcome-1",
@@ -111,7 +109,9 @@ describe("Outcome P-01 read model", () => {
     "blocks when an operation is %s",
     (state) => {
       const input = record();
-      input.operations = [{ id: `op-${state}`, kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }, attemptedAt: 1 }];
+      const ref = { owner: "workboard" as const, cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" };
+      input.criteria[0]!.workRefs = [ref];
+      input.operations = [{ id: `op-${state}`, kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: ref, attemptedAt: 1 }];
       expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
     },
   );
@@ -130,17 +130,19 @@ describe("Outcome P-01 read model", () => {
   it.each(["succeeded", "failed"] as const)("ignores terminal %s operations and preserves input", (state) => {
     const input = record();
     input.operations = [{ id: "op-done", kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" } }];
-    const before = structuredClone(input);
-    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
-    expect(input).toEqual(before);
+    const parsed = valid(input);
+    const before = structuredClone(parsed);
+    expect(toOutcomeSummary(parsed, 10).readiness).toBe("incomplete");
+    expect(parsed).toEqual(before);
   });
 
   it("ignores a blocked projection after its link is removed", () => {
     const input = record();
     input.projections = [{ ref: { owner: "workboard", cardId: "old-card", cardCreatedAt: 1, boardIdAtLink: "board" }, availability: "available", status: "blocked", observedAt: 1, lastSuccessfulAt: 10, proofs: [], artifacts: [] }];
-    const before = structuredClone(input);
-    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
-    expect(input).toEqual(before);
+    const parsed = valid(input);
+    const before = structuredClone(parsed);
+    expect(toOutcomeSummary(parsed, 10).readiness).toBe("incomplete");
+    expect(parsed).toEqual(before);
   });
 
   it("never treats historical decisions as current readiness", () => {
