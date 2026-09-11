@@ -2038,6 +2038,17 @@ jobs:
             extensions/outcomes/runtime-api.ts \
             extensions/outcomes/src/gateway/health.ts \
             extensions/outcomes/src/runtime-capabilities.test.ts \
+            extensions/outcomes/src/domain/read-model.test.ts \
+            extensions/outcomes/src/domain/read-model.ts \
+            extensions/outcomes/src/domain/reducer.ts \
+            extensions/outcomes/src/domain/repository.contract.test.ts \
+            extensions/outcomes/src/domain/schema.test.ts \
+            extensions/outcomes/src/domain/schema.ts \
+            extensions/outcomes/src/domain/types.ts \
+            extensions/outcomes/src/store/plugin-state-repository.test.ts \
+            extensions/outcomes/src/store/plugin-state-repository.ts \
+            packages/outcomes-contract/src/index.test.ts \
+            packages/outcomes-contract/src/index.ts \
             scripts/outcome-artifact-policy.mjs \
             src/plugins/contracts/plugin-sdk-runtime-api-guardrails.test.ts \
             test/scripts/ci-workflow-guards.test.ts \
