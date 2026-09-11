@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { evidenceSetHash } from "./hash.js";
 import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
-import { parseOutcomeRecord, planHash } from "./schema.js";
+import { parseOutcomeRecord, planHash, workboardProjectionFingerprint } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
 
 function first<T>(items: T[]): T {
@@ -40,6 +40,23 @@ const record = (): OutcomeRecord => ({
 });
 
 function valid(input: OutcomeRecord): OutcomeRecord {
+  for (const projection of input.projections) {
+    if (
+      projection.availability === "available" &&
+      projection.currentBoardId !== undefined &&
+      projection.status !== undefined &&
+      projection.sourceUpdatedAt !== undefined
+    ) {
+      projection.sourceFingerprint = workboardProjectionFingerprint({
+        ref: projection.ref,
+        proofs: projection.proofs,
+        artifacts: projection.artifacts,
+        currentBoardId: projection.currentBoardId,
+        status: projection.status,
+        sourceUpdatedAt: projection.sourceUpdatedAt,
+      });
+    }
+  }
   input.planHash = planHash({
     outcomeId: input.id,
     objective: input.objective,
@@ -72,6 +89,7 @@ function withCurrentVerifiedEvidence(input: OutcomeRecord): OutcomeRecord {
       availability: "available",
       currentBoardId: "board-current",
       status: "done",
+      sourceUpdatedAt: 10,
       observedAt: 10,
       lastSuccessfulAt: 10,
       proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
@@ -201,9 +219,11 @@ describe("Outcome P-01 read model", () => {
       {
         ref: input.criteria[1]!.workRefs[0]!,
         availability: "available",
+        currentBoardId: "board-current",
         status: "blocked",
         observedAt: 1,
         lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
         proofs: [],
         artifacts: [],
       },
@@ -256,9 +276,11 @@ describe("Outcome P-01 read model", () => {
         ref: input.criteria[0]!.workRefs[0]!,
         availability: "unavailable",
         errorCode: "timeout",
+        currentBoardId: "board-current",
         status: "blocked",
         observedAt: 1,
         lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
         proofs: [],
         artifacts: [],
       },
@@ -299,9 +321,11 @@ describe("Outcome P-01 read model", () => {
       {
         ref: { owner: "workboard", cardId: "old-card", cardCreatedAt: 1, boardIdAtLink: "board" },
         availability: "available",
+        currentBoardId: "board-current",
         status: "blocked",
         observedAt: 1,
         lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
         proofs: [],
         artifacts: [],
       },
@@ -406,6 +430,7 @@ describe("Outcome P-01 read model", () => {
           status: "done",
           observedAt: 10,
           lastSuccessfulAt: 10,
+          sourceUpdatedAt: 10,
           proofs: [],
           artifacts: [],
         });

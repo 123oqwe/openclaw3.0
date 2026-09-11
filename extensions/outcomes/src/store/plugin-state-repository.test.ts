@@ -22,7 +22,7 @@ import {
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
-import { createRequestHash, planHash } from "../domain/schema.js";
+import { createRequestHash, planHash, workboardProjectionFingerprint } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
@@ -72,6 +72,35 @@ function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
 
 function serializedBytes(record: OutcomeRecord): number {
   return Buffer.byteLength(stableStringify(record), "utf8");
+}
+
+function oversizedAvailableProjection(digest: string): OutcomeRecord["projections"][number] {
+  const ref = {
+    owner: "workboard" as const,
+    cardId: "c",
+    cardCreatedAt: 1,
+    boardIdAtLink: "b",
+  };
+  const proofs = [{ sourceId: "s", digest }];
+  const artifacts: Array<{ sourceId: string; digest: string }> = [];
+  return {
+    ref,
+    availability: "available",
+    currentBoardId: "board-current",
+    status: "done",
+    observedAt: 1,
+    sourceUpdatedAt: 1,
+    proofs,
+    artifacts,
+    sourceFingerprint: workboardProjectionFingerprint({
+      ref,
+      proofs,
+      artifacts,
+      currentBoardId: "board-current",
+      status: "done",
+      sourceUpdatedAt: 1,
+    }),
+  };
 }
 
 function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
@@ -568,20 +597,7 @@ describe("Outcome repository host adapter", () => {
         const repository = createOutcomeRepository(store);
         const oversized = {
           ...draftRecord("large"),
-          projections: [
-            {
-              ref: {
-                owner: "workboard" as const,
-                cardId: "c",
-                cardCreatedAt: 1,
-                boardIdAtLink: "b",
-              },
-              availability: "available" as const,
-              observedAt: 1,
-              proofs: [{ sourceId: "s", digest: "x".repeat(140_000) }],
-              artifacts: [],
-            },
-          ],
+          projections: [oversizedAvailableProjection("x".repeat(140_000))],
         };
         await expect(repository.create(oversized)).rejects.toMatchObject({
           code: "outcome-capacity-exceeded",
@@ -595,15 +611,7 @@ describe("Outcome repository host adapter", () => {
             result: "updated",
             next: {
               ...current!,
-              projections: [
-                {
-                  ref: { owner: "workboard", cardId: "c", cardCreatedAt: 1, boardIdAtLink: "b" },
-                  availability: "available",
-                  observedAt: 1,
-                  proofs: [{ sourceId: "s", digest: "x".repeat(140_000) }],
-                  artifacts: [],
-                },
-              ],
+              projections: [oversizedAvailableProjection("x".repeat(140_000))],
             },
           })),
         ).rejects.toMatchObject({ code: "outcome-capacity-exceeded" });
