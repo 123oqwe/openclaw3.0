@@ -2349,7 +2349,7 @@ NODE
     expect(ensureBaseStep.with["fetch-ref"]).toContain("github.event.repository.default_branch");
     expect(changedScopeStep.if).toContain("github.event_name == 'workflow_dispatch'");
     expect(
-      evaluateWorkflowExpression(changedScopeStep.if, {
+      evaluateWorkflowExpression(`\${{ ${changedScopeStep.if} }}`, {
         eventName: "workflow_dispatch",
         releaseGate: false,
         repository: "openclaw/openclaw",
@@ -2358,7 +2358,7 @@ NODE
       }),
     ).toBe(true);
     expect(
-      evaluateWorkflowExpression(changedScopeStep.if, {
+      evaluateWorkflowExpression(`\${{ ${changedScopeStep.if} }}`, {
         eventName: "pull_request",
         releaseGate: false,
         repository: "openclaw/openclaw",
