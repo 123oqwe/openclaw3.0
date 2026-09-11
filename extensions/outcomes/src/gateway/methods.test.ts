@@ -683,6 +683,24 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(0);
   });
 
+  it("rejects an oversized opaque card ID before the owner read", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    harness.gatewayRequest.mockClear();
+    const writes = harness.writes();
+    expect(
+      await harness.call("outcomes.linkWorkboard", {
+        id,
+        expectedRevision: 1,
+        criterionId,
+        cardId: "x".repeat(64 * 1024),
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_INVALID_REQUEST" }]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("rejects stale and cancelled link mutations before reading Workboard", async () => {
     const harness = createHarness();
     const id = outcomeIds[0]!;
