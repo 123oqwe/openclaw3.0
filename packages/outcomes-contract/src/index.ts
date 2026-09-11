@@ -153,3 +153,43 @@ export type OutcomeDetail = OutcomeSummary & {
   attention: Array<{ code: OutcomeAttentionCode; criterionId?: string }>;
   nextActions: OutcomeNextAction[];
 };
+
+/** Client-owned fields for the first authenticated Outcome Gateway package. */
+export type OutcomeCriterionInput = {
+  id: string;
+  text: string;
+  required: boolean;
+};
+
+export type OutcomeCreateParams = {
+  id: string;
+  title: string;
+  objective: string;
+  criteria: OutcomeCriterionInput[];
+};
+
+export type OutcomeGetParams = { id: string };
+
+export type OutcomeListParams = { limit?: number; cursor?: string };
+
+export type OutcomeUpdateParams = {
+  id: string;
+  expectedRevision: number;
+  patch: {
+    title?: string;
+    objective?: string;
+    criteria?: OutcomeCriterionInput[];
+  };
+};
+
+export type OutcomeRevisionParams = { id: string; expectedRevision: number };
+
+export type OutcomeCreateResult = {
+  outcome: OutcomeDetail;
+  replayed: boolean;
+  receipt: { kind: "create"; id: string; committedRevision: number };
+};
+
+export type OutcomeMutationResult = { outcome: OutcomeDetail };
+
+export type OutcomeListResult = { outcomes: OutcomeSummary[]; nextCursor?: string };

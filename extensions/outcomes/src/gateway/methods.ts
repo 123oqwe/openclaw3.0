@@ -1,4 +1,9 @@
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
+import type {
+  OutcomeCreateParams,
+  OutcomeCriterionInput,
+  OutcomeUpdateParams,
+} from "@openclaw/outcomes-contract";
 import type { OpenClawPluginApi } from "../../api.js";
 import { Value } from "typebox/value";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
@@ -19,9 +24,9 @@ import {
 
 const OUTCOME_STORE = { namespace: "outcomes-v1", maxEntries: OUTCOME_MAX_ENTRIES, overflowPolicy: OUTCOME_OVERFLOW_POLICY };
 const MAX_REQUEST_BYTES = 64 * 1024;
-type PublicCriterion = { id: string; text: string; required: boolean };
-type PublicCreate = { id: string; title: string; objective: string; criteria: PublicCriterion[] };
-type PublicPatch = { title?: string; objective?: string; criteria?: PublicCriterion[] };
+type PublicCriterion = OutcomeCriterionInput;
+type PublicCreate = OutcomeCreateParams;
+type PublicPatch = OutcomeUpdateParams["patch"];
 
 function fail(respond: (ok: false, payload?: undefined, error?: unknown) => void, code: keyof typeof OutcomeErrorCodes): void {
   respond(false, undefined, outcomeError(OutcomeErrorCodes[code]));
