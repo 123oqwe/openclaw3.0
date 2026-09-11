@@ -2348,6 +2348,24 @@ NODE
     expect(ensureBaseStep.with["base-sha"]).toContain("steps.diff_base.outputs.sha");
     expect(ensureBaseStep.with["fetch-ref"]).toContain("github.event.repository.default_branch");
     expect(changedScopeStep.if).toContain("github.event_name == 'workflow_dispatch'");
+    expect(
+      evaluateWorkflowExpression(changedScopeStep.if, {
+        eventName: "workflow_dispatch",
+        releaseGate: false,
+        repository: "openclaw/openclaw",
+        runAttempt: 1,
+        steps: { docs_scope: { outputs: { docs_only: "true" } } },
+      }),
+    ).toBe(true);
+    expect(
+      evaluateWorkflowExpression(changedScopeStep.if, {
+        eventName: "pull_request",
+        releaseGate: false,
+        repository: "openclaw/openclaw",
+        runAttempt: 1,
+        steps: { docs_scope: { outputs: { docs_only: "true" } } },
+      }),
+    ).toBe(false);
     expect(changedScopeStep.env?.OPENCLAW_ALLOW_RELEASE_GENERATED_MIX).toContain(
       "github.event_name == 'workflow_dispatch'",
     );
