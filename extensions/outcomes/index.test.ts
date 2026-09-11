@@ -37,7 +37,10 @@ describe("Outcome plugin shell", () => {
       peerDependencies: { openclaw: ">=2026.8.1" },
       peerDependenciesMeta: { openclaw: { optional: true } },
     });
-    expect(packageManifest.dependencies).toEqual({ zod: "4.4.3" });
+    expect(packageManifest.dependencies).toEqual({
+      "@openclaw/outcomes-contract": "workspace:*",
+      zod: "4.4.3",
+    });
   });
 
   it("registers only the content-free operator.read health method", async () => {
