@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   assertOutcomeRecordSize,
+  canonicalPlanSchema,
   closureHash,
   createRequestHash,
   createRequestSchema,
@@ -68,6 +69,38 @@ describe("Outcome create schema and canonical hash", () => {
         ],
       }),
     ).toThrow();
+  });
+
+  it("bounds canonical historical plan references by card identity", () => {
+    const ref = (index: number) => ({
+      owner: "workboard" as const,
+      cardId: `card-${index}`,
+      cardCreatedAt: index,
+      boardIdAtLink: "board-1",
+    });
+    const plan = {
+      outcomeId: "o-history-bounds",
+      objective: "Keep bounded history",
+      contractRevision: 1,
+      planGeneration: 1,
+      criteria: [
+        { id: "c-1", text: "one", required: true, workRefs: Array.from({ length: 10 }, (_, index) => ref(index)) },
+        { id: "c-2", text: "two", required: false, workRefs: Array.from({ length: 10 }, (_, index) => ref(index + 10)) },
+      ],
+    };
+    expect(canonicalPlanSchema.safeParse(plan).success).toBe(true);
+    expect(
+      canonicalPlanSchema.safeParse({
+        ...plan,
+        criteria: [{ ...plan.criteria[0], workRefs: Array.from({ length: 11 }, (_, index) => ref(index)) }],
+      }).success,
+    ).toBe(false);
+    expect(
+      canonicalPlanSchema.safeParse({
+        ...plan,
+        criteria: [...plan.criteria, { id: "c-3", text: "three", required: false, workRefs: [ref(20)] }],
+      }).success,
+    ).toBe(false);
   });
 
   it("enforces the UTF-8 aggregate size limit", () => {

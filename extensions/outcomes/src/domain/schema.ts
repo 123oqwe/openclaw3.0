@@ -370,6 +370,7 @@ export const canonicalPlanSchema = z
     if (criterionIds.size !== plan.criteria.length) {
       ctx.addIssue({ code: "custom", message: "criterion ids must be unique" });
     }
+    const linkedRefs = new Set<string>();
     for (const criterion of plan.criteria) {
       const refs = new Set(
         criterion.workRefs.map(
@@ -379,6 +380,15 @@ export const canonicalPlanSchema = z
       if (refs.size !== criterion.workRefs.length) {
         ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });
       }
+      if (refs.size > 10) {
+        ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
+      }
+      for (const ref of refs) {
+        linkedRefs.add(ref);
+      }
+    }
+    if (linkedRefs.size > 20) {
+      ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
     }
   });
 
