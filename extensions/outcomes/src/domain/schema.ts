@@ -203,6 +203,16 @@ export const outcomeRecordSchema = z
         ctx.addIssue({ code: "custom", message: "evidence criterion is absent from the record" });
       }
     }
+    for (const decision of record.decisions) {
+      if (!criterionIds.has(decision.criterionId)) {
+        ctx.addIssue({ code: "custom", message: "decision criterion is absent from the record" });
+      }
+    }
+    for (const operation of record.operations) {
+      if (!criterionIds.has(operation.criterionId)) {
+        ctx.addIssue({ code: "custom", message: "operation criterion is absent from the record" });
+      }
+    }
     if (!record.criteria.some((criterion) => criterion.required)) {
       ctx.addIssue({ code: "custom", message: "at least one criterion must be required" });
     }
