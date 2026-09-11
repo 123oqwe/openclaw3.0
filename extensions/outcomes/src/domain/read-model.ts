@@ -128,7 +128,9 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
         projection.errorCode ?? "",
       ),
   );
-  const hasStaleSource = projections.some((projection) => isStaleProjection(projection, observedAt));
+  const hasStaleSource = projections.some((projection) =>
+    isStaleProjection(projection, observedAt),
+  );
   const hasBlockedSource = projections.some((projection) => projection.status === "blocked");
   const hasUncertainOperation = record.operations.some((operation) =>
     ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
@@ -141,7 +143,10 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
     ? "unavailable"
     : hasStaleSource
       ? "stale"
-      : hasBlockedSource || hasUncertainOperation || hasCurrentRejectedDecision || record.phase === "cancelled"
+      : hasBlockedSource ||
+          hasUncertainOperation ||
+          hasCurrentRejectedDecision ||
+          record.phase === "cancelled"
         ? "blocked"
         : "incomplete";
   const acceptanceValidity = record.acceptances.length === 0 ? "none" : "needs-review";
@@ -174,10 +179,7 @@ export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): Outc
   const sourceIssues = currentProjections(record)
     .flatMap((projection) => {
       const linkedCriteria = record.criteria.filter((item) =>
-        item.workRefs.some(
-          (ref) =>
-            workRefIdentity(ref) === workRefIdentity(projection.ref),
-        ),
+        item.workRefs.some((ref) => workRefIdentity(ref) === workRefIdentity(projection.ref)),
       );
       const reason = projection.errorCode;
       return reason

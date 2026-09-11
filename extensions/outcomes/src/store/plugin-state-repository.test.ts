@@ -1,12 +1,12 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { monitorEventLoopDelay, performance } from "node:perf_hooks";
+import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import {
   createPluginStateKeyedStoreForTests,
   resetPluginStateStoreForTests,
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
-import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { afterEach, describe, expect, it } from "vitest";
 import { summarizeBenchmarkTimings } from "../../../../scripts/lib/benchmark-harness.mts";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
@@ -588,12 +588,17 @@ describe("Outcome repository host adapter", () => {
       eventLoop: { baselineMaxMs: number; maxMs: number; deltaMs: number; resolutionMs: number };
       heap: { afterBytes: number; beforeBytes: number; deltaBytes: number };
       list: ReturnType<typeof summarizeBenchmarkTimings>;
+      measurementScope: {
+        eventLoop: "whole-scenario-including-validation";
+        heap: "whole-scenario-including-validation";
+      };
       mutation: ReturnType<typeof summarizeBenchmarkTimings>;
       recordCount: number;
       requestedRecordBytes: number;
       samples: number;
       targetsMs: { eventLoopLagDelta: number; listP95: number; mutationP95: number };
       withinTargets: { eventLoopLagDelta: boolean; listP95: boolean; mutationP95: boolean };
+      warmupCounts: { list: number; mutation: number };
     }> = [];
 
     await withOpenClawTestState(
@@ -663,12 +668,16 @@ describe("Outcome repository host adapter", () => {
               expect(result).toBe(101 + sample);
             }
             const mutated = await repository.get(mutationId);
+            if (!mutated) {
+              throw new Error("performance mutation record could not be read back");
+            }
             expect(mutated).toMatchObject({
               id: mutationId,
               revision: 100 + OUTCOME_PERFORMANCE_SAMPLES,
               title: "perf",
               updatedAt: 100 + OUTCOME_PERFORMANCE_SAMPLES,
             });
+            expect(serializedBytes(mutated)).toBeLessThanOrEqual(scenario.recordBytes);
           } finally {
             await new Promise<void>((resolve) => setTimeout(resolve, 20));
             delay.disable();
@@ -680,9 +689,18 @@ describe("Outcome repository host adapter", () => {
           const heapAfterBytes = process.memoryUsage().heapUsed;
           expect(list.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
           expect(mutation.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
+          for (const timing of [...listTimings, ...mutationTimings]) {
+            expect(Number.isFinite(timing)).toBe(true);
+            expect(timing).toBeGreaterThanOrEqual(0);
+          }
           expect(list.p95).toBeTypeOf("number");
           expect(mutation.p95).toBeTypeOf("number");
+          for (const timing of [list.p50, list.p95, mutation.p50, mutation.p95]) {
+            expect(Number.isFinite(timing)).toBe(true);
+            expect(timing).toBeGreaterThanOrEqual(0);
+          }
           expect(Number.isFinite(maxMs)).toBe(true);
+          expect(Number.isFinite(heapAfterBytes)).toBe(true);
           expect(Number.isFinite(heapAfterBytes)).toBe(true);
           const targetsMs = { mutationP95: 100, listP95: 1_000, eventLoopLagDelta: 20 };
           const eventLoopDeltaMs = Math.max(0, maxMs - baselineMaxMs);
@@ -704,12 +722,17 @@ describe("Outcome repository host adapter", () => {
               afterBytes: heapAfterBytes,
               deltaBytes: heapAfterBytes - heapBeforeBytes,
             },
+            measurementScope: {
+              eventLoop: "whole-scenario-including-validation",
+              heap: "whole-scenario-including-validation",
+            },
             targetsMs,
             withinTargets: {
               mutationP95: (mutation.p95 ?? Number.POSITIVE_INFINITY) <= targetsMs.mutationP95,
               listP95: (list.p95 ?? Number.POSITIVE_INFINITY) <= targetsMs.listP95,
               eventLoopLagDelta: eventLoopDeltaMs <= targetsMs.eventLoopLagDelta,
             },
+            warmupCounts: { list: 1, mutation: 0 },
           });
         }
       },

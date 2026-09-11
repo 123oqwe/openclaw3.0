@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
-import { describe, expect, it } from "vitest";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
+import { describe, expect, it } from "vitest";
 import {
   assertOutcomeRecordSize,
   canonicalPlanSchema,
@@ -152,21 +152,36 @@ describe("Outcome create schema and canonical hash", () => {
       contractRevision: 1,
       planGeneration: 1,
       criteria: [
-        { id: "c-1", text: "one", required: true, workRefs: Array.from({ length: 10 }, (_, index) => ref(index)) },
-        { id: "c-2", text: "two", required: false, workRefs: Array.from({ length: 10 }, (_, index) => ref(index + 10)) },
+        {
+          id: "c-1",
+          text: "one",
+          required: true,
+          workRefs: Array.from({ length: 10 }, (_, index) => ref(index)),
+        },
+        {
+          id: "c-2",
+          text: "two",
+          required: false,
+          workRefs: Array.from({ length: 10 }, (_, index) => ref(index + 10)),
+        },
       ],
     };
     expect(canonicalPlanSchema.safeParse(plan).success).toBe(true);
     expect(
       canonicalPlanSchema.safeParse({
         ...plan,
-        criteria: [{ ...plan.criteria[0], workRefs: Array.from({ length: 11 }, (_, index) => ref(index)) }],
+        criteria: [
+          { ...plan.criteria[0], workRefs: Array.from({ length: 11 }, (_, index) => ref(index)) },
+        ],
       }).success,
     ).toBe(false);
     expect(
       canonicalPlanSchema.safeParse({
         ...plan,
-        criteria: [...plan.criteria, { id: "c-3", text: "three", required: false, workRefs: [ref(20)] }],
+        criteria: [
+          ...plan.criteria,
+          { id: "c-3", text: "three", required: false, workRefs: [ref(20)] },
+        ],
       }).success,
     ).toBe(false);
   });

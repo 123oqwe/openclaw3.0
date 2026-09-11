@@ -39,11 +39,7 @@ export const createRequestSchema = z
     if (
       request.criteria.some(
         (criterion) =>
-          new Set(
-            criterion.workRefs.map(
-              (ref) => `${ref.cardId}\0${ref.cardCreatedAt}`,
-            ),
-          ).size > 10,
+          new Set(criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`)).size > 10,
       )
     ) {
       ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
@@ -195,9 +191,7 @@ export const outcomeRecordSchema = z
       }
       criterionIds.add(criterion.id);
       const criterionRefs = new Set(
-        criterion.workRefs.map(
-          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}`,
-        ),
+        criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`),
       );
       if (criterionRefs.size !== criterion.workRefs.length) {
         ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });
@@ -393,11 +387,7 @@ export const canonicalPlanSchema = z
     }
     const linkedRefs = new Set<string>();
     for (const criterion of plan.criteria) {
-      const refs = new Set(
-        criterion.workRefs.map(
-          (ref) => `${ref.cardId}\0${ref.cardCreatedAt}`,
-        ),
-      );
+      const refs = new Set(criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`));
       if (refs.size !== criterion.workRefs.length) {
         ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });
       }
