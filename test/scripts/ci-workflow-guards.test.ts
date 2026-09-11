@@ -11209,16 +11209,21 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(current.outputs.run_channel_contracts_shards).toBe("true");
     expect(current.outputs.run_protocol_event_coverage).toBe("true");
 
-    const modernCompatibility = runCiManifestFixture({
-      bundledPlanner: true,
-      historicalCompatibility: true,
-      eventName: "workflow_dispatch",
-      changedPaths: ["extensions/outcomes/src/domain/read-model.ts"],
-    });
-    expect(modernCompatibility.status, modernCompatibility.output).toBe(0);
-    expect(modernCompatibility.outputs.checks_node_core_nondist_matrix).toContain(
-      "changed-extension-fallback-plan",
-    );
+    for (const changedPath of [
+      "extensions/outcomes/src/domain/read-model.ts",
+      "extensions/outcomes/src/domain/read-model.test.ts",
+    ]) {
+      const modernCompatibility = runCiManifestFixture({
+        bundledPlanner: true,
+        historicalCompatibility: true,
+        eventName: "workflow_dispatch",
+        changedPaths: [changedPath],
+      });
+      expect(modernCompatibility.status, modernCompatibility.output).toBe(0);
+      expect(modernCompatibility.outputs.checks_node_core_nondist_matrix).toContain(
+        "changed-extension-fallback-plan",
+      );
+    }
 
     const missingModernFallback = runCiManifestFixture({
       bundledPlanner: true,
@@ -11574,6 +11579,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const frozenMissingCurrentCapabilities = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       historicalCompatibility: false,
       iosCapabilities: false,
       iosBuildCapability: true,
@@ -11596,6 +11602,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const releaseCandidateMissingSwiftWrappers = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       historicalCompatibility: false,
       iosCapabilities: false,
       iosBuildCapability: true,
@@ -11609,6 +11616,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const releaseCandidateMissingIosBuild = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       historicalCompatibility: false,
       iosCapabilities: false,
       iosBuildCapability: false,
@@ -11619,6 +11627,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const frozenTargetContext = runCiManifestFixture({
       bundledPlanner: false,
+      changedPaths: [],
       historicalCompatibility: false,
       targetContextCompatibility: true,
     });
@@ -13384,6 +13393,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     ];
     const result = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       nodeTestShards: selections.map((selection, index) =>
         Object.assign(
           {
