@@ -283,6 +283,58 @@ describe("Outcome create schema and canonical hash", () => {
     expect(() => outcomeRecordSchema.parse({ ...record, managerProfileId: undefined })).toThrow();
   });
 
+  it("rejects an available projection with a forged source fingerprint", () => {
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "card-1",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board-1",
+    };
+    const plan = {
+      outcomeId: "o-projection-fingerprint",
+      objective: "Keep the projection bound to its source",
+      contractRevision: 1,
+      planGeneration: 1,
+      criteria: [{ id: "c-1", text: "done", required: true, workRefs: [ref] }],
+    };
+    const record = {
+      schemaVersion: 1,
+      id: plan.outcomeId,
+      createRequestHash: "a".repeat(64),
+      managerProfileId: "manager-1",
+      title: "Projection integrity",
+      objective: plan.objective,
+      phase: "active" as const,
+      revision: 2,
+      contractRevision: plan.contractRevision,
+      planGeneration: plan.planGeneration,
+      planHash: planHash(plan),
+      criteria: plan.criteria,
+      projections: [
+        {
+          ref,
+          availability: "available" as const,
+          currentBoardId: "board-1",
+          status: "done",
+          sourceUpdatedAt: 2,
+          observedAt: 2,
+          lastSuccessfulAt: 2,
+          proofs: [{ sourceId: "proof-1", digest: "proof-digest" }],
+          artifacts: [{ sourceId: "artifact-1", digest: "artifact-digest" }],
+          sourceFingerprint: "f".repeat(64),
+        },
+      ],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+      createdAt: 1,
+      updatedAt: 2,
+    };
+
+    expect(outcomeRecordSchema.safeParse(record).success).toBe(false);
+  });
+
   it("applies the aggregate byte limit at the strict parse boundary", () => {
     const criterion = {
       id: "c-1",
