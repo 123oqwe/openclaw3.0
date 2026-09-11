@@ -236,6 +236,54 @@ describe("Outcome create schema and canonical hash", () => {
     };
     const valid = { ...record, decisions: [decision] };
     expect(outcomeRecordSchema.safeParse(valid).success).toBe(true);
+    const historicalAcceptance = {
+      id: "acceptance-1",
+      requestHash: "c".repeat(64),
+      acceptedRevision: 2,
+      profileId: "manager-1",
+      acceptedAt: 2,
+      planGeneration: 1,
+      planHash: planHash(plan),
+      closureHash: "e".repeat(64),
+      acceptedPlan: plan,
+    };
+    const acceptedHistory = { ...record, acceptances: [historicalAcceptance] };
+    expect(outcomeRecordSchema.safeParse(acceptedHistory).success).toBe(true);
+    const acceptanceWithDuplicateIdentity = {
+      ...historicalAcceptance,
+      acceptedPlan: {
+        ...plan,
+        criteria: [
+          {
+            ...plan.criteria[0],
+            workRefs: [
+              {
+                owner: "workboard" as const,
+                cardId: "card-1",
+                cardCreatedAt: 1,
+                boardIdAtLink: "board-1",
+              },
+              {
+                owner: "workboard" as const,
+                cardId: "card-1",
+                cardCreatedAt: 1,
+                boardIdAtLink: "board-2",
+              },
+            ],
+          },
+        ],
+      },
+    };
+    expect(() =>
+      outcomeRecordSchema.safeParse({
+        ...record,
+        acceptances: [acceptanceWithDuplicateIdentity],
+      }),
+    ).not.toThrow();
+    expect(
+      outcomeRecordSchema.safeParse({ ...record, acceptances: [acceptanceWithDuplicateIdentity] })
+        .success,
+    ).toBe(false);
     const duplicateCriterionPlan = {
       ...plan,
       criteria: [...plan.criteria, { ...plan.criteria[0] }],
@@ -366,6 +414,16 @@ describe("Outcome create schema and canonical hash", () => {
         planHash: planHash(nextPlan),
         criteria: nextPlan.criteria,
         decisions: [decision],
+      }).success,
+    ).toBe(true);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        revision: 3,
+        planGeneration: 2,
+        planHash: planHash(nextPlan),
+        criteria: nextPlan.criteria,
+        acceptances: [historicalAcceptance],
       }).success,
     ).toBe(true);
   });
