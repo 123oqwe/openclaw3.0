@@ -1,7 +1,6 @@
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
 import type { OutcomeDetail, OutcomeSummary } from "@openclaw/outcomes-contract";
 import type { OutcomeRecord } from "./types.js";
-import { closureHash } from "./schema.js";
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
 export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): OutcomeSummary {
@@ -66,33 +65,7 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
         : hasIncompleteRequired || record.phase === "draft"
           ? "incomplete"
           : "ready";
-  const latestAcceptance = record.acceptances.at(-1);
-  const currentBindings = currentDecisions
-    .filter(({ criterion, decision }) => criterion.required && decision?.status === "verified")
-    .map(({ criterion, decision }) => ({
-      criterionId: criterion.id,
-      decisionId: decision!.id,
-      decidedRevision: decision!.decidedRevision,
-      evidenceSetHash: decision!.evidenceSetHash,
-    }));
-  const currentClosureHash =
-    record.planHash === null
-      ? null
-      : closureHash({
-          outcomeId: record.id,
-          planGeneration: record.planGeneration,
-          planHash: record.planHash,
-          requiredCriteria: currentBindings,
-        });
-  const acceptanceValidity =
-    latestAcceptance === undefined
-      ? "none"
-      : record.phase === "accepted" &&
-          latestAcceptance.planGeneration === record.planGeneration &&
-          latestAcceptance.planHash === record.planHash &&
-          latestAcceptance.closureHash === currentClosureHash
-        ? "current"
-        : "needs-review";
+  const acceptanceValidity = record.acceptances.length === 0 ? "none" : "needs-review";
   return {
     id: record.id,
     title: record.title,
