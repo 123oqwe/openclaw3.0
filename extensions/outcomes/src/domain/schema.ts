@@ -7,7 +7,7 @@ import type { Criterion, PersistedOutcomeRecord } from "./types.js";
 export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
   cardId: z.string().min(1),
-  cardCreatedAt: z.number().finite(),
+  cardCreatedAt: z.number().finite().nonnegative(),
   boardIdAtLink: z.string().min(1),
 });
 

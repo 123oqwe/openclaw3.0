@@ -84,6 +84,24 @@ describe("Outcome create schema and canonical hash", () => {
       ],
     };
     expect(createRequestSchema.parse(base).criteria).toHaveLength(5);
+    expect(() =>
+      createRequestSchema.parse({
+        ...base,
+        criteria: [
+          {
+            ...base.criteria[0],
+            workRefs: [
+              {
+                owner: "workboard",
+                cardId: "card-negative-time",
+                cardCreatedAt: -1,
+                boardIdAtLink: "board",
+              },
+            ],
+          },
+        ],
+      }),
+    ).toThrow();
     const reordered = { ...base, criteria: [...base.criteria].toReversed() };
     expect(createRequestHash(base)).toBe(createRequestHash(reordered));
     const refsReordered = {
