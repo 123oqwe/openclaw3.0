@@ -1,7 +1,8 @@
 import { z } from "zod";
 
-const proofSchema = z.object({ id: z.string().min(1), status: z.string(), createdAt: z.number().finite() }).passthrough();
-const artifactSchema = z.object({ id: z.string().min(1), createdAt: z.number().finite() }).passthrough();
+const optionalText = z.string().min(1).optional();
+const proofSchema = z.object({ id: z.string().min(1), status: z.enum(["passed", "failed", "skipped", "unknown"]), createdAt: z.number().finite(), label: optionalText, command: optionalText, url: optionalText, note: optionalText }).passthrough();
+const artifactSchema = z.object({ id: z.string().min(1), createdAt: z.number().finite(), label: optionalText, url: optionalText, path: optionalText, mimeType: optionalText }).passthrough();
 const cardSchema = z.object({
   id: z.string().min(1), status: z.string().min(1), createdAt: z.number().finite(), updatedAt: z.number().finite(),
   metadata: z.object({
@@ -13,8 +14,8 @@ const responseSchema = z.object({ cards: z.array(cardSchema) }).passthrough();
 
 export type WorkboardCard = {
   id: string; createdAt: number; updatedAt: number; status: string; boardId: string;
-  proofs: Array<{ id: string; status: string; createdAt: number }>;
-  artifacts: Array<{ id: string; createdAt: number }>;
+  proofs: Array<{ id: string; status: "passed" | "failed" | "skipped" | "unknown"; createdAt: number; label?: string; command?: string; url?: string; note?: string }>;
+  artifacts: Array<{ id: string; createdAt: number; label?: string; url?: string; path?: string; mimeType?: string }>;
 };
 
 /** Parses only the frozen public cards.list fields, accepting harmless owner additions. */
@@ -28,8 +29,8 @@ export function readWorkboardCards(value: unknown): WorkboardCard[] {
     return {
       id: card.id, createdAt: card.createdAt, updatedAt: card.updatedAt, status: card.status,
       boardId: card.metadata?.automation?.boardId ?? "default",
-      proofs: (card.metadata?.proof ?? []).map(({ id, status, createdAt }) => ({ id, status, createdAt })),
-      artifacts: (card.metadata?.artifacts ?? []).map(({ id, createdAt }) => ({ id, createdAt })),
+      proofs: card.metadata?.proof ?? [],
+      artifacts: card.metadata?.artifacts ?? [],
     };
   });
 }
