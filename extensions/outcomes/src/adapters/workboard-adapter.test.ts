@@ -57,4 +57,15 @@ describe("Workboard adapter", () => {
       }),
     ).toThrow(/duplicate/i);
   });
+
+  it("fails closed when one card id is reused with a different creation identity", () => {
+    expect(() =>
+      readWorkboardCards({
+        cards: [
+          fixture.cards[0],
+          { ...fixture.cards[0], createdAt: fixture.cards[0].createdAt + 1 },
+        ],
+      }),
+    ).toThrow(/identity|ambiguous|collision/i);
+  });
 });
