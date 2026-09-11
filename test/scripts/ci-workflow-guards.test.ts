@@ -11208,6 +11208,27 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(current.outputs.run_sqlite_session_lifecycle).toBe("true");
     expect(current.outputs.run_channel_contracts_shards).toBe("true");
     expect(current.outputs.run_protocol_event_coverage).toBe("true");
+
+    const modernCompatibility = runCiManifestFixture({
+      bundledPlanner: true,
+      historicalCompatibility: true,
+      eventName: "workflow_dispatch",
+      changedPaths: ["extensions/outcomes/src/domain/read-model.ts"],
+    });
+    expect(modernCompatibility.status, modernCompatibility.output).toBe(0);
+    expect(modernCompatibility.outputs.checks_node_core_nondist_matrix).toContain(
+      "changed-extension-fallback-plan",
+    );
+
+    const missingModernFallback = runCiManifestFixture({
+      bundledPlanner: true,
+      changedPlannerSource: "export const createChangedNodeTestShards = () => [];",
+      historicalCompatibility: false,
+      eventName: "workflow_dispatch",
+      changedPaths: ["extensions/outcomes/src/domain/read-model.ts"],
+    });
+    expect(missingModernFallback.status).toBe(1);
+    expect(missingModernFallback.output).toContain("createChangedExtensionFallbackShards");
     expect(current.outputs.run_format_check).toBe("true");
     expect(
       JSON.parse(expectDefined(current.outputs.android_matrix, "current Android matrix output"))

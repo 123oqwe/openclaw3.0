@@ -1422,7 +1422,10 @@ jobs:
           // collected instead of silently falling through to the core catalog.
           const changedExtensionValidation =
             runNodeFull &&
-            (changedExtensionPullRequest || (eventName === "workflow_dispatch" && !compatibilityTarget));
+            (changedExtensionPullRequest ||
+              (eventName === "workflow_dispatch" &&
+                (typeof changedNodeTestPlan.createChangedExtensionFallbackShards === "function" ||
+                  !compatibilityTarget)));
           if (changedExtensionValidation) {
             // Every PR plan excludes the full extension catch-all below. Keep changed
             // extension behavior covered even when a private mirror retains the full
