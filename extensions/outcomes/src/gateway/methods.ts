@@ -253,6 +253,16 @@ function uniqueSourcePairs(items: Array<{ sourceId: string; digest: string }>) {
   );
 }
 
+function publicSourceUrl(value: string | undefined): string | undefined {
+  if (value === undefined) return undefined;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 function refreshReason(error: unknown): RefreshReason {
   if (error instanceof WorkboardIdentityConflictError) return "identity-conflict";
   if (error instanceof InvalidWorkboardResponseError) return "invalid-response";
@@ -404,30 +414,30 @@ function buildRefreshCandidate(
       .flatMap((item) => {
         if (item.kind === "workboard-proof") {
           const proof = card.proofs.find((candidate) => candidate.id === item.sourceId);
-          return proof === undefined
-            ? []
-            : [
-                {
-                  ...item,
-                  sourceCreatedAt: proof.createdAt,
-                  ...(proof.label === undefined ? {} : { label: proof.label }),
-                  proofStatus: proof.status,
-                  ...(proof.url === undefined ? {} : { url: proof.url }),
-                },
-              ];
+          if (proof === undefined) return [];
+          const url = publicSourceUrl(proof.url);
+          return [
+            {
+              ...item,
+              sourceCreatedAt: proof.createdAt,
+              ...(proof.label === undefined ? {} : { label: proof.label }),
+              proofStatus: proof.status,
+              ...(url === undefined ? {} : { url }),
+            },
+          ];
         }
         const artifact = card.artifacts.find((candidate) => candidate.id === item.sourceId);
-        return artifact === undefined
-          ? []
-          : [
-              {
-                ...item,
-                sourceCreatedAt: artifact.createdAt,
-                ...(artifact.label === undefined ? {} : { label: artifact.label }),
-                ...(artifact.url === undefined ? {} : { url: artifact.url }),
-                ...(artifact.mimeType === undefined ? {} : { mimeType: artifact.mimeType }),
-              },
-            ];
+        if (artifact === undefined) return [];
+        const url = publicSourceUrl(artifact.url);
+        return [
+          {
+            ...item,
+            sourceCreatedAt: artifact.createdAt,
+            ...(artifact.label === undefined ? {} : { label: artifact.label }),
+            ...(url === undefined ? {} : { url }),
+            ...(artifact.mimeType === undefined ? {} : { mimeType: artifact.mimeType }),
+          },
+        ];
       });
     return [
       {

@@ -392,6 +392,72 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("only returns HTTP(S) source links and never returns private source fields", async () => {
+    const harness = createHarness({
+      workboardCards: [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 8,
+          metadata: {
+            automation: { boardId: "board-b" },
+            proof: [
+              {
+                id: "proof-a",
+                status: "passed",
+                createdAt: 3,
+                label: "Hosted proof",
+                url: "javascript:alert(1)",
+                command: "cat /private/proof",
+                note: "private note",
+              },
+            ],
+            artifacts: [
+              {
+                id: "artifact-a",
+                createdAt: 4,
+                label: "Hosted artifact",
+                url: "https://example.test/artifact",
+                path: "/private/artifact",
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    const response = await harness.call("outcomes.get", { id });
+    expect(response).toMatchObject([
+      true,
+      {
+        outcome: {
+          evidence: expect.arrayContaining([
+            expect.objectContaining({ sourceId: "proof-a", label: "Hosted proof" }),
+            expect.objectContaining({
+              sourceId: "artifact-a",
+              url: "https://example.test/artifact",
+            }),
+          ]),
+        },
+      },
+    ]);
+    const evidence = (response[1] as { outcome: { evidence: Array<Record<string, unknown>> } })
+      .outcome.evidence;
+    const proof = evidence.find((item) => item.sourceId === "proof-a")!;
+    expect(proof).not.toHaveProperty("url");
+    expect(proof).not.toHaveProperty("command");
+    expect(proof).not.toHaveProperty("note");
+    expect(evidence.find((item) => item.sourceId === "artifact-a")).not.toHaveProperty("path");
+  });
+
   it("treats changed authorized source content as current evidence without rewriting on get", async () => {
     const cards = [
       {
