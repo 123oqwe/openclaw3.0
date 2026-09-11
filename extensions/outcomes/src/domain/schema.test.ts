@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { describe, expect, it } from "vitest";
+import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import {
   assertOutcomeRecordSize,
   canonicalPlanSchema,
@@ -10,6 +12,52 @@ import {
   parseOutcomeRecord,
   planHash,
 } from "./schema.js";
+
+function malformedSnapshotPlanHash(plan: {
+  outcomeId: string;
+  objective: string;
+  contractRevision: number;
+  planGeneration: number;
+  criteria: Array<{
+    id: string;
+    text: string;
+    required: boolean;
+    workRefs: Array<{
+      owner: "workboard";
+      cardId: string;
+      cardCreatedAt: number;
+      boardIdAtLink: string;
+    }>;
+  }>;
+}): string {
+  const canonical = {
+    outcomeId: plan.outcomeId,
+    objective: plan.objective,
+    contractRevision: plan.contractRevision,
+    planGeneration: plan.planGeneration,
+    criteria: [...plan.criteria]
+      .toSorted((left, right) => (left.id < right.id ? -1 : left.id > right.id ? 1 : 0))
+      .map((criterion) => ({
+        id: criterion.id,
+        text: criterion.text,
+        required: criterion.required,
+        workRefs: [...criterion.workRefs].toSorted((left, right) => {
+          if (left.cardId !== right.cardId) return left.cardId < right.cardId ? -1 : 1;
+          if (left.cardCreatedAt !== right.cardCreatedAt) {
+            return left.cardCreatedAt - right.cardCreatedAt;
+          }
+          return left.boardIdAtLink < right.boardIdAtLink
+            ? -1
+            : left.boardIdAtLink > right.boardIdAtLink
+              ? 1
+              : 0;
+        }),
+      })),
+  };
+  return createHash("sha256")
+    .update(`openclaw:outcome-plan:v1\0${stableStringify(canonical)}`, "utf8")
+    .digest("hex");
+}
 
 describe("Outcome create schema and canonical hash", () => {
   it("accepts at most five criteria and produces order-independent hashes", () => {
@@ -236,6 +284,7 @@ describe("Outcome create schema and canonical hash", () => {
     };
     const valid = { ...record, decisions: [decision] };
     expect(outcomeRecordSchema.safeParse(valid).success).toBe(true);
+    expect(malformedSnapshotPlanHash(plan)).toBe(planHash(plan));
     const historicalAcceptance = {
       id: "acceptance-1",
       requestHash: "c".repeat(64),
@@ -277,12 +326,23 @@ describe("Outcome create schema and canonical hash", () => {
     expect(() =>
       outcomeRecordSchema.safeParse({
         ...record,
-        acceptances: [acceptanceWithDuplicateIdentity],
+        acceptances: [
+          {
+            ...acceptanceWithDuplicateIdentity,
+            planHash: malformedSnapshotPlanHash(acceptanceWithDuplicateIdentity.acceptedPlan),
+          },
       }),
     ).not.toThrow();
     expect(
-      outcomeRecordSchema.safeParse({ ...record, acceptances: [acceptanceWithDuplicateIdentity] })
-        .success,
+      outcomeRecordSchema.safeParse({
+        ...record,
+        acceptances: [
+          {
+            ...acceptanceWithDuplicateIdentity,
+            planHash: malformedSnapshotPlanHash(acceptanceWithDuplicateIdentity.acceptedPlan),
+          },
+        ],
+      }).success,
     ).toBe(false);
     const duplicateCriterionPlan = {
       ...plan,
@@ -295,7 +355,7 @@ describe("Outcome create schema and canonical hash", () => {
           {
             ...decision,
             decidedPlan: duplicateCriterionPlan,
-            planHash: planHash(duplicateCriterionPlan),
+            planHash: malformedSnapshotPlanHash(duplicateCriterionPlan),
           },
         ],
       }).success,
@@ -370,7 +430,7 @@ describe("Outcome create schema and canonical hash", () => {
           {
             ...decision,
             decidedPlan: duplicateRefPlan,
-            planHash: planHash(duplicateRefPlan),
+            planHash: malformedSnapshotPlanHash(duplicateRefPlan),
           },
         ],
       }).success,
