@@ -36,6 +36,7 @@ import type {
   WorkProjection,
   WorkboardRef,
 } from "../domain/types.js";
+import type { OutcomeCapacityWarning } from "../store/outcome-repository.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
 import {
@@ -73,6 +74,14 @@ function fail(
 ): void {
   respond(false, undefined, outcomeError(OutcomeErrorCodes[code]));
 }
+
+function reportCapacityWarning(api: OpenClawPluginApi, warning: OutcomeCapacityWarning): void {
+  // Keep persistence/source identities out of diagnostics; this is an internal threshold signal.
+  api.logger.warn(
+    `outcomes: capacity warning kind=${warning.kind} observed=${warning.observed} threshold=${warning.threshold}`,
+  );
+}
+
 function authenticatedProfileId(
   client: { authenticatedUserProfile?: { profileId: string } } | null,
 ): string | undefined {
@@ -466,6 +475,7 @@ function buildRefreshCandidate(
 export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void {
   const repository = createOutcomeRepository(
     api.runtime.state.openKeyedStore<OutcomeRecord>(OUTCOME_STORE),
+    { onCapacityWarning: (warning) => reportCapacityWarning(api, warning) },
   );
   api.registerGatewayMethod(
     "outcomes.create",
