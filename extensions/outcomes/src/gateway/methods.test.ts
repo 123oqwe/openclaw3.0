@@ -18,12 +18,13 @@ const outcomeIds = [
   "123e4567-e89b-42d3-a456-426614174012",
 ];
 
-function createHarness() {
+function createHarness(options: { registerError?: unknown } = {}) {
   const records = new Map<string, OutcomeRecord>();
   let writes = 0;
   const handlers = new Map<string, RegisteredHandler>();
   const store = {
     registerIfAbsent: async (id: string, record: OutcomeRecord) => {
+      if (options.registerError !== undefined) throw options.registerError;
       if (records.has(id)) return false;
       records.set(id, record);
       writes += 1;
@@ -67,6 +68,20 @@ function createParams(id: string, title = "Outcome title") {
 }
 
 describe("P-02 Outcome handlers", () => {
+  it("maps a bounded host capacity failure without exposing its exception", async () => {
+    const harness = createHarness({
+      registerError: Object.assign(new Error("private store path"), {
+        code: "PLUGIN_STATE_LIMIT_EXCEEDED",
+      }),
+    });
+    expect(await harness.call("outcomes.create", createParams(outcomeIds[0]!))).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_CAPACITY_EXCEEDED", message: "Outcome request could not be completed" },
+    ]);
+    expect(harness.writes()).toBe(0);
+  });
+
   it("replays an identical owner create but makes a foreign record unavailable", async () => {
     const harness = createHarness();
     const params = createParams(outcomeIds[0]!);
