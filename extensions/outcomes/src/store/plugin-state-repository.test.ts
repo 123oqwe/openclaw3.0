@@ -185,6 +185,62 @@ describe("Outcome repository host adapter", () => {
     );
   });
 
+  it("rejects non-initial aggregates before either create path writes", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-initial-create", applyEnv: false },
+      async (state) => {
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace: `outcomes-v1-${randomUUID()}`,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const repository = createOutcomeRepository(store);
+        const active = draftRecord("initial-active");
+        const nonInitialActive: OutcomeRecord = {
+          ...active,
+          phase: "active",
+          revision: 2,
+          planGeneration: 1,
+          planHash: planHash({
+            outcomeId: active.id,
+            objective: active.objective,
+            contractRevision: active.contractRevision,
+            planGeneration: 1,
+            criteria: active.criteria,
+          }),
+        };
+        const cached = draftRecord("initial-cached");
+        const nonInitialCached: OutcomeRecord = {
+          ...cached,
+          revision: 2,
+          projections: [
+            {
+              ref: {
+                owner: "workboard",
+                cardId: "card-1",
+                cardCreatedAt: 1,
+                boardIdAtLink: "board-1",
+              },
+              availability: "unavailable",
+              observedAt: 2,
+              proofs: [],
+              artifacts: [],
+              errorCode: "timeout",
+            },
+          ],
+        };
+
+        await expect(repository.create(nonInitialActive)).rejects.toThrow("initial Outcome record");
+        await expect(repository.createOwned("alice", nonInitialCached)).rejects.toThrow(
+          "initial Outcome record",
+        );
+        await expect(store.lookup(nonInitialActive.id)).resolves.toBeUndefined();
+        await expect(store.lookup(nonInitialCached.id)).resolves.toBeUndefined();
+      },
+    );
+  });
+
   it("serializes concurrent CAS and persists only the winning title", async () => {
     await withOpenClawTestState(
       { label: "outcome-repository-cas", applyEnv: false },
