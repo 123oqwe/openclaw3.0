@@ -438,6 +438,10 @@ describe("Outcome create schema and canonical hash", () => {
       planGeneration: 1,
       criteria: [{ id: "c-1", text: "done", required: true, workRefs: [] }],
     };
+    const baseCriterion = plan.criteria[0];
+    if (baseCriterion === undefined) {
+      throw new Error("history fixture requires a criterion");
+    }
     const record = {
       schemaVersion: 1,
       id: "o-history",
@@ -512,7 +516,7 @@ describe("Outcome create schema and canonical hash", () => {
         ...plan,
         criteria: [
           {
-            ...plan.criteria[0],
+            ...baseCriterion,
             workRefs: [
               {
                 owner: "workboard" as const,
@@ -555,7 +559,7 @@ describe("Outcome create schema and canonical hash", () => {
     ).toBe(false);
     const duplicateCriterionPlan = {
       ...plan,
-      criteria: [...plan.criteria, { ...plan.criteria[0] }],
+      criteria: [...plan.criteria, { ...baseCriterion }],
     };
     expect(
       outcomeRecordSchema.safeParse({
@@ -573,7 +577,7 @@ describe("Outcome create schema and canonical hash", () => {
       ...plan,
       criteria: [
         {
-          ...plan.criteria[0],
+          ...baseCriterion,
           workRefs: [
             {
               owner: "workboard" as const,
@@ -614,7 +618,7 @@ describe("Outcome create schema and canonical hash", () => {
       ...plan,
       criteria: [
         {
-          ...plan.criteria[0],
+          ...baseCriterion,
           workRefs: [
             {
               owner: "workboard" as const,
@@ -664,7 +668,7 @@ describe("Outcome create schema and canonical hash", () => {
             ...decision,
             decidedPlan: {
               ...plan,
-              criteria: [{ ...plan.criteria[0], required: false }],
+              criteria: [{ ...baseCriterion, required: false }],
             },
           },
         ],

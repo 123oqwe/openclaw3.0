@@ -77,13 +77,26 @@ const projectionSchema = z
       .optional(),
   })
   .superRefine((projection, ctx) => {
-    if (projection.sourceFingerprint === undefined) {
-      return;
-    }
     if (projection.availability !== "available") {
+      if (projection.sourceFingerprint === undefined) {
+        return;
+      }
       ctx.addIssue({
         code: "custom",
         message: "sourceFingerprint is valid only for available Workboard sources",
+      });
+      return;
+    }
+    if (projection.errorCode !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "available Workboard sources cannot carry a refresh error",
+      });
+    }
+    if (projection.sourceFingerprint === undefined) {
+      ctx.addIssue({
+        code: "custom",
+        message: "available Workboard sources require a sourceFingerprint",
       });
       return;
     }
