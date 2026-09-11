@@ -42,7 +42,9 @@ function malformedSnapshotPlanHash(plan: {
         text: criterion.text,
         required: criterion.required,
         workRefs: [...criterion.workRefs].toSorted((left, right) => {
-          if (left.cardId !== right.cardId) return left.cardId < right.cardId ? -1 : 1;
+          if (left.cardId !== right.cardId) {
+            return left.cardId < right.cardId ? -1 : 1;
+          }
           if (left.cardCreatedAt !== right.cardCreatedAt) {
             return left.cardCreatedAt - right.cardCreatedAt;
           }
@@ -331,6 +333,7 @@ describe("Outcome create schema and canonical hash", () => {
             ...acceptanceWithDuplicateIdentity,
             planHash: malformedSnapshotPlanHash(acceptanceWithDuplicateIdentity.acceptedPlan),
           },
+        ],
       }),
     ).not.toThrow();
     expect(
