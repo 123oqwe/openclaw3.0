@@ -1,6 +1,6 @@
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { planHash } from "./canonical-plan.js";
-import type { Criterion, OutcomeRecord } from "./types.js";
+import type { Criterion, OutcomeRecord, WorkboardRef } from "./types.js";
 
 export type OutcomeMutation = {
   expectedRevision: number;
@@ -40,6 +40,8 @@ export type OutcomeActivateResult =
   | { kind: "conflict"; record: OutcomeRecord }
   | { kind: "rejected"; record: OutcomeRecord }
   | { kind: "updated"; record: OutcomeRecord };
+
+export type OutcomeLinkMutation = { expectedRevision: number; criterionId: string; ref: WorkboardRef; serverTime: number };
 
 function hasInFlightOperation(current: OutcomeRecord): boolean {
   return (
@@ -230,6 +232,20 @@ export function reduceOutcomePatch(
       updatedAt: mutation.serverTime,
     },
   };
+}
+
+/** Atomically adds one owner-derived Workboard identity to a criterion. */
+export function reduceOutcomeLink(
+  current: OutcomeRecord,
+  mutation: OutcomeLinkMutation,
+): OutcomeMutationResult {
+  assertServerTime(mutation.serverTime);
+  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
+  if (current.phase === "cancelled" || hasInFlightOperation(current)) return { kind: "rejected", record: current };
+  const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
+  if (!criterion) return { kind: "rejected", record: current };
+  if (criterion.workRefs.some((ref) => ref.cardId === mutation.ref.cardId && ref.cardCreatedAt === mutation.ref.cardCreatedAt)) return { kind: "noop", record: current };
+  return { kind: "updated", record: { ...current, criteria: current.criteria.map((item) => item.id === mutation.criterionId ? { ...item, workRefs: [...item.workRefs, mutation.ref] } : item), revision: current.revision + 1, updatedAt: mutation.serverTime } };
 }
 
 export function reduceOutcomeCancel(

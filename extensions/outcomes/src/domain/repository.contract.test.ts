@@ -5,6 +5,7 @@ import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,
   reduceOutcomeContract,
+  reduceOutcomeLink,
   reduceOutcomePatch,
   reduceOutcomeTitle,
   type OutcomeMutationResult,
@@ -184,6 +185,17 @@ describe("Outcome repository atomic contract", () => {
         expect(titleUpdate.record.updatedAt).toBe(42);
       }
     }
+  });
+
+  it("links an owner-derived card identity with one CAS revision", () => {
+    const record = validRecord();
+    const result = reduceOutcomeLink(record, {
+      expectedRevision: 1,
+      criterionId: "c-1",
+      ref: { owner: "workboard", cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" },
+      serverTime: 42,
+    });
+    expect(result).toMatchObject({ kind: "updated", record: { revision: 2, updatedAt: 42 } });
   });
 
   it("rejects a duplicate create without a second write", async () => {
