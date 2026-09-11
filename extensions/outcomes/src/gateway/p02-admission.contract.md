@@ -97,8 +97,8 @@ canonical plan hash without accepting a caller-supplied phase, generation, hash,
 The third package adds `outcomes.refresh` after the Workboard adapter contract is executable.
 Refresh requires expectedRevision and performs at most one authenticated `workboard.cards.list`
 request per Outcome. It maps disabled, timeout, not-found, and identity-conflict distinctly; a
-failed refresh preserves displayable cached projection fields but cannot make prior evidence
-current.
+failed refresh preserves displayable cached projection fields, clears `sourceFingerprint`, and
+cannot make prior evidence current.
 
 All packages keep typed mappings distinct for unauthenticated, forbidden, not-found,
 revision-conflict, invalid-input, capacity, and internal failures without leaking exceptions.

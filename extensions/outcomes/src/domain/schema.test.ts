@@ -355,6 +355,20 @@ describe("Outcome create schema and canonical hash", () => {
             ...record.projections[0]!,
             availability: "unavailable",
             errorCode: "timeout",
+            observedAt: 3,
+            sourceFingerprint: undefined,
+          },
+        ],
+      }).success,
+    ).toBe(true);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [
+          {
+            ...record.projections[0]!,
+            availability: "unavailable",
+            errorCode: "timeout",
           },
         ],
       }).success,
