@@ -80,6 +80,50 @@ describe("P-02 Outcome handlers", () => {
     ).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
   });
 
+  it("constructs the only allowed initial draft and rejects client-owned record fields before writing", async () => {
+    const harness = createHarness();
+    const invalid = {
+      ...createParams(outcomeIds[0]!),
+      phase: "accepted",
+      revision: 99,
+      managerProfileId: "forged-manager",
+      createdAt: 0,
+    };
+    expect(await harness.call("outcomes.create", invalid)).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_REQUEST" },
+    ]);
+    expect(harness.writes()).toBe(0);
+
+    await harness.call("outcomes.create", createParams(outcomeIds[0]!));
+    expect(harness.records.get(outcomeIds[0]!)).toMatchObject({
+      managerProfileId: "manager-a",
+      phase: "draft",
+      revision: 1,
+      contractRevision: 1,
+      planGeneration: 0,
+      planHash: null,
+      projections: [],
+      evidence: [],
+      decisions: [],
+      operations: [],
+      acceptances: [],
+    });
+  });
+
+  it("maps a same-owner different create request to the non-disclosing unavailable code", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    expect(await harness.call("outcomes.create", createParams(id, "Changed title"))).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_ID_UNAVAILABLE" },
+    ]);
+    expect(harness.writes()).toBe(1);
+  });
+
   it("applies a combined patch once and rejects stale or terminal mutations without a write", async () => {
     const harness = createHarness();
     const id = outcomeIds[0]!;
