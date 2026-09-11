@@ -26,6 +26,8 @@ suite.define(() => {
         const deviceToken = "synthetic-paired-browser";
         let helperCalls = 0;
         let diagnosticSequence = 0;
+        let broadRequestId = 0;
+        const activeBroadRequests = new Set<number>();
         const trace = (stage: string, routePath?: string) => {
           diagnosticSequence += 1;
           console.info(
@@ -42,21 +44,25 @@ suite.define(() => {
             // Exercise secure-origin browser behavior while serving only this test's local bundle.
             await page.route(`${origin}/**`, async (route) => {
               const requested = new URL(route.request().url());
+              const requestId = ++broadRequestId;
+              activeBroadRequests.add(requestId);
+              trace("broad-enter", `${requestId}:${requested.pathname}`);
+              try {
               const isDiagnosticPath =
                 requested.pathname === "/avatar/main" ||
                 requested.pathname === "/.well-known/openclaw/browser-bootstrap";
               if (isDiagnosticPath) {
-                trace("broad-enter", requested.pathname);
+                trace("broad-diagnostic", `${requestId}:${requested.pathname}`);
               }
               if (requested.pathname === "/.well-known/openclaw/browser-bootstrap") {
-                trace("broad-fallback", requested.pathname);
+                trace("broad-fallback", `${requestId}:${requested.pathname}`);
                 await route.fallback();
                 return;
               }
               if (requested.pathname === "/avatar/main") {
-                trace("avatar-fulfill-before", requested.pathname);
+                trace("avatar-fulfill-before", `${requestId}:${requested.pathname}`);
                 await route.fulfill({ status: 404, body: "" });
-                trace("avatar-fulfill-after", requested.pathname);
+                trace("avatar-fulfill-after", `${requestId}:${requested.pathname}`);
                 return;
               }
               const upstream = new URL(
@@ -65,14 +71,20 @@ suite.define(() => {
               );
               const response = await route.fetch({ url: upstream.href });
               if (isDiagnosticPath) {
-                trace("broad-fetch-complete", requested.pathname);
+                trace("broad-fetch-complete", `${requestId}:${requested.pathname}`);
               }
               if (isDiagnosticPath) {
-                trace("broad-fulfill-before", requested.pathname);
+                trace("broad-fulfill-before", `${requestId}:${requested.pathname}`);
               }
               await route.fulfill({ response });
               if (isDiagnosticPath) {
-                trace("broad-fulfill-after", requested.pathname);
+                trace("broad-fulfill-after", `${requestId}:${requested.pathname}`);
+              }
+              } catch (error) {
+                trace("broad-error", `${requestId}:${requested.pathname}`);
+                throw error;
+              } finally {
+                activeBroadRequests.delete(requestId);
               }
             });
             const gateway = await installMockGateway(page, {
@@ -165,7 +177,7 @@ suite.define(() => {
           },
           // Drain active interception handlers before withPage closes the context.
           async () => {
-            trace("cleanup-before-unroute", "none");
+            trace("cleanup-before-unroute", `active=${[...activeBroadRequests].join(",") || "none"}`);
             await page.unrouteAll({ behavior: "wait" });
             trace("cleanup-after-unroute", "none");
           },
