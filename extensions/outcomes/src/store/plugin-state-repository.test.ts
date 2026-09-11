@@ -1,11 +1,14 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
+import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import {
   createPluginStateKeyedStoreForTests,
   resetPluginStateStoreForTests,
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
+import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { afterEach, describe, expect, it } from "vitest";
+import { summarizeBenchmarkTimings } from "../../../../scripts/lib/benchmark-harness.mts";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import {
   reduceOutcomeActivate,
@@ -18,6 +21,16 @@ import {
   OutcomeRepositoryConflictError,
   createOutcomeRepository,
 } from "./plugin-state-repository.js";
+
+const OUTCOME_PERFORMANCE_SAMPLES = 20;
+const OUTCOME_PERFORMANCE_SCENARIOS = [
+  { recordCount: 50, recordBytes: 4 * 1024 },
+  { recordCount: 50, recordBytes: 96 * 1024 },
+  { recordCount: 50, recordBytes: 128 * 1024 },
+  { recordCount: 500, recordBytes: 4 * 1024 },
+  { recordCount: 500, recordBytes: 96 * 1024 },
+  { recordCount: 500, recordBytes: 128 * 1024 },
+] as const;
 
 function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
   const request = {
@@ -47,6 +60,60 @@ function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
     createdAt: 1,
     updatedAt: 1,
   };
+}
+
+function serializedBytes(record: OutcomeRecord): number {
+  return Buffer.byteLength(stableStringify(record), "utf8");
+}
+
+function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
+  const draft = draftRecord(id);
+  const plan = {
+    outcomeId: draft.id,
+    objective: draft.objective,
+    contractRevision: draft.contractRevision,
+    planGeneration: 1,
+    criteria: draft.criteria,
+  };
+  const record: OutcomeRecord = {
+    ...draft,
+    phase: "active",
+    revision: 100,
+    planGeneration: 1,
+    planHash: planHash(plan),
+    createdAt: 100,
+    updatedAt: 100,
+  };
+  for (let index = 1; index <= 100 && serializedBytes(record) < targetBytes; index += 1) {
+    const decision = {
+      id: `decision-${index}`,
+      criterionId: "c-1",
+      planGeneration: 1,
+      decidedRevision: index,
+      status: "verified" as const,
+      requestHash: `${index.toString(16).padStart(2, "0")}${"a".repeat(62)}`,
+      profileId: record.managerProfileId,
+      planHash: record.planHash,
+      decidedPlan: plan,
+      evidenceSetHash: "b".repeat(64),
+      note: "x".repeat(2_000),
+      decidedAt: index,
+    };
+    record.decisions.push(decision);
+    const overshoot = serializedBytes(record) - targetBytes;
+    if (overshoot > 0) {
+      decision.note = decision.note.slice(0, Math.max(0, decision.note.length - overshoot));
+      if (serializedBytes(record) > targetBytes) {
+        record.decisions.pop();
+        break;
+      }
+    }
+  }
+  const actualBytes = serializedBytes(record);
+  if (actualBytes > targetBytes || actualBytes < targetBytes * 0.9) {
+    throw new Error(`unable to construct ${targetBytes}-byte Outcome record; got ${actualBytes}`);
+  }
+  return record;
 }
 
 afterEach(() => resetPluginStateStoreForTests());
@@ -512,6 +579,155 @@ describe("Outcome repository host adapter", () => {
         ).rejects.toThrow("Failed to update plugin state entry");
         await expect(repository.get(existing.id)).resolves.toEqual(existing);
       },
+    );
+  });
+
+  it("measures bounded host-adapter list and mutation behavior across the P-01 matrix", async () => {
+    const reports: Array<{
+      actualRecordBytes: number;
+      eventLoop: { baselineMaxMs: number; maxMs: number; deltaMs: number; resolutionMs: number };
+      heap: { afterBytes: number; beforeBytes: number; deltaBytes: number };
+      list: ReturnType<typeof summarizeBenchmarkTimings>;
+      mutation: ReturnType<typeof summarizeBenchmarkTimings>;
+      recordCount: number;
+      requestedRecordBytes: number;
+      samples: number;
+      targetsMs: { eventLoopLagDelta: number; listP95: number; mutationP95: number };
+      withinTargets: { eventLoopLagDelta: boolean; listP95: boolean; mutationP95: boolean };
+    }> = [];
+
+    await withOpenClawTestState(
+      { label: "outcome-repository-performance", applyEnv: false },
+      async (state) => {
+        for (const scenario of OUTCOME_PERFORMANCE_SCENARIOS) {
+          const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+            namespace: `outcomes-v1-performance-${randomUUID()}`,
+            maxEntries: OUTCOME_MAX_ENTRIES,
+            overflowPolicy: "reject-new",
+            env: state.env,
+          });
+          const repository = createOutcomeRepository(store);
+          const records = Array.from({ length: scenario.recordCount }, (_, index) =>
+            activeRecordAtSize(
+              `performance-${scenario.recordCount}-${scenario.recordBytes}-${index}`,
+              scenario.recordBytes,
+            ),
+          );
+          const actualRecordBytes = records.map(serializedBytes);
+          expect(new Set(actualRecordBytes).size).toBe(1);
+          expect(actualRecordBytes[0]).toBeGreaterThanOrEqual(scenario.recordBytes * 0.9);
+          expect(actualRecordBytes[0]).toBeLessThanOrEqual(scenario.recordBytes);
+          for (const record of records) {
+            await expect(repository.create(record)).resolves.toEqual({ created: true });
+          }
+          const expectedIds = new Set(records.map((record) => record.id));
+          const seeded = await repository.list();
+          expect(seeded).toHaveLength(scenario.recordCount);
+          expect(new Set(seeded.map((record) => record.id))).toEqual(expectedIds);
+
+          const delay = monitorEventLoopDelay({ resolution: 10 });
+          delay.enable();
+          await new Promise<void>((resolve) => setTimeout(resolve, 20));
+          const baselineMaxMs = Number(delay.max) / 1_000_000;
+          delay.reset();
+          const heapBeforeBytes = process.memoryUsage().heapUsed;
+          const listTimings: number[] = [];
+          const mutationTimings: number[] = [];
+          try {
+            for (let sample = 0; sample < OUTCOME_PERFORMANCE_SAMPLES; sample += 1) {
+              const startedAt = performance.now();
+              const listed = await repository.list();
+              listTimings.push(performance.now() - startedAt);
+              expect(listed).toHaveLength(scenario.recordCount);
+              expect(new Set(listed.map((record) => record.id))).toEqual(expectedIds);
+            }
+            const mutationId = records[0]?.id;
+            if (!mutationId) {
+              throw new Error("performance scenario must contain a record");
+            }
+            for (let sample = 0; sample < OUTCOME_PERFORMANCE_SAMPLES; sample += 1) {
+              const startedAt = performance.now();
+              const result = await repository.transact(mutationId, (current) => {
+                if (!current) {
+                  throw new Error("performance mutation record disappeared");
+                }
+                const next = {
+                  ...current,
+                  title: "perf",
+                  revision: current.revision + 1,
+                  updatedAt: 101 + sample,
+                };
+                return { result: next.revision, next };
+              });
+              mutationTimings.push(performance.now() - startedAt);
+              expect(result).toBe(101 + sample);
+            }
+            const mutated = await repository.get(mutationId);
+            expect(mutated).toMatchObject({
+              id: mutationId,
+              revision: 100 + OUTCOME_PERFORMANCE_SAMPLES,
+              title: "perf",
+              updatedAt: 100 + OUTCOME_PERFORMANCE_SAMPLES,
+            });
+          } finally {
+            await new Promise<void>((resolve) => setTimeout(resolve, 20));
+            delay.disable();
+          }
+
+          const list = summarizeBenchmarkTimings(listTimings);
+          const mutation = summarizeBenchmarkTimings(mutationTimings);
+          const maxMs = Number(delay.max) / 1_000_000;
+          const heapAfterBytes = process.memoryUsage().heapUsed;
+          expect(list.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
+          expect(mutation.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
+          expect(list.p95).toBeTypeOf("number");
+          expect(mutation.p95).toBeTypeOf("number");
+          expect(Number.isFinite(maxMs)).toBe(true);
+          expect(Number.isFinite(heapAfterBytes)).toBe(true);
+          const targetsMs = { mutationP95: 100, listP95: 1_000, eventLoopLagDelta: 20 };
+          const eventLoopDeltaMs = Math.max(0, maxMs - baselineMaxMs);
+          reports.push({
+            recordCount: scenario.recordCount,
+            requestedRecordBytes: scenario.recordBytes,
+            actualRecordBytes: actualRecordBytes[0] ?? 0,
+            samples: OUTCOME_PERFORMANCE_SAMPLES,
+            list,
+            mutation,
+            eventLoop: {
+              resolutionMs: 10,
+              baselineMaxMs,
+              maxMs,
+              deltaMs: eventLoopDeltaMs,
+            },
+            heap: {
+              beforeBytes: heapBeforeBytes,
+              afterBytes: heapAfterBytes,
+              deltaBytes: heapAfterBytes - heapBeforeBytes,
+            },
+            targetsMs,
+            withinTargets: {
+              mutationP95: (mutation.p95 ?? Number.POSITIVE_INFINITY) <= targetsMs.mutationP95,
+              listP95: (list.p95 ?? Number.POSITIVE_INFINITY) <= targetsMs.listP95,
+              eventLoopLagDelta: eventLoopDeltaMs <= targetsMs.eventLoopLagDelta,
+            },
+          });
+        }
+      },
+    );
+
+    expect(reports).toHaveLength(OUTCOME_PERFORMANCE_SCENARIOS.length);
+    console.info(
+      `[outcome-plugin-state-benchmark] ${JSON.stringify({
+        schemaVersion: 1,
+        sourceSha: process.env.GITHUB_SHA ?? "local",
+        runner: {
+          arch: process.arch,
+          image: process.env.ImageOS ?? process.env.RUNNER_IMAGE ?? null,
+          node: process.version,
+          platform: process.platform,
+        },
+        reports,
+      })}`,
     );
   });
 
