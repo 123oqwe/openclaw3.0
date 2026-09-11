@@ -42,7 +42,9 @@ describe("Workboard evidence extraction", () => {
   });
 
   it("changes a source digest and evidence ID when canonical source material or generation changes", () => {
-    const original = extractWorkboardEvidence(input).find((item) => item.kind === "workboard-proof")!;
+    const original = extractWorkboardEvidence(input).find(
+      (item) => item.kind === "workboard-proof",
+    )!;
     const changed = extractWorkboardEvidence({
       ...input,
       card: { ...card, proofs: [{ ...card.proofs[0]!, note: "changed claim" }] },
@@ -58,7 +60,10 @@ describe("Workboard evidence extraction", () => {
 
   it("fails closed when the owner card does not match the linked identity", () => {
     expect(() =>
-      extractWorkboardEvidence({ ...input, workRef: { ...input.workRef, cardCreatedAt: card.createdAt + 1 } }),
+      extractWorkboardEvidence({
+        ...input,
+        workRef: { ...input.workRef, cardCreatedAt: card.createdAt + 1 },
+      }),
     ).toThrow(/identity/i);
   });
 });

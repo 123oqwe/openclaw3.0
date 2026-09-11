@@ -1,5 +1,5 @@
-import type { OpenClawPluginApi } from "../../api.js";
 import { describe, expect, it, vi } from "vitest";
+import type { OpenClawPluginApi } from "../../api.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import { registerOutcomeFirstPackageMethods } from "./methods.js";
 
@@ -18,7 +18,9 @@ const outcomeIds = [
   "123e4567-e89b-42d3-a456-426614174012",
 ];
 
-function createHarness(options: { registerError?: unknown; workboardCards?: unknown[]; workboardError?: unknown } = {}) {
+function createHarness(
+  options: { registerError?: unknown; workboardCards?: unknown[]; workboardError?: unknown } = {},
+) {
   const records = new Map<string, OutcomeRecord>();
   let writes = 0;
   const handlers = new Map<string, RegisteredHandler>();
@@ -32,7 +34,10 @@ function createHarness(options: { registerError?: unknown; workboardCards?: unkn
     },
     lookup: async (id: string) => records.get(id),
     entries: async () => [...records].map(([key, value]) => ({ key, value, createdAt: 0 })),
-    update: async (id: string, decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined) => {
+    update: async (
+      id: string,
+      decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined,
+    ) => {
       const next = decide(records.get(id));
       if (!next) return false;
       records.set(id, next);
@@ -45,13 +50,13 @@ function createHarness(options: { registerError?: unknown; workboardCards?: unkn
     if (options.workboardError !== undefined) throw options.workboardError;
     return {
       cards: options.workboardCards ?? [
-      {
-        id: "card-a",
-        status: "done",
-        createdAt: 1,
-        updatedAt: 2,
-        metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] },
-      },
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 2,
+          metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] },
+        },
       ],
     };
   });
@@ -109,13 +114,20 @@ describe("P-02 Outcome handlers", () => {
   it("replays an identical owner create but makes a foreign record unavailable", async () => {
     const harness = createHarness();
     const params = createParams(outcomeIds[0]!);
-    expect(await harness.call("outcomes.create", params)).toMatchObject([true, { replayed: false }]);
+    expect(await harness.call("outcomes.create", params)).toMatchObject([
+      true,
+      { replayed: false },
+    ]);
     expect(await harness.call("outcomes.create", params)).toMatchObject([true, { replayed: true }]);
     expect(harness.writes()).toBe(1);
     expect(
-      await harness.call("outcomes.get", { id: params.id }, {
-        authenticatedUserProfile: { profileId: "manager-b" },
-      }),
+      await harness.call(
+        "outcomes.get",
+        { id: params.id },
+        {
+          authenticatedUserProfile: { profileId: "manager-b" },
+        },
+      ),
     ).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
   });
 
@@ -123,7 +135,11 @@ describe("P-02 Outcome handlers", () => {
     const harness = createHarness();
     const params = createParams(outcomeIds[0]!);
     await harness.call("outcomes.create", params);
-    await harness.call("outcomes.update", { id: params.id, expectedRevision: 1, patch: { title: "Revised" } });
+    await harness.call("outcomes.update", {
+      id: params.id,
+      expectedRevision: 1,
+      patch: { title: "Revised" },
+    });
     expect(await harness.call("outcomes.create", params)).toMatchObject([
       true,
       { replayed: true, outcome: { revision: 2 }, receipt: { committedRevision: 1 } },
@@ -203,7 +219,10 @@ describe("P-02 Outcome handlers", () => {
       expectedRevision: 1,
       patch: { title: "Renamed", objective: "Revised objective" },
     });
-    expect(patched).toMatchObject([true, { outcome: { title: "Renamed", revision: 2, contractRevision: 2 } }]);
+    expect(patched).toMatchObject([
+      true,
+      { outcome: { title: "Renamed", revision: 2, contractRevision: 2 } },
+    ]);
     const writesAfterPatch = harness.writes();
     expect(await harness.call("outcomes.cancel", { id, expectedRevision: 1 })).toMatchObject([
       false,
@@ -324,7 +343,11 @@ describe("P-02 Outcome handlers", () => {
       ],
       evidence: [
         expect.objectContaining({ criterionId, sourceId: "proof-a", kind: "workboard-proof" }),
-        expect.objectContaining({ criterionId, sourceId: "artifact-a", kind: "workboard-artifact" }),
+        expect.objectContaining({
+          criterionId,
+          sourceId: "artifact-a",
+          kind: "workboard-artifact",
+        }),
       ],
     });
   });
@@ -347,7 +370,12 @@ describe("P-02 Outcome handlers", () => {
     });
     const id = outcomeIds[0]!;
     await harness.call("outcomes.create", createParams(id));
-    await harness.call("outcomes.linkWorkboard", { id, expectedRevision: 1, criterionId, cardId: "card-a" });
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
     expect(await harness.call("outcomes.get", { id })).toMatchObject([
@@ -365,11 +393,18 @@ describe("P-02 Outcome handlers", () => {
   });
 
   it("keeps Outcome content but never leaks cached source material after an owner-read failure", async () => {
-    const harness = createHarness({ workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" } });
+    const harness = createHarness({
+      workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" },
+    });
     const id = outcomeIds[0]!;
     await harness.call("outcomes.create", createParams(id));
     const created = harness.records.get(id)!;
-    const ref = { owner: "workboard" as const, cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" };
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "card-a",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board-a",
+    };
     harness.records.set(id, {
       ...created,
       criteria: [{ ...created.criteria[0]!, workRefs: [ref] }],
@@ -406,11 +441,18 @@ describe("P-02 Outcome handlers", () => {
   });
 
   it("records a failed refresh as unavailable while retaining its display cache", async () => {
-    const harness = createHarness({ workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" } });
+    const harness = createHarness({
+      workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" },
+    });
     const id = outcomeIds[0]!;
     await harness.call("outcomes.create", createParams(id));
     const created = harness.records.get(id)!;
-    const ref = { owner: "workboard" as const, cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" };
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "card-a",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board-a",
+    };
     harness.records.set(id, {
       ...created,
       criteria: [{ ...created.criteria[0]!, workRefs: [ref] }],
@@ -454,11 +496,22 @@ describe("P-02 Outcome handlers", () => {
     const id = outcomeIds[0]!;
     await harness.call("outcomes.create", createParams(id));
     const created = harness.records.get(id)!;
-    const ref = { owner: "workboard" as const, cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" };
-    harness.records.set(id, { ...created, criteria: [{ ...created.criteria[0]!, workRefs: [ref] }] });
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "card-a",
+      cardCreatedAt: 1,
+      boardIdAtLink: "board-a",
+    };
+    harness.records.set(id, {
+      ...created,
+      criteria: [{ ...created.criteria[0]!, workRefs: [ref] }],
+    });
     expect(await harness.call("outcomes.refresh", { id, expectedRevision: 1 })).toMatchObject([
       true,
-      { outcome: { revision: 2 }, refresh: { status: "identity-conflict", reason: "identity-conflict" } },
+      {
+        outcome: { revision: 2 },
+        refresh: { status: "identity-conflict", reason: "identity-conflict" },
+      },
     ]);
     expect(harness.records.get(id)?.projections).toMatchObject([
       { availability: "identity-conflict", errorCode: "identity-conflict" },
@@ -523,7 +576,10 @@ describe("P-02 Outcome handlers", () => {
     const id = outcomeIds[0]!;
     await harness.call("outcomes.create", createParams(id));
     const writes = harness.writes();
-    for (const cards of [[card, { ...card, createdAt: 2 }], [{ ...card, createdAt: 2 }, card]]) {
+    for (const cards of [
+      [card, { ...card, createdAt: 2 }],
+      [{ ...card, createdAt: 2 }, card],
+    ]) {
       harness.gatewayRequest.mockResolvedValueOnce({ cards });
       expect(
         await harness.call("outcomes.linkWorkboard", {
@@ -543,14 +599,30 @@ describe("P-02 Outcome handlers", () => {
     const unavailable = createHarness({ workboardCards: [] });
     await unavailable.call("outcomes.create", createParams(id));
     expect(
-      await unavailable.call("outcomes.linkWorkboard", { id, expectedRevision: 1, criterionId, cardId: "card-a" }),
+      await unavailable.call("outcomes.linkWorkboard", {
+        id,
+        expectedRevision: 1,
+        criterionId,
+        cardId: "card-a",
+      }),
     ).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_UNAVAILABLE" }]);
 
-    const timeout = createHarness({ workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" } });
+    const timeout = createHarness({
+      workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" },
+    });
     await timeout.call("outcomes.create", createParams(id));
     expect(
-      await timeout.call("outcomes.linkWorkboard", { id, expectedRevision: 1, criterionId, cardId: "card-a" }),
-    ).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_TIMEOUT", message: "Outcome request could not be completed" }]);
+      await timeout.call("outcomes.linkWorkboard", {
+        id,
+        expectedRevision: 1,
+        criterionId,
+        cardId: "card-a",
+      }),
+    ).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_OWNER_TIMEOUT", message: "Outcome request could not be completed" },
+    ]);
   });
 
   it("activates only a linked draft and freezes its first generation hash", async () => {
@@ -565,7 +637,9 @@ describe("P-02 Outcome handlers", () => {
     });
     expect(await harness.call("outcomes.activate", { id, expectedRevision: 2 })).toMatchObject([
       true,
-      { outcome: { phase: "active", revision: 3, planGeneration: 1, planHash: expect.any(String) } },
+      {
+        outcome: { phase: "active", revision: 3, planGeneration: 1, planHash: expect.any(String) },
+      },
     ]);
     const writes = harness.writes();
     expect(await harness.call("outcomes.activate", { id, expectedRevision: 3 })).toMatchObject([
@@ -626,10 +700,15 @@ describe("P-02 Outcome handlers", () => {
     const firstPayload = first?.[1] as { outcomes: Array<{ id: string }>; nextCursor?: string };
     expect(firstPayload.outcomes).toHaveLength(2);
     expect(firstPayload.nextCursor).toEqual(expect.any(String));
-    const second = await harness.call("outcomes.list", { limit: 2, cursor: firstPayload.nextCursor });
+    const second = await harness.call("outcomes.list", {
+      limit: 2,
+      cursor: firstPayload.nextCursor,
+    });
     const secondPayload = second?.[1] as { outcomes: Array<{ id: string }> };
     expect(secondPayload.outcomes).toHaveLength(1);
-    expect(new Set([...firstPayload.outcomes, ...secondPayload.outcomes].map((outcome) => outcome.id))).toHaveSize(3);
+    expect(
+      new Set([...firstPayload.outcomes, ...secondPayload.outcomes].map((outcome) => outcome.id)),
+    ).toHaveSize(3);
     expect(harness.writes()).toBe(writes);
   });
 

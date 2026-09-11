@@ -191,7 +191,9 @@ export function toOutcomeDetail(
   );
   const criteria = record.criteria.map((criterion) => ({
     ...(() => {
-      const visibleRefs = criterion.workRefs.filter((ref) => sourcesByRef.has(workRefIdentity(ref)));
+      const visibleRefs = criterion.workRefs.filter((ref) =>
+        sourcesByRef.has(workRefIdentity(ref)),
+      );
       const sourcesComplete = visibleRefs.length === criterion.workRefs.length;
       const sourceDigests = sourcesComplete
         ? visibleRefs.flatMap((ref) =>
@@ -239,10 +241,15 @@ export function toOutcomeDetail(
   const evidence: OutcomeDetail["evidence"] = authorizedSources
     .flatMap((source) => source.evidence)
     .filter((item) => item.planGeneration === record.planGeneration)
-    .toSorted((left, right) =>
-      (left.criterionId < right.criterionId ? -1 : left.criterionId > right.criterionId ? 1 : 0) ||
-      (left.kind < right.kind ? -1 : left.kind > right.kind ? 1 : 0) ||
-      (left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0),
+    .toSorted(
+      (left, right) =>
+        (left.criterionId < right.criterionId
+          ? -1
+          : left.criterionId > right.criterionId
+            ? 1
+            : 0) ||
+        (left.kind < right.kind ? -1 : left.kind > right.kind ? 1 : 0) ||
+        (left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0),
     );
   const sourceIssues = observedProjections
     .flatMap((projection) => {

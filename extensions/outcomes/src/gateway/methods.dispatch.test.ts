@@ -1,14 +1,20 @@
 import { createTestPluginApi } from "openclaw/plugin-sdk/plugin-test-api";
 import { describe, expect, it, vi } from "vitest";
-import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "../../../../packages/gateway-protocol/src/client-info.js";
+import {
+  GATEWAY_CLIENT_IDS,
+  GATEWAY_CLIENT_MODES,
+} from "../../../../packages/gateway-protocol/src/client-info.js";
 import { PROTOCOL_VERSION } from "../../../../packages/gateway-protocol/src/version.js";
-import { withPluginRuntimeGatewayRequestScope } from "../../../../src/plugins/runtime/gateway-request-scope.js";
 import { createGatewayMethodRegistry } from "../../../../src/gateway/methods/registry.js";
+import type {
+  GatewayRequestContext,
+  GatewayRequestOptions,
+} from "../../../../src/gateway/server-methods/types.js";
 import {
   dispatchGatewayMethodInProcess,
   withOperatorToolGatewayAuthority,
 } from "../../../../src/gateway/server-plugin-in-process-dispatch.js";
-import type { GatewayRequestContext, GatewayRequestOptions } from "../../../../src/gateway/server-methods/types.js";
+import { withPluginRuntimeGatewayRequestScope } from "../../../../src/plugins/runtime/gateway-request-scope.js";
 import { registerOutcomeGatewayMethods } from "./registrar.js";
 
 const outcomeId = "123e4567-e89b-42d3-a456-426614174000";
@@ -21,7 +27,10 @@ function createContext(): GatewayRequestContext {
   } as unknown as GatewayRequestContext;
 }
 
-function createOperatorClient(profileId: string, scopes: string[]): NonNullable<GatewayRequestOptions["client"]> {
+function createOperatorClient(
+  profileId: string,
+  scopes: string[],
+): NonNullable<GatewayRequestOptions["client"]> {
   return {
     connId: `conn-${profileId}`,
     authenticatedUserId: `${profileId}@example.com`,
@@ -42,7 +51,11 @@ function createOperatorClient(profileId: string, scopes: string[]): NonNullable<
 }
 
 function registerHarness() {
-  const registrations: Array<{ method: string; handler: never; options: { scope: "operator.read" | "operator.write" } }> = [];
+  const registrations: Array<{
+    method: string;
+    handler: never;
+    options: { scope: "operator.read" | "operator.write" };
+  }> = [];
   const api = createTestPluginApi({
     id: "outcomes",
     name: "Outcomes",
@@ -59,7 +72,11 @@ function registerHarness() {
       gateway: { isAvailable: async () => false, request: async () => ({}) },
     } as never,
     registerGatewayMethod: (method, handler, options) => {
-      registrations.push({ method, handler, options: options as { scope: "operator.read" | "operator.write" } });
+      registrations.push({
+        method,
+        handler,
+        options: options as { scope: "operator.read" | "operator.write" },
+      });
     },
   });
   registerOutcomeGatewayMethods(api);
@@ -129,7 +146,12 @@ describe("P-02 Outcome Gateway admission", () => {
         },
       ]);
     await expect(
-      dispatch({ client: createOperatorClient("manager-a", []), context, method: "outcomes.get", request: { id: outcomeId } }),
+      dispatch({
+        client: createOperatorClient("manager-a", []),
+        context,
+        method: "outcomes.get",
+        request: { id: outcomeId },
+      }),
     ).rejects.toThrow(/scope/i);
     expect(handler).not.toHaveBeenCalled();
   });
@@ -147,7 +169,12 @@ describe("P-02 Outcome Gateway admission", () => {
         },
       ]);
     await expect(
-      dispatch({ client: createOperatorClient("manager-a", ["operator.write"]), context, method: "outcomes.get", request: { id: outcomeId } }),
+      dispatch({
+        client: createOperatorClient("manager-a", ["operator.write"]),
+        context,
+        method: "outcomes.get",
+        request: { id: outcomeId },
+      }),
     ).rejects.toMatchObject({ code: "OUTCOME_NOT_FOUND" });
     expect(handler).toHaveBeenCalledOnce();
   });

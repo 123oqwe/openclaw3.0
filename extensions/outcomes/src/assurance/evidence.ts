@@ -14,7 +14,9 @@ type EvidenceInput = {
 type CanonicalSourceFields = Record<string, string | number>;
 
 function digest(domain: string, value: object): string {
-  return createHash("sha256").update(`${domain}\0${stableStringify(value)}`, "utf8").digest("hex");
+  return createHash("sha256")
+    .update(`${domain}\0${stableStringify(value)}`, "utf8")
+    .digest("hex");
 }
 
 function proofFields(proof: WorkboardCard["proofs"][number]): CanonicalSourceFields {
@@ -103,6 +105,10 @@ export function extractWorkboardEvidence(input: EvidenceInput): EvidenceRef[] {
     (left, right) =>
       (left.kind < right.kind ? -1 : left.kind > right.kind ? 1 : 0) ||
       (left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0) ||
-      (left.sourceDigest < right.sourceDigest ? -1 : left.sourceDigest > right.sourceDigest ? 1 : 0),
+      (left.sourceDigest < right.sourceDigest
+        ? -1
+        : left.sourceDigest > right.sourceDigest
+          ? 1
+          : 0),
   );
 }

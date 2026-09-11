@@ -221,10 +221,33 @@ describe("Outcome repository atomic contract", () => {
   });
 
   it("unlinks a current identity once and leaves an absent identity unchanged", () => {
-    const linked = reduceOutcomeLink(validRecord(), { expectedRevision: 1, criterionId: "c-1", ref: { owner: "workboard", cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }, serverTime: 42 }).record;
-    const mutation = { expectedRevision: 2, criterionId: "c-1", ref: { owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }, serverTime: 43 };
-    expect(reduceOutcomeUnlink(linked, mutation)).toMatchObject({ kind: "updated", record: { revision: 3 } });
-    expect(reduceOutcomeUnlink({ ...linked, revision: 2, criteria: [{ ...first(linked.criteria), workRefs: [] }] }, mutation).kind).toBe("noop");
+    const linked = reduceOutcomeLink(validRecord(), {
+      expectedRevision: 1,
+      criterionId: "c-1",
+      ref: { owner: "workboard", cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" },
+      serverTime: 42,
+    }).record;
+    const mutation = {
+      expectedRevision: 2,
+      criterionId: "c-1",
+      ref: {
+        owner: "workboard" as const,
+        cardId: "card-1",
+        cardCreatedAt: 1,
+        boardIdAtLink: "board-1",
+      },
+      serverTime: 43,
+    };
+    expect(reduceOutcomeUnlink(linked, mutation)).toMatchObject({
+      kind: "updated",
+      record: { revision: 3 },
+    });
+    expect(
+      reduceOutcomeUnlink(
+        { ...linked, revision: 2, criteria: [{ ...first(linked.criteria), workRefs: [] }] },
+        mutation,
+      ).kind,
+    ).toBe("noop");
   });
 
   it("refreshes every linked projection atomically while retaining evidence history", () => {
@@ -240,7 +263,12 @@ describe("Outcome repository atomic contract", () => {
       sourceDigest: "a".repeat(64),
       observedAt: 1,
     };
-    const refreshedEvidence = { ...historicalEvidence, id: "new-evidence", sourceDigest: "b".repeat(64), observedAt: 42 };
+    const refreshedEvidence = {
+      ...historicalEvidence,
+      id: "new-evidence",
+      sourceDigest: "b".repeat(64),
+      observedAt: 42,
+    };
     const result = reduceOutcomeRefresh(
       { ...record, evidence: [historicalEvidence] },
       {
@@ -281,10 +309,22 @@ describe("Outcome repository atomic contract", () => {
       artifacts: [],
       errorCode: "timeout" as const,
     };
-    const mutation = { expectedRevision: record.revision, serverTime: 42, projections: [validProjection], evidence: [] };
-    expect(reduceOutcomeRefresh(record, { ...mutation, projections: [] })).toEqual({ kind: "rejected", record });
-    expect(reduceOutcomeRefresh({ ...record, phase: "cancelled" as const }, mutation)).toMatchObject({ kind: "rejected" });
-    expect(reduceOutcomeRefresh({ ...record, revision: 2 }, mutation)).toMatchObject({ kind: "conflict" });
+    const mutation = {
+      expectedRevision: record.revision,
+      serverTime: 42,
+      projections: [validProjection],
+      evidence: [],
+    };
+    expect(reduceOutcomeRefresh(record, { ...mutation, projections: [] })).toEqual({
+      kind: "rejected",
+      record,
+    });
+    expect(
+      reduceOutcomeRefresh({ ...record, phase: "cancelled" as const }, mutation),
+    ).toMatchObject({ kind: "rejected" });
+    expect(reduceOutcomeRefresh({ ...record, revision: 2 }, mutation)).toMatchObject({
+      kind: "conflict",
+    });
     const evidence = Array.from({ length: 101 }, (_, index) => ({
       id: `evidence-${index}`,
       criterionId: "c-1",
@@ -295,7 +335,10 @@ describe("Outcome repository atomic contract", () => {
       sourceDigest: `${index}`.padStart(64, "0"),
       observedAt: 42,
     }));
-    expect(reduceOutcomeRefresh(record, { ...mutation, evidence })).toEqual({ kind: "rejected", record });
+    expect(reduceOutcomeRefresh(record, { ...mutation, evidence })).toEqual({
+      kind: "rejected",
+      record,
+    });
   });
 
   it("retains a failed refresh's display cache but makes it unavailable to current closure", () => {
@@ -347,7 +390,8 @@ describe("Outcome repository atomic contract", () => {
         ],
       },
     });
-    if (result.kind === "updated") expect(first(result.record.projections).sourceFingerprint).toBeUndefined();
+    if (result.kind === "updated")
+      expect(first(result.record.projections).sourceFingerprint).toBeUndefined();
   });
 
   it("treats link and unlink as generation-changing contract mutations outside draft", () => {
@@ -408,7 +452,12 @@ describe("Outcome repository atomic contract", () => {
     });
     const perCriterion = {
       ...validRecord("per-criterion"),
-      criteria: [{ ...first(validRecord("per-criterion").criteria), workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index)) }],
+      criteria: [
+        {
+          ...first(validRecord("per-criterion").criteria),
+          workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index)),
+        },
+      ],
     };
     expect(
       reduceOutcomeLink(perCriterion, {
@@ -422,8 +471,16 @@ describe("Outcome repository atomic contract", () => {
     const total = {
       ...validRecord("total-refs"),
       criteria: [
-        { ...first(validRecord("total-refs").criteria), workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index)) },
-        { id: "c-2", text: "second", required: false, workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index + 10)) },
+        {
+          ...first(validRecord("total-refs").criteria),
+          workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index)),
+        },
+        {
+          id: "c-2",
+          text: "second",
+          required: false,
+          workRefs: Array.from({ length: 10 }, (_, index) => makeRef(index + 10)),
+        },
         { id: "c-3", text: "third", required: false, workRefs: [] },
       ],
     };

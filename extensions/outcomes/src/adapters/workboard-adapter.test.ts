@@ -2,7 +2,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { readWorkboardCards } from "./workboard-adapter.js";
 
-const fixture = JSON.parse(readFileSync(new URL("./fixtures/workboard-list.v1.json", import.meta.url), "utf8"));
+const fixture = JSON.parse(
+  readFileSync(new URL("./fixtures/workboard-list.v1.json", import.meta.url), "utf8"),
+);
 
 describe("Workboard adapter", () => {
   it("uses public identity fields and defaults an absent board id", () => {
@@ -38,7 +40,9 @@ describe("Workboard adapter", () => {
   it("fails closed for a malformed owner identity or ambiguous card identity", () => {
     expect(() => readWorkboardCards({ cards: [{ ...fixture.cards[0], id: "" }] })).toThrow();
     expect(() => readWorkboardCards({ cards: [fixture.cards[0], fixture.cards[0]] })).toThrow();
-    expect(() => readWorkboardCards({ cards: [{ ...fixture.cards[0], status: "unrecognized" }] })).toThrow();
+    expect(() =>
+      readWorkboardCards({ cards: [{ ...fixture.cards[0], status: "unrecognized" }] }),
+    ).toThrow();
     expect(() =>
       readWorkboardCards({
         cards: [

@@ -1,7 +1,8 @@
 import { Type } from "typebox";
 import { OUTCOME_MAX_CRITERIA } from "../domain/constants.js";
 
-const UUID_PATTERN = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
+const UUID_PATTERN =
+  "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
 
 const outcomeId = Type.String({ pattern: UUID_PATTERN });
 const outcomeTitle = Type.String({ minLength: 1, maxLength: 160 });
@@ -27,7 +28,10 @@ export const outcomeCreateParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
-export const outcomeIdParamsSchema = Type.Object({ id: outcomeId }, { additionalProperties: false });
+export const outcomeIdParamsSchema = Type.Object(
+  { id: outcomeId },
+  { additionalProperties: false },
+);
 
 export const outcomeListParamsSchema = Type.Object(
   {
@@ -45,7 +49,9 @@ export const outcomeUpdateParamsSchema = Type.Object(
       {
         title: Type.Optional(outcomeTitle),
         objective: Type.Optional(outcomeObjective),
-        criteria: Type.Optional(Type.Array(criterion, { minItems: 1, maxItems: OUTCOME_MAX_CRITERIA })),
+        criteria: Type.Optional(
+          Type.Array(criterion, { minItems: 1, maxItems: OUTCOME_MAX_CRITERIA }),
+        ),
       },
       { additionalProperties: false },
     ),

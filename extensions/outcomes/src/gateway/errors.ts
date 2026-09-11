@@ -1,9 +1,9 @@
+import { WorkboardIdentityConflictError } from "../adapters/workboard-adapter.js";
 import {
   OutcomeRepositoryCapacityError,
   OutcomeRepositoryConflictError,
   OutcomeRepositoryNotFoundError,
 } from "../store/plugin-state-repository.js";
-import { WorkboardIdentityConflictError } from "../adapters/workboard-adapter.js";
 
 export const OutcomeErrorCodes = {
   INVALID_REQUEST: "OUTCOME_INVALID_REQUEST",

@@ -51,7 +51,12 @@ export type OutcomeActivateResult =
   | { kind: "rejected"; record: OutcomeRecord }
   | { kind: "updated"; record: OutcomeRecord };
 
-export type OutcomeLinkMutation = { expectedRevision: number; criterionId: string; ref: WorkboardRef; serverTime: number };
+export type OutcomeLinkMutation = {
+  expectedRevision: number;
+  criterionId: string;
+  ref: WorkboardRef;
+  serverTime: number;
+};
 
 /**
  * The Gateway builds these values exclusively from one authorized Workboard
@@ -78,7 +83,11 @@ function canonicalRefOrder(left: WorkboardRef, right: WorkboardRef): number {
   return (
     (left.cardId < right.cardId ? -1 : left.cardId > right.cardId ? 1 : 0) ||
     left.cardCreatedAt - right.cardCreatedAt ||
-    (left.boardIdAtLink < right.boardIdAtLink ? -1 : left.boardIdAtLink > right.boardIdAtLink ? 1 : 0)
+    (left.boardIdAtLink < right.boardIdAtLink
+      ? -1
+      : left.boardIdAtLink > right.boardIdAtLink
+        ? 1
+        : 0)
   );
 }
 
@@ -279,7 +288,13 @@ export function reduceOutcomePatch(
       planHash:
         planGeneration === 0
           ? null
-          : planHash({ outcomeId: current.id, objective, contractRevision, planGeneration, criteria }),
+          : planHash({
+              outcomeId: current.id,
+              objective,
+              contractRevision,
+              planGeneration,
+              criteria,
+            }),
       revision: current.revision + 1,
       updatedAt: mutation.serverTime,
     },
@@ -293,7 +308,8 @@ export function reduceOutcomeLink(
 ): OutcomeMutationResult {
   assertServerTime(mutation.serverTime);
   if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
-  if (current.phase === "cancelled" || hasInFlightOperation(current)) return { kind: "rejected", record: current };
+  if (current.phase === "cancelled" || hasInFlightOperation(current))
+    return { kind: "rejected", record: current };
   const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
   if (!criterion) return { kind: "rejected", record: current };
   const refIdentity = workRefIdentity(mutation.ref);
@@ -327,15 +343,20 @@ export function reduceOutcomeUnlink(
 ): OutcomeMutationResult {
   assertServerTime(mutation.serverTime);
   if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
-  if (current.phase === "cancelled" || hasInFlightOperation(current)) return { kind: "rejected", record: current };
+  if (current.phase === "cancelled" || hasInFlightOperation(current))
+    return { kind: "rejected", record: current };
   const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
   if (!criterion) return { kind: "rejected", record: current };
-  const workRefs = criterion.workRefs.filter((ref) => workRefIdentity(ref) !== workRefIdentity(mutation.ref));
+  const workRefs = criterion.workRefs.filter(
+    (ref) => workRefIdentity(ref) !== workRefIdentity(mutation.ref),
+  );
   if (workRefs.length === criterion.workRefs.length) return { kind: "noop", record: current };
   return reduceWorkboardRefContract(
     current,
     mutation,
-    current.criteria.map((item) => (item.id === mutation.criterionId ? { ...item, workRefs } : item)),
+    current.criteria.map((item) =>
+      item.id === mutation.criterionId ? { ...item, workRefs } : item,
+    ),
   );
 }
 
@@ -355,7 +376,9 @@ export function reduceOutcomeRefresh(
 
   const linkedRefs = current.criteria.flatMap((criterion) => criterion.workRefs);
   const linkedIdentities = new Set(linkedRefs.map(workRefIdentity));
-  const projectionIdentities = mutation.projections.map((projection) => workRefIdentity(projection.ref));
+  const projectionIdentities = mutation.projections.map((projection) =>
+    workRefIdentity(projection.ref),
+  );
   const projectionIdentitySet = new Set(projectionIdentities);
   if (
     projectionIdentitySet.size !== projectionIdentities.length ||
@@ -377,8 +400,11 @@ export function reduceOutcomeRefresh(
     return { kind: "rejected", record: current };
   }
 
-  const existingEvidence = new Map(current.evidence.map((evidence) => [evidenceIdentity(evidence), evidence]));
-  for (const evidence of mutation.evidence) existingEvidence.set(evidenceIdentity(evidence), evidence);
+  const existingEvidence = new Map(
+    current.evidence.map((evidence) => [evidenceIdentity(evidence), evidence]),
+  );
+  for (const evidence of mutation.evidence)
+    existingEvidence.set(evidenceIdentity(evidence), evidence);
   const evidence = Array.from(existingEvidence.values()).toSorted((left, right) =>
     left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
   );
