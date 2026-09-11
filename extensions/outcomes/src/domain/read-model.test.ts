@@ -176,6 +176,49 @@ describe("Outcome P-01 read model", () => {
     expect(detail).not.toHaveProperty("operations");
   });
 
+  it("returns source fields only from explicit authorized read material", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const ref = first(first(input.criteria).workRefs);
+    const restricted = toOutcomeDetail(input, 10);
+    expect(restricted.criteria[0]).toMatchObject({ workRefs: [], sourcesVisibility: "restricted" });
+    expect(restricted.work).toEqual([]);
+
+    const complete = toOutcomeDetail(input, 10, [
+      {
+        ref,
+        currentBoardId: "board-current",
+        status: "done",
+        sourceUpdatedAt: 10,
+        upstreamStale: false,
+        evidence: [
+          {
+            id: "evidence-1",
+            criterionId: "c-1",
+            workRef: ref,
+            kind: "workboard-proof",
+            sourceId: "proof-1",
+            sourceDigest: "proof-digest-1",
+            observedAt: 10,
+            planGeneration: 1,
+            sourceCreatedAt: 9,
+            label: "Hosted proof",
+            proofStatus: "passed",
+            url: "https://example.test/proof-1",
+          },
+        ],
+      },
+    ]);
+    expect(complete.criteria[0]).toMatchObject({
+      workRefs: [ref],
+      sourcesVisibility: "complete",
+      evidenceSetHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+    expect(complete.work).toMatchObject([{ ref, currentBoardId: "board-current", status: "done" }]);
+    expect(complete.evidence).toMatchObject([
+      { sourceId: "proof-1", label: "Hosted proof", proofStatus: "passed" },
+    ]);
+  });
+
   it("reports source failures by criterion without leaking card identity", () => {
     const input = record();
     const criterion = first(input.criteria);

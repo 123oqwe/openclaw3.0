@@ -5,6 +5,20 @@ import type { OutcomeRecord } from "./types.js";
 
 type CurrentProjection = OutcomeRecord["projections"][number];
 
+/**
+ * Ephemeral data from one authorized Workboard read. It is deliberately not a
+ * persisted DTO: callers that have no current owner read pass no material and
+ * receive the restricted view below.
+ */
+export type AuthorizedOutcomeSource = {
+  ref: OutcomeRecord["criteria"][number]["workRefs"][number];
+  currentBoardId: string;
+  status: string;
+  sourceUpdatedAt: number;
+  upstreamStale: boolean;
+  evidence: OutcomeDetail["evidence"];
+};
+
 function workRefIdentity(ref: OutcomeRecord["criteria"][number]["workRefs"][number]): string {
   return `${ref.cardId}\0${ref.cardCreatedAt}`;
 }
@@ -116,8 +130,11 @@ function currentDecision(
 }
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
-export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): OutcomeSummary {
-  const projections = currentProjections(record);
+export function toOutcomeSummary(
+  record: OutcomeRecord,
+  observedAt: number,
+  projections: CurrentProjection[] = currentProjections(record),
+): OutcomeSummary {
   const hasUnavailableSource = projections.some(
     (projection) =>
       projection.availability !== "available" ||
@@ -158,22 +175,73 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
   };
 }
 
-/** Build the public detail view; identity, request hashes, and internal history stay private. */
-export function toOutcomeDetail(record: OutcomeRecord, observedAt: number): OutcomeDetail {
-  const summary = toOutcomeSummary(record, observedAt);
+/** Build the public detail view; persistence identity and internal history stay private. */
+export function toOutcomeDetail(
+  record: OutcomeRecord,
+  observedAt: number,
+  authorizedSources: AuthorizedOutcomeSource[] = [],
+  observedProjections: CurrentProjection[] = currentProjections(record),
+): OutcomeDetail {
+  const summary = toOutcomeSummary(record, observedAt, observedProjections);
+  const sourcesByRef = new Map(
+    authorizedSources.map((source) => [workRefIdentity(source.ref), source]),
+  );
   const criteria = record.criteria.map((criterion) => ({
-    id: criterion.id,
-    text: criterion.text,
-    required: criterion.required,
-    workRefs: [],
-    sourcesVisibility: "restricted" as const,
-    evidenceSetHash: null,
+    ...(() => {
+      const visibleRefs = criterion.workRefs.filter((ref) => sourcesByRef.has(workRefIdentity(ref)));
+      const sourcesComplete = visibleRefs.length === criterion.workRefs.length;
+      const sourceDigests = sourcesComplete
+        ? visibleRefs.flatMap((ref) =>
+            (sourcesByRef.get(workRefIdentity(ref))?.evidence ?? [])
+              .filter(
+                (evidence) =>
+                  evidence.criterionId === criterion.id &&
+                  evidence.planGeneration === record.planGeneration,
+              )
+              .map((evidence) => evidence.sourceDigest),
+          )
+        : [];
+      return {
+        id: criterion.id,
+        text: criterion.text,
+        required: criterion.required,
+        workRefs: sourcesComplete ? visibleRefs : [],
+        sourcesVisibility: sourcesComplete ? ("complete" as const) : ("restricted" as const),
+        evidenceSetHash:
+          sourcesComplete && criterion.workRefs.length > 0
+            ? evidenceSetHash({
+                criterionId: criterion.id,
+                planGeneration: record.planGeneration,
+                sourceDigests,
+              })
+            : null,
+      };
+    })(),
   }));
-  // P-01 has no owner-authorized observation adapter yet. Do not leak persisted
-  // refs/evidence or invent source timestamps; P-02 supplies these inputs.
-  const work: OutcomeDetail["work"] = [];
-  const evidence: OutcomeDetail["evidence"] = [];
-  const sourceIssues = currentProjections(record)
+  const work: OutcomeDetail["work"] = authorizedSources
+    .map((source) => ({
+      ref: source.ref,
+      currentBoardId: source.currentBoardId,
+      status: source.status,
+      observedAt,
+      sourceUpdatedAt: source.sourceUpdatedAt,
+      lastSuccessfulAt: observedAt,
+      upstreamStale: source.upstreamStale,
+    }))
+    .toSorted((left, right) => {
+      const leftIdentity = workRefIdentity(left.ref);
+      const rightIdentity = workRefIdentity(right.ref);
+      return leftIdentity < rightIdentity ? -1 : leftIdentity > rightIdentity ? 1 : 0;
+    });
+  const evidence: OutcomeDetail["evidence"] = authorizedSources
+    .flatMap((source) => source.evidence)
+    .filter((item) => item.planGeneration === record.planGeneration)
+    .toSorted((left, right) =>
+      (left.criterionId < right.criterionId ? -1 : left.criterionId > right.criterionId ? 1 : 0) ||
+      (left.kind < right.kind ? -1 : left.kind > right.kind ? 1 : 0) ||
+      (left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0),
+    );
+  const sourceIssues = observedProjections
     .flatMap((projection) => {
       const linkedCriteria = record.criteria.filter((item) =>
         item.workRefs.some((ref) => workRefIdentity(ref) === workRefIdentity(projection.ref)),

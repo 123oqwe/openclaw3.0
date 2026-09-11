@@ -19,7 +19,11 @@ import {
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
 import { createRequestHash, workboardProjectionFingerprint } from "../domain/schema.js";
-import { toOutcomeDetail, toOutcomeSummary } from "../domain/read-model.js";
+import {
+  toOutcomeDetail,
+  toOutcomeSummary,
+  type AuthorizedOutcomeSource,
+} from "../domain/read-model.js";
 import type { Criterion, EvidenceRef, OutcomeRecord, WorkProjection, WorkboardRef } from "../domain/types.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { WorkboardIdentityConflictError, readWorkboardCards } from "../adapters/workboard-adapter.js";
@@ -162,6 +166,7 @@ type RefreshSummary = { status: OutcomeRefreshStatus; reason?: RefreshReason };
 type RefreshCandidate = {
   projections: WorkProjection[];
   evidence: EvidenceRef[];
+  authorizedSources: AuthorizedOutcomeSource[];
   refresh: RefreshSummary;
 };
 
@@ -201,6 +206,7 @@ function unavailableRefresh(record: OutcomeRecord, observedAt: number, reason: R
   return {
     projections,
     evidence: [],
+    authorizedSources: [],
     refresh: { status: availability, reason },
   };
 }
@@ -288,9 +294,55 @@ function buildRefreshCandidate(record: OutcomeRecord, cards: Awaited<ReturnType<
   });
   const identityConflict = projections.some((projection) => projection.availability === "identity-conflict");
   const unavailableProjection = projections.find((projection) => projection.availability === "unavailable");
+  const authorizedSources: AuthorizedOutcomeSource[] = projections.flatMap((projection) => {
+    if (projection.availability !== "available") return [];
+    const card = matchedCards.get(workRefIdentity(projection.ref));
+    if (card === undefined) return [];
+    const evidenceViews = evidence
+      .filter((item) => workRefIdentity(item.workRef) === workRefIdentity(projection.ref))
+      .flatMap((item) => {
+        if (item.kind === "workboard-proof") {
+          const proof = card.proofs.find((candidate) => candidate.id === item.sourceId);
+          return proof === undefined
+            ? []
+            : [
+                {
+                  ...item,
+                  sourceCreatedAt: proof.createdAt,
+                  ...(proof.label === undefined ? {} : { label: proof.label }),
+                  proofStatus: proof.status,
+                  ...(proof.url === undefined ? {} : { url: proof.url }),
+                },
+              ];
+        }
+        const artifact = card.artifacts.find((candidate) => candidate.id === item.sourceId);
+        return artifact === undefined
+          ? []
+          : [
+              {
+                ...item,
+                sourceCreatedAt: artifact.createdAt,
+                ...(artifact.label === undefined ? {} : { label: artifact.label }),
+                ...(artifact.url === undefined ? {} : { url: artifact.url }),
+                ...(artifact.mimeType === undefined ? {} : { mimeType: artifact.mimeType }),
+              },
+            ];
+      });
+    return [
+      {
+        ref: projection.ref,
+        currentBoardId: card.boardId,
+        status: card.status,
+        sourceUpdatedAt: card.updatedAt,
+        upstreamStale: card.upstreamStale,
+        evidence: evidenceViews,
+      },
+    ];
+  });
   return {
     projections,
     evidence,
+    authorizedSources,
     refresh: identityConflict
       ? { status: "identity-conflict", reason: "identity-conflict" }
       : unavailableProjection === undefined
@@ -313,7 +365,29 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod("outcomes.get", async ({ client, params, respond }) => {
     if (!Value.Check(outcomeIdParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
     const owner = authenticatedProfileId(client); const id = normalizedUuid(params.id); if (!owner || !id) return fail(respond, "NOT_FOUND");
-    try { const record = await repository.getOwned(owner, id); if (!record) return fail(respond, "NOT_FOUND"); respond(true, { outcome: toOutcomeDetail(record, Date.now()) }); }
+    try {
+      const record = await repository.getOwned(owner, id);
+      if (!record) return fail(respond, "NOT_FOUND");
+      const now = Date.now();
+      if (record.criteria.every((criterion) => criterion.workRefs.length === 0)) {
+        respond(true, { outcome: toOutcomeDetail(record, now) });
+        return;
+      }
+      let candidate: RefreshCandidate;
+      try {
+        candidate = buildRefreshCandidate(record, await readAuthorizedWorkboardCards(api), now);
+      } catch (error) {
+        candidate = unavailableRefresh(record, now, refreshReason(error));
+      }
+      respond(true, {
+        outcome: toOutcomeDetail(
+          record,
+          now,
+          candidate.authorizedSources,
+          candidate.projections,
+        ),
+      });
+    }
     catch (error) { respond(false, undefined, outcomeError(outcomeStorageError(error, "read"))); }
   }, { scope: "operator.read" });
   api.registerGatewayMethod("outcomes.list", async ({ client, params, respond }) => {
@@ -410,7 +484,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
     const now = Date.now();
     let candidate: RefreshCandidate;
     if (record.criteria.every((criterion) => criterion.workRefs.length === 0)) {
-      candidate = { projections: [], evidence: [], refresh: { status: "available" } };
+      candidate = { projections: [], evidence: [], authorizedSources: [], refresh: { status: "available" } };
     } else {
       try {
         candidate = buildRefreshCandidate(record, await readAuthorizedWorkboardCards(api), now);
@@ -429,7 +503,15 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         return { result: mutation, ...(mutation.kind === "updated" ? { next: mutation.record } : {}) };
       });
       if (decision.kind === "updated" || decision.kind === "noop") {
-        respond(true, { outcome: toOutcomeDetail(decision.record, now), refresh: candidate.refresh });
+        respond(true, {
+          outcome: toOutcomeDetail(
+            decision.record,
+            now,
+            candidate.authorizedSources,
+            candidate.projections,
+          ),
+          refresh: candidate.refresh,
+        });
         return;
       }
       respond(false, undefined, outcomeError(decision.kind === "conflict" ? OutcomeErrorCodes.REVISION_CONFLICT : OutcomeErrorCodes.INVALID_STATE));

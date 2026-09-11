@@ -318,6 +318,82 @@ describe("P-02 Outcome handlers", () => {
     });
   });
 
+  it("reads current authorized source material once without persisting a get", async () => {
+    const harness = createHarness({
+      workboardCards: [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 8,
+          metadata: {
+            automation: { boardId: "board-b" },
+            proof: [{ id: "proof-a", status: "passed", createdAt: 3, label: "Hosted proof" }],
+            artifacts: [],
+          },
+        },
+      ],
+    });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.linkWorkboard", { id, expectedRevision: 1, criterionId, cardId: "card-a" });
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+    expect(await harness.call("outcomes.get", { id })).toMatchObject([
+      true,
+      {
+        outcome: {
+          criteria: [{ sourcesVisibility: "complete", workRefs: [{ cardId: "card-a" }] }],
+          work: [{ ref: { cardId: "card-a" }, currentBoardId: "board-b", status: "done" }],
+          evidence: [{ sourceId: "proof-a", label: "Hosted proof", proofStatus: "passed" }],
+        },
+      },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.writes()).toBe(writes);
+  });
+
+  it("keeps Outcome content but never leaks cached source material after an owner-read failure", async () => {
+    const harness = createHarness({ workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" } });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const created = harness.records.get(id)!;
+    const ref = { owner: "workboard" as const, cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" };
+    harness.records.set(id, {
+      ...created,
+      criteria: [{ ...created.criteria[0]!, workRefs: [ref] }],
+      projections: [
+        {
+          ref,
+          availability: "available",
+          observedAt: 1,
+          proofs: [{ sourceId: "proof-a", digest: "a".repeat(64) }],
+          artifacts: [],
+          currentBoardId: "board-a",
+          status: "done",
+          sourceUpdatedAt: 1,
+          lastSuccessfulAt: 1,
+          sourceFingerprint: "b".repeat(64),
+        },
+      ],
+    });
+    const writes = harness.writes();
+    expect(await harness.call("outcomes.get", { id })).toMatchObject([
+      true,
+      {
+        outcome: {
+          objective: "Outcome objective",
+          readiness: "unavailable",
+          criteria: [{ sourcesVisibility: "restricted", workRefs: [] }],
+          work: [],
+          evidence: [],
+          sourceIssues: [{ criterionId, reason: "timeout" }],
+        },
+      },
+    ]);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("records a failed refresh as unavailable while retaining its display cache", async () => {
     const harness = createHarness({ workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" } });
     const id = outcomeIds[0]!;
