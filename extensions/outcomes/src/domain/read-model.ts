@@ -276,9 +276,10 @@ export function toOutcomeDetail(
         projection.lastSuccessfulAt !== undefined,
     )
     .map((projection) => projection.lastSuccessfulAt! + OUTCOME_PROJECTION_MAX_AGE_MS)
-    .reduce<number | null>((earliest, candidate) =>
-      earliest === null || candidate < earliest ? candidate : earliest,
-    , null);
+    .reduce<number | null>(
+      (earliest, candidate) => (earliest === null || candidate < earliest ? candidate : earliest),
+      null,
+    );
   return {
     ...summary,
     objective: record.objective,
