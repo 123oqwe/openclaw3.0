@@ -43,6 +43,9 @@ function currentEvidenceSourceDigests(
   observedAt: number,
 ): string[] | undefined {
   const linked = new Map(criterion.workRefs.map((ref) => [workRefIdentity(ref), ref]));
+  if (linked.size === 0) {
+    return undefined;
+  }
   const linkedProjections = new Map(
     projections
       .filter((projection) => linked.has(workRefIdentity(projection.ref)))

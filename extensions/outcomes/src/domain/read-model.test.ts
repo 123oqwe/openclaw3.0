@@ -376,6 +376,14 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
 
+  it("does not select a rejected decision after its criterion is unlinked", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const current = first(input.decisions);
+    input.decisions = [{ ...current, id: "decision-unlinked-rejected", status: "rejected" }];
+    first(input.criteria).workRefs = [];
+    expect(toOutcomeSummary(syncCurrentDecisionPlan(input), 10).readiness).toBe("incomplete");
+  });
+
   it.each(["missing projection", "source from another linked card"])(
     "does not select a rejected decision with %s",
     (caseName) => {
