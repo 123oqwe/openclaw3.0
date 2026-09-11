@@ -805,28 +805,28 @@ describe("Outcome repository host adapter", () => {
           overflowPolicy: "reject-new",
           env: state.env,
         });
-        const warnings: Array<{ kind: string; observed: number; threshold: number }> = [];
-        const repository = createOutcomeRepository(store, {
-          onCapacityWarning: (warning) => warnings.push(warning),
-        });
+        const repository = createOutcomeRepository(store);
         for (let index = 0; index < OUTCOME_CAPACITY_WARNING_ENTRIES - 1; index += 1) {
           await expect(repository.create(draftRecord(`capacity-${index}`))).resolves.toEqual({
             created: true,
           });
         }
-        expect(warnings).toEqual([]);
-        const reopenedRepository = createOutcomeRepository(store, {
-          onCapacityWarning: (warning) => warnings.push(warning),
-        });
+        await expect(repository.inspectCapacity()).resolves.toEqual({ entryCount: 399, warnings: [] });
+        const reopenedRepository = createOutcomeRepository(store);
         await expect(
           reopenedRepository.create(
             draftRecord(`capacity-${OUTCOME_CAPACITY_WARNING_ENTRIES - 1}`),
           ),
         ).resolves.toEqual({ created: true });
-        expect(warnings).toContainEqual({
-          kind: "entry-count",
-          observed: OUTCOME_CAPACITY_WARNING_ENTRIES,
-          threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
+        await expect(repository.inspectCapacity()).resolves.toEqual({
+          entryCount: OUTCOME_CAPACITY_WARNING_ENTRIES,
+          warnings: [
+            {
+              kind: "entry-count",
+              observed: OUTCOME_CAPACITY_WARNING_ENTRIES,
+              threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
+            },
+          ],
         });
         for (
           let index = OUTCOME_CAPACITY_WARNING_ENTRIES;

@@ -6,6 +6,12 @@ export type OutcomeCapacityWarning =
   | { kind: "record-bytes"; observed: number; threshold: number }
   | { kind: "write-duration"; observed: number; threshold: number };
 
+/** A read-only, host-sampled capacity observation. */
+export type OutcomeCapacitySnapshot = {
+  entryCount: number;
+  warnings: OutcomeCapacityWarning[];
+};
+
 /**
  * Internal-only diagnostics. The callback is deliberately not part of a public
  * Gateway contract; P-02 supplies an actual receiver when it wires mutations.
@@ -24,6 +30,7 @@ export type OutcomeRepository = {
   ): Promise<{ created: boolean; replayed: boolean; record: OutcomeRecord }>;
   get(id: string): Promise<OutcomeRecord | undefined>;
   list(): Promise<OutcomeRecord[]>;
+  inspectCapacity(): Promise<OutcomeCapacitySnapshot>;
   transact<T>(
     id: string,
     decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },

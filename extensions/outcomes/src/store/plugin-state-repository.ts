@@ -13,6 +13,7 @@ import {
 } from "../domain/schema.js";
 import type {
   OutcomeCapacityWarning,
+  OutcomeCapacitySnapshot,
   OutcomeRecord,
   OutcomeRepository,
   OutcomeRepositoryOptions,
@@ -108,6 +109,7 @@ function createLegacyOutcomeRepository(
       (await store.entries())
         .map((entry) => entry.value)
         .toSorted((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
+    inspectCapacity: async () => capacitySnapshot((await store.entries()).length),
     transact: async <T>(
       id: string,
       decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },
@@ -194,7 +196,7 @@ function createStrictOutcomeRepository(
   const base = createLegacyOutcomeRepository(store);
   const strict = (value: OutcomeRecord | undefined) =>
     value === undefined ? undefined : parseOutcomeRecord(value);
-  const diagnostics = createCapacityDiagnostics(store, options);
+  const diagnostics = createCapacityDiagnostics(options);
   return {
     ...base,
     create: async (record) => {
@@ -203,7 +205,7 @@ function createStrictOutcomeRepository(
         const parsed = parseOutcomeRecord(record);
         const created = await base.create(parsed);
         if (created.created) {
-          await diagnostics.observeCommitted(parsed, true, diagnostics.now() - startedAt);
+          await diagnostics.observeCommitted(parsed, diagnostics.now() - startedAt);
         }
         return created;
       } catch (error) {
@@ -224,7 +226,7 @@ function createStrictOutcomeRepository(
         return rethrowKnownCapacity(error);
       }
       if (created) {
-        await diagnostics.observeCommitted(parsed, true, diagnostics.now() - startedAt);
+        await diagnostics.observeCommitted(parsed, diagnostics.now() - startedAt);
         return { created: true, replayed: false, record: parsed };
       }
       const rawExisting = await store.lookup(parsed.id);
@@ -242,6 +244,7 @@ function createStrictOutcomeRepository(
     },
     get: async (id) => strict(await base.get(id)),
     list: async () => (await base.list()).map(parseOutcomeRecord),
+    inspectCapacity: () => base.inspectCapacity(),
     getOwned: async (owner, id) => strict(await base.getOwned(owner, id)),
     listOwned: async (owner) => (await base.listOwned(owner)).map(parseOutcomeRecord),
     transact: async <T>(
@@ -274,7 +277,7 @@ function createStrictOutcomeRepository(
         throw new OutcomeRepositoryCapacityError();
       }
       if (committed !== undefined) {
-        await diagnostics.observeCommitted(committed, false, diagnostics.now() - startedAt);
+        await diagnostics.observeCommitted(committed, diagnostics.now() - startedAt);
       }
       return result;
     },
@@ -309,7 +312,7 @@ function createStrictOutcomeRepository(
         throw new OutcomeRepositoryCapacityError();
       }
       if (committed !== undefined) {
-        await diagnostics.observeCommitted(committed, false, diagnostics.now() - startedAt);
+        await diagnostics.observeCommitted(committed, diagnostics.now() - startedAt);
       }
       return result;
     },
@@ -326,13 +329,8 @@ function createStrictOutcomeRepository(
   };
 }
 
-function createCapacityDiagnostics(
-  store: Pick<PluginStateKeyedStore<OutcomeRecord>, "entries">,
-  options: OutcomeRepositoryOptions,
-) {
+function createCapacityDiagnostics(options: OutcomeRepositoryOptions) {
   const now = options.now ?? performance.now;
-  let entryCountHint: number | undefined;
-  let entryWarningSent = false;
 
   const warn = (warning: OutcomeCapacityWarning) => {
     try {
@@ -342,33 +340,9 @@ function createCapacityDiagnostics(
     }
   };
 
-  const sampleEntryCountAfterCreate = async () => {
-    if (!options.onCapacityWarning || entryWarningSent) {
-      return;
-    }
-    if (entryCountHint === undefined || entryCountHint + 1 >= OUTCOME_CAPACITY_WARNING_ENTRIES) {
-      try {
-        entryCountHint = (await store.entries()).length;
-      } catch {
-        // Diagnostics are best effort and must not fail a committed mutation.
-        return;
-      }
-    } else {
-      entryCountHint += 1;
-    }
-    if (entryCountHint >= OUTCOME_CAPACITY_WARNING_ENTRIES) {
-      entryWarningSent = true;
-      warn({
-        kind: "entry-count",
-        observed: entryCountHint,
-        threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
-      });
-    }
-  };
-
   return {
     now,
-    observeCommitted: async (record: OutcomeRecord, created: boolean, writeDuration: number) => {
+    observeCommitted: async (record: OutcomeRecord, writeDuration: number) => {
       if (!options.onCapacityWarning) {
         return;
       }
@@ -387,10 +361,23 @@ function createCapacityDiagnostics(
           threshold: OUTCOME_CAPACITY_WARNING_WRITE_DURATION_MS,
         });
       }
-      if (created) {
-        await sampleEntryCountAfterCreate();
-      }
     },
+  };
+}
+
+function capacitySnapshot(entryCount: number): OutcomeCapacitySnapshot {
+  return {
+    entryCount,
+    warnings:
+      entryCount >= OUTCOME_CAPACITY_WARNING_ENTRIES
+        ? [
+            {
+              kind: "entry-count",
+              observed: entryCount,
+              threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
+            },
+          ]
+        : [],
   };
 }
 
