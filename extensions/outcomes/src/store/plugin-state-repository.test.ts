@@ -230,13 +230,21 @@ describe("Outcome repository host adapter", () => {
             },
           ],
         };
+        const invalidCreateHash: OutcomeRecord = {
+          ...draftRecord("initial-hash"),
+          createRequestHash: "f".repeat(64),
+        };
 
         await expect(repository.create(nonInitialActive)).rejects.toThrow("initial Outcome record");
         await expect(repository.createOwned("alice", nonInitialCached)).rejects.toThrow(
           "initial Outcome record",
         );
+        await expect(repository.create(invalidCreateHash)).rejects.toThrow(
+          "createRequestHash does not match",
+        );
         await expect(store.lookup(nonInitialActive.id)).resolves.toBeUndefined();
         await expect(store.lookup(nonInitialCached.id)).resolves.toBeUndefined();
+        await expect(store.lookup(invalidCreateHash.id)).resolves.toBeUndefined();
       },
     );
   });
