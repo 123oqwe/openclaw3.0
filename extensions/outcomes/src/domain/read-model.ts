@@ -42,15 +42,20 @@ function currentEvidenceSourceDigests(
   projections: CurrentProjection[],
   observedAt: number,
 ): string[] | undefined {
-  const linked = new Map(criterion.workRefs.map((ref) => [workRefIdentity(ref), ref]));
+  const linked = new Map<string, OutcomeRecord["criteria"][number]["workRefs"][number]>();
+  for (const ref of criterion.workRefs) {
+    linked.set(workRefIdentity(ref), ref);
+  }
   if (linked.size === 0) {
     return undefined;
   }
-  const linkedProjections = new Map(
-    projections
-      .filter((projection) => linked.has(workRefIdentity(projection.ref)))
-      .map((projection) => [workRefIdentity(projection.ref), projection]),
-  );
+  const linkedProjections = new Map<string, CurrentProjection>();
+  for (const projection of projections) {
+    const identity = workRefIdentity(projection.ref);
+    if (linked.has(identity)) {
+      linkedProjections.set(identity, projection);
+    }
+  }
   if (
     linkedProjections.size !== linked.size ||
     Array.from(linkedProjections.values()).some(
