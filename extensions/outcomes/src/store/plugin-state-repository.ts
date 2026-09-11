@@ -63,17 +63,18 @@ function rethrowKnownCapacity(error: unknown): never {
   throw error;
 }
 
+function assertManagerProfileId(managerProfileId: string): void {
+  if (!managerProfileId.trim()) {
+    throw new Error("managerProfileId must be non-empty");
+  }
+}
+
 function createLegacyOutcomeRepository(
   store: Pick<
     PluginStateKeyedStore<OutcomeRecord>,
     "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf"
   >,
 ): OutcomeRepository {
-  const requireManager = (managerProfileId: string) => {
-    if (!managerProfileId.trim()) {
-      throw new Error("managerProfileId must be non-empty");
-    }
-  };
   if (typeof store.update !== "function") {
     throw new Error("Outcome repository requires atomic keyed-store update");
   }
@@ -83,7 +84,7 @@ function createLegacyOutcomeRepository(
       return { created: await store.registerIfAbsent(record.id, record) };
     },
     createOwned: async (managerProfileId, record) => {
-      requireManager(managerProfileId);
+      assertManagerProfileId(managerProfileId);
       if (record.managerProfileId !== managerProfileId) {
         throw new Error("Outcome manager profile does not match authenticated owner");
       }
@@ -132,12 +133,12 @@ function createLegacyOutcomeRepository(
       return store.deleteIf(id, predicate);
     },
     getOwned: async (managerProfileId, id) => {
-      requireManager(managerProfileId);
+      assertManagerProfileId(managerProfileId);
       const record = await store.lookup(id);
       return record?.managerProfileId === managerProfileId ? record : undefined;
     },
     listOwned: async (managerProfileId) => {
-      requireManager(managerProfileId);
+      assertManagerProfileId(managerProfileId);
       return (await store.entries())
         .map((entry) => entry.value)
         .filter((record) => record.managerProfileId === managerProfileId)
@@ -148,7 +149,7 @@ function createLegacyOutcomeRepository(
       id: string,
       decide: (current: OutcomeRecord) => { result: T; next?: OutcomeRecord },
     ) => {
-      requireManager(managerProfileId);
+      assertManagerProfileId(managerProfileId);
       let result!: T;
       let unavailable = false;
       await store.update!(id, (current) => {
@@ -169,7 +170,7 @@ function createLegacyOutcomeRepository(
       return result;
     },
     deleteOwnedIf: async (managerProfileId, id, predicate) => {
-      requireManager(managerProfileId);
+      assertManagerProfileId(managerProfileId);
       if (typeof store.deleteIf !== "function") {
         throw new Error("Outcome repository requires atomic keyed-store deleteIf");
       }
@@ -321,11 +322,13 @@ function createStrictOutcomeRepository(
         const parsed = parseOutcomeRecord(current);
         return predicate(parsed);
       }),
-    deleteOwnedIf: async (owner, id, predicate) =>
-      deleteIf(id, (current) => {
+    deleteOwnedIf: async (owner, id, predicate) => {
+      assertManagerProfileId(owner);
+      return deleteIf(id, (current) => {
         const parsed = parseOutcomeRecord(current);
         return parsed.managerProfileId === owner && predicate(parsed);
-      }),
+      });
+    },
   };
 }
 

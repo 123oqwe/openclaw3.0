@@ -1,0 +1,91 @@
+{
+  "cards": [
+    {
+      "id": "card-proof-artifact",
+      "title": "Publish the Outcome fixture",
+      "status": "done",
+      "priority": "normal",
+      "labels": ["outcomes"],
+      "position": 1000,
+      "createdAt": 1700000000000,
+      "updatedAt": 1700000100000,
+      "metadata": {
+        "automation": {
+          "boardId": "release-board"
+        },
+        "proof": [
+          {
+            "id": "proof-1",
+            "status": "passed",
+            "createdAt": 1700000001000,
+            "label": "Hosted test",
+            "command": "pnpm test extensions/outcomes",
+            "url": "https://example.test/proof-1",
+            "note": "All expected checks passed."
+          }
+        ],
+        "artifacts": [
+          {
+            "id": "artifact-1",
+            "createdAt": 1700000002000,
+            "label": "Hosted report",
+            "url": "https://example.test/artifact-1",
+            "path": "/tmp/outcome-report.json",
+            "mimeType": "application/json"
+          }
+        ],
+        "futureOwnerMetadata": {
+          "ignoredByOutcome": true
+        }
+      },
+      "futureCardField": "permitted owner response addition"
+    },
+    {
+      "id": "card-default-board",
+      "title": "Use the default board identity",
+      "status": "blocked",
+      "priority": "high",
+      "labels": [],
+      "position": 2000,
+      "createdAt": 1700000200000,
+      "updatedAt": 1700000300000,
+      "metadata": {
+        "proof": [],
+        "artifacts": []
+      }
+    }
+  ],
+  "boards": [
+    {
+      "id": "default",
+      "name": "Default",
+      "total": 1,
+      "active": 1,
+      "archived": 0,
+      "byStatus": {
+        "blocked": 1
+      }
+    },
+    {
+      "id": "release-board",
+      "name": "Release",
+      "total": 1,
+      "active": 0,
+      "archived": 0,
+      "byStatus": {
+        "done": 1
+      }
+    }
+  ],
+  "statuses": [
+    "triage",
+    "backlog",
+    "todo",
+    "scheduled",
+    "ready",
+    "running",
+    "review",
+    "blocked",
+    "done"
+  ]
+}

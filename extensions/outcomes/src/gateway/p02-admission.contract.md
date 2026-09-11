@@ -14,6 +14,31 @@ first real P-02 handler and must use the host registrar/authentication fixtures.
 - Assert unauthenticated, expired, revoked, and missing-scope requests fail closed
   using the existing typed Gateway error contract.
 
+## Frozen Workboard owner-response fixture
+
+The P-02 adapter test uses
+`adapters/fixtures/workboard-list.v1.json`, a public `workboard.cards.list`
+response shape as it exists today: `{ cards, boards, statuses }`. The compatibility fixture must retain
+the top-level `boards` and `statuses` fields even though the adapter consumes only
+`cards`; this proves it accepts permitted owner-response additions rather than
+silently assuming a private store shape.
+
+- Include a visible card with `id`, `status`, `createdAt`, `updatedAt`, and
+  `metadata.automation.boardId`, plus at least one proof and one artifact. The
+  fixture must exercise the canonical proof fields
+  (`id/status/createdAt/label/command/url/note`) and artifact fields
+  (`id/createdAt/label/url/path/mimeType`).
+- Include a card without `metadata.automation.boardId` to prove the adapter uses
+  the specified `"default"` fallback, not a Workboard store helper or a client
+  supplied board id.
+- Include harmless extra card/metadata fields. The Zod owner-response boundary
+  permits those fields, but malformed required identity fields, malformed proof or
+  artifact IDs, and an unknown card status must fail closed.
+- Keep card identity assertions on `(id, createdAt)`, not position or display
+  order. A reordered response must produce the same source digest/fingerprint;
+  a changed proof/artifact field or a changed current board must produce a new
+  digest.
+
 ## First handler package
 
 The first executable package is the complete P-02 method set:
@@ -23,6 +48,9 @@ The first executable package is the complete P-02 method set:
 
 1. Strict TypeBox request DTOs reject unknown fields, invalid UUIDs, invalid limits,
    oversized UTF-8 payloads, duplicate criteria, and missing required criteria.
+   In particular, client-supplied timestamp/server-time fields are invalid input:
+   handlers obtain timestamps from the trusted Gateway clock, and a spoofed time
+   cannot affect persisted timestamps. Replay and no-op paths remain zero-write.
 2. Response DTOs are explicit allowlists: no manager profile, request hash, raw
    refs/evidence, database paths, or internal operation fields are exposed.
 3. `get` and `list` filter by the authenticated manager. A record owned by another

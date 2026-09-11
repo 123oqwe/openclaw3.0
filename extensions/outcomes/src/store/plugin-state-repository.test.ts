@@ -83,12 +83,13 @@ function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
     planGeneration: 1,
     criteria: draft.criteria,
   };
+  const activePlanHash = planHash(plan);
   const record: OutcomeRecord = {
     ...draft,
     phase: "active",
     revision: 100,
     planGeneration: 1,
-    planHash: planHash(plan),
+    planHash: activePlanHash,
     createdAt: 100,
     updatedAt: 100,
   };
@@ -101,7 +102,7 @@ function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
       status: "verified" as const,
       requestHash: `${index.toString(16).padStart(2, "0")}${"a".repeat(62)}`,
       profileId: record.managerProfileId,
-      planHash: record.planHash,
+      planHash: activePlanHash,
       decidedPlan: plan,
       evidenceSetHash: "b".repeat(64),
       note: "x".repeat(2_000),
