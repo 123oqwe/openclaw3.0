@@ -844,13 +844,24 @@ describe("Outcome repository host adapter", () => {
           env: state.env,
         });
         // Deliberately malformed persisted value: unknown version and missing fields.
-        const corrupt = { id: "corrupt", schemaVersion: 99 } as unknown as OutcomeRecord;
+        const corrupt = {
+          id: "corrupt",
+          managerProfileId: "alice",
+          schemaVersion: 99,
+        } as unknown as OutcomeRecord;
         await store.registerIfAbsent(corrupt.id, corrupt);
         const repository = createOutcomeRepository(store);
         await expect(repository.get(corrupt.id)).rejects.toThrow();
         let called = false;
         await expect(
           repository.transact(corrupt.id, () => {
+            called = true;
+            return { result: "unexpected" };
+          }),
+        ).rejects.toMatchObject({ code: "PLUGIN_STATE_WRITE_FAILED" });
+        expect(called).toBe(false);
+        await expect(
+          repository.transactOwned("alice", corrupt.id, () => {
             called = true;
             return { result: "unexpected" };
           }),
