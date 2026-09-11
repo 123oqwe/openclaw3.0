@@ -3642,6 +3642,7 @@ NODE
       eventName: "workflow_dispatch",
       historicalCompatibility: false,
       runnerBackend: "hybrid",
+      changedPaths: ["extensions/outcomes/index.ts"],
     });
 
     expect(blacksmith.status, blacksmith.output).toBe(0);
@@ -3692,6 +3693,7 @@ NODE
           historicalCompatibility: !partsSupported,
           macosNodeParts: partsSupported,
           runnerBackend,
+          changedPaths: ["extensions/outcomes/index.ts"],
         });
         expect(manifest.status, manifest.output).toBe(0);
         const rows = JSON.parse(
@@ -4629,6 +4631,7 @@ setImmediate(() => {
       historicalCompatibility: false,
       runnerBackend: "blacksmith",
       runnerProfile: "github",
+      changedPaths: ["extensions/outcomes/index.ts"],
     });
     expect(dispatchManifest.status, dispatchManifest.output).toBe(0);
     expect(
