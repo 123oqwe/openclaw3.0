@@ -383,18 +383,34 @@ export function reduceOutcomeRefresh(
     left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
   );
   if (evidence.length > 100) return { kind: "rejected", record: current };
+  const previousProjections = new Map(
+    current.projections.map((projection) => [workRefIdentity(projection.ref), projection]),
+  );
 
   return {
     kind: "updated",
     record: {
       ...current,
       projections: mutation.projections
-        .map((projection) => ({
-          ...projection,
-          ref: { ...projection.ref },
-          proofs: projection.proofs.map((proof) => ({ ...proof })),
-          artifacts: projection.artifacts.map((artifact) => ({ ...artifact })),
-        }))
+        .map((projection) => {
+          const previous = previousProjections.get(workRefIdentity(projection.ref));
+          const cached =
+            projection.availability === "available" || previous === undefined
+              ? projection
+              : {
+                  ...previous,
+                  ...projection,
+                  proofs: previous.proofs,
+                  artifacts: previous.artifacts,
+                  sourceFingerprint: undefined,
+                };
+          return {
+            ...cached,
+            ref: { ...cached.ref },
+            proofs: cached.proofs.map((proof) => ({ ...proof })),
+            artifacts: cached.artifacts.map((artifact) => ({ ...artifact })),
+          };
+        })
         .toSorted((left, right) => canonicalRefOrder(left.ref, right.ref)),
       evidence,
       revision: current.revision + 1,

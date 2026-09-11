@@ -298,6 +298,58 @@ describe("Outcome repository atomic contract", () => {
     expect(reduceOutcomeRefresh(record, { ...mutation, evidence })).toEqual({ kind: "rejected", record });
   });
 
+  it("retains a failed refresh's display cache but makes it unavailable to current closure", () => {
+    const record = linkedActiveRecord();
+    const ref = first(first(record.criteria).workRefs);
+    const cached = {
+      ref,
+      availability: "available" as const,
+      observedAt: 1,
+      proofs: [{ sourceId: "proof-1", digest: "a".repeat(64) }],
+      artifacts: [],
+      currentBoardId: "board-1",
+      status: "done",
+      sourceUpdatedAt: 1,
+      lastSuccessfulAt: 1,
+      sourceFingerprint: "b".repeat(64),
+    };
+    const result = reduceOutcomeRefresh(
+      { ...record, projections: [cached] },
+      {
+        expectedRevision: 1,
+        serverTime: 42,
+        projections: [
+          {
+            ref,
+            availability: "unavailable",
+            observedAt: 42,
+            proofs: [],
+            artifacts: [],
+            errorCode: "timeout",
+          },
+        ],
+        evidence: [],
+      },
+    );
+    expect(result).toMatchObject({
+      kind: "updated",
+      record: {
+        projections: [
+          {
+            availability: "unavailable",
+            observedAt: 42,
+            errorCode: "timeout",
+            currentBoardId: "board-1",
+            status: "done",
+            lastSuccessfulAt: 1,
+            proofs: [{ sourceId: "proof-1", digest: "a".repeat(64) }],
+          },
+        ],
+      },
+    });
+    if (result.kind === "updated") expect(first(result.record.projections).sourceFingerprint).toBeUndefined();
+  });
+
   it("treats link and unlink as generation-changing contract mutations outside draft", () => {
     const ref = {
       owner: "workboard" as const,
