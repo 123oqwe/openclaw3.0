@@ -11,7 +11,9 @@ import {
   outcomeRecordSchema,
   parseOutcomeRecord,
   planHash,
+  workboardProjectionFingerprint,
 } from "./schema.js";
+import type { CanonicalPlan } from "./schema.js";
 
 function malformedSnapshotPlanHash(plan: {
   outcomeId: string;
@@ -69,7 +71,7 @@ describe("Outcome create schema and canonical hash", () => {
       objective: "ship",
       criteria: [{ id: "criterion", text: "complete", required: true, workRefs: [] }],
     };
-    const plan = {
+    const plan: CanonicalPlan = {
       outcomeId: "outcome",
       objective: "ship",
       contractRevision: 1,
@@ -297,6 +299,18 @@ describe("Outcome create schema and canonical hash", () => {
       planGeneration: 1,
       criteria: [{ id: "c-1", text: "done", required: true, workRefs: [ref] }],
     };
+    const projection = {
+      ref,
+      availability: "available" as const,
+      currentBoardId: "board-1",
+      status: "done",
+      sourceUpdatedAt: 2,
+      observedAt: 2,
+      lastSuccessfulAt: 2,
+      proofs: [{ sourceId: "proof-1", digest: "proof-digest" }],
+      artifacts: [{ sourceId: "artifact-1", digest: "artifact-digest" }],
+    };
+    const fingerprint = workboardProjectionFingerprint(projection);
     const record = {
       schemaVersion: 1,
       id: plan.outcomeId,
@@ -310,20 +324,7 @@ describe("Outcome create schema and canonical hash", () => {
       planGeneration: plan.planGeneration,
       planHash: planHash(plan),
       criteria: plan.criteria,
-      projections: [
-        {
-          ref,
-          availability: "available" as const,
-          currentBoardId: "board-1",
-          status: "done",
-          sourceUpdatedAt: 2,
-          observedAt: 2,
-          lastSuccessfulAt: 2,
-          proofs: [{ sourceId: "proof-1", digest: "proof-digest" }],
-          artifacts: [{ sourceId: "artifact-1", digest: "artifact-digest" }],
-          sourceFingerprint: "f".repeat(64),
-        },
-      ],
+      projections: [{ ...projection, sourceFingerprint: fingerprint }],
       evidence: [],
       decisions: [],
       operations: [],
@@ -332,7 +333,38 @@ describe("Outcome create schema and canonical hash", () => {
       updatedAt: 2,
     };
 
-    expect(outcomeRecordSchema.safeParse(record).success).toBe(false);
+    expect(outcomeRecordSchema.safeParse(record).success).toBe(true);
+    const projectionWithTwoProofs = {
+      ...projection,
+      proofs: [{ sourceId: "proof-0", digest: "proof-digest-0" }, ...projection.proofs],
+    };
+    expect(workboardProjectionFingerprint(projectionWithTwoProofs)).toBe(
+      workboardProjectionFingerprint({
+        ...projectionWithTwoProofs,
+        proofs: projectionWithTwoProofs.proofs.toReversed(),
+      }),
+    );
+    expect(workboardProjectionFingerprint({ ...projection, currentBoardId: "board-2" })).not.toBe(
+      fingerprint,
+    );
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [
+          {
+            ...record.projections[0]!,
+            availability: "unavailable",
+            errorCode: "timeout",
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [{ ...record.projections[0]!, sourceFingerprint: "f".repeat(64) }],
+      }).success,
+    ).toBe(false);
   });
 
   it("applies the aggregate byte limit at the strict parse boundary", () => {
@@ -373,7 +405,7 @@ describe("Outcome create schema and canonical hash", () => {
   });
 
   it("reports malformed historical snapshots through safeParse", () => {
-    const plan = {
+    const plan: CanonicalPlan = {
       outcomeId: "o-history",
       objective: "Keep history",
       contractRevision: 1,
@@ -640,7 +672,7 @@ describe("Outcome create schema and canonical hash", () => {
   });
 
   it("deep-clones historical plans and counts them against the aggregate limit", () => {
-    const snapshot = {
+    const snapshot: CanonicalPlan = {
       outcomeId: "o-history-isolation",
       objective: "Preserve the original contract",
       contractRevision: 1,
@@ -695,9 +727,9 @@ describe("Outcome create schema and canonical hash", () => {
       updatedAt: 3,
     };
     const parsed = parseOutcomeRecord(record);
-    snapshot.criteria[0].text = "mutated after parsing";
-    expect(parsed.decisions[0].decidedPlan.criteria[0].text).toBe("done");
-    expect(parsed.acceptances[0].acceptedPlan.criteria[0].text).toBe("done");
+    snapshot.criteria[0]!.text = "mutated after parsing";
+    expect(parsed.decisions[0]!.decidedPlan.criteria[0]!.text).toBe("done");
+    expect(parsed.acceptances[0]!.acceptedPlan.criteria[0]!.text).toBe("done");
 
     const oversizedSnapshot = {
       ...snapshot,

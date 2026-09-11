@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { z } from "zod";
 import { OUTCOME_MAX_CRITERIA, OUTCOME_MAX_RECORD_BYTES } from "./constants.js";
-import type { Criterion, PersistedOutcomeRecord } from "./types.js";
+import type { Criterion, PersistedOutcomeRecord, WorkProjection } from "./types.js";
 
 export const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
@@ -49,32 +49,100 @@ export const createRequestSchema = z
     }
   });
 
-const projectionSchema = z.strictObject({
-  ref: workboardRefSchema,
-  availability: z.enum(["available", "unavailable", "identity-conflict"]),
-  observedAt: z.number().finite(),
-  proofs: z.array(z.strictObject({ sourceId: z.string().min(1), digest: z.string().min(1) })),
-  artifacts: z.array(z.strictObject({ sourceId: z.string().min(1), digest: z.string().min(1) })),
-  currentBoardId: z.string().min(1).optional(),
-  status: z.string().min(1).optional(),
-  lastSuccessfulAt: z.number().finite().optional(),
-  sourceUpdatedAt: z.number().finite().optional(),
-  upstreamStale: z.boolean().optional(),
-  sourceFingerprint: z
-    .string()
-    .regex(/^[0-9a-f]{64}$/)
-    .optional(),
-  errorCode: z
-    .enum([
-      "workboard-disabled",
-      "not-found",
-      "forbidden",
-      "timeout",
-      "invalid-response",
-      "identity-conflict",
-    ])
-    .optional(),
-});
+const projectionSchema = z
+  .strictObject({
+    ref: workboardRefSchema,
+    availability: z.enum(["available", "unavailable", "identity-conflict"]),
+    observedAt: z.number().finite(),
+    proofs: z.array(z.strictObject({ sourceId: z.string().min(1), digest: z.string().min(1) })),
+    artifacts: z.array(z.strictObject({ sourceId: z.string().min(1), digest: z.string().min(1) })),
+    currentBoardId: z.string().min(1).optional(),
+    status: z.string().min(1).optional(),
+    lastSuccessfulAt: z.number().finite().optional(),
+    sourceUpdatedAt: z.number().finite().optional(),
+    upstreamStale: z.boolean().optional(),
+    sourceFingerprint: z
+      .string()
+      .regex(/^[0-9a-f]{64}$/)
+      .optional(),
+    errorCode: z
+      .enum([
+        "workboard-disabled",
+        "not-found",
+        "forbidden",
+        "timeout",
+        "invalid-response",
+        "identity-conflict",
+      ])
+      .optional(),
+  })
+  .superRefine((projection, ctx) => {
+    if (projection.sourceFingerprint === undefined) {
+      return;
+    }
+    if (projection.availability !== "available") {
+      ctx.addIssue({
+        code: "custom",
+        message: "sourceFingerprint is valid only for available Workboard sources",
+      });
+      return;
+    }
+    if (
+      projection.currentBoardId === undefined ||
+      projection.status === undefined ||
+      projection.sourceUpdatedAt === undefined
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "sourceFingerprint requires complete Workboard source fields",
+      });
+      return;
+    }
+    const sourceFingerprint = workboardProjectionFingerprint({
+      ref: projection.ref,
+      proofs: projection.proofs,
+      artifacts: projection.artifacts,
+      currentBoardId: projection.currentBoardId,
+      status: projection.status,
+      sourceUpdatedAt: projection.sourceUpdatedAt,
+    });
+    if (projection.sourceFingerprint !== sourceFingerprint) {
+      ctx.addIssue({ code: "custom", message: "sourceFingerprint does not match projection source" });
+    }
+  });
+
+type ProjectionFingerprintInput = Pick<
+  WorkProjection,
+  "ref" | "proofs" | "artifacts" | "currentBoardId" | "status" | "sourceUpdatedAt"
+> & {
+  currentBoardId: string;
+  status: string;
+  sourceUpdatedAt: number;
+};
+
+/** Canonical binding for the latest Workboard source material on a projection. */
+export function workboardProjectionFingerprint(projection: ProjectionFingerprintInput): string {
+  const sortPairs = (pairs: Array<{ sourceId: string; digest: string }>) =>
+    [...pairs]
+      .map((pair) => ({ sourceId: pair.sourceId, digest: pair.digest }))
+      .toSorted(
+        (left, right) =>
+          (left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0) ||
+          (left.digest < right.digest ? -1 : left.digest > right.digest ? 1 : 0),
+      );
+  const canonical = {
+    cardId: projection.ref.cardId,
+    cardCreatedAt: projection.ref.cardCreatedAt,
+    currentBoardId: projection.currentBoardId,
+    status: projection.status,
+    sourceUpdatedAt: projection.sourceUpdatedAt,
+    proofs: sortPairs(projection.proofs),
+    artifacts: sortPairs(projection.artifacts),
+  };
+  return createHash("sha256")
+    .update(`openclaw:workboard-projection:v1\0${stableStringify(canonical)}`, "utf8")
+    .digest("hex");
+}
 
 const evidenceSchema = z.strictObject({
   id: z.string().min(1),
