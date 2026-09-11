@@ -78,13 +78,30 @@ const projectionSchema = z
   })
   .superRefine((projection, ctx) => {
     if (projection.availability !== "available") {
-      if (projection.sourceFingerprint === undefined) {
-        return;
+      if (projection.sourceFingerprint !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          message: "sourceFingerprint is valid only for available Workboard sources",
+        });
       }
-      ctx.addIssue({
-        code: "custom",
-        message: "sourceFingerprint is valid only for available Workboard sources",
-      });
+      if (
+        projection.availability === "identity-conflict" &&
+        projection.errorCode !== "identity-conflict"
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "identity-conflict projections require an identity-conflict error",
+        });
+      }
+      if (
+        projection.availability === "unavailable" &&
+        (projection.errorCode === undefined || projection.errorCode === "identity-conflict")
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "unavailable projections require a non-identity refresh error",
+        });
+      }
       return;
     }
     if (projection.errorCode !== undefined) {
