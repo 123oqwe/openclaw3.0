@@ -70,10 +70,10 @@ repository and redacted read model, but it does not call Workboard. Its Hosted t
    criteria. Client-supplied timestamp/server-time fields are invalid input: handlers obtain
    timestamps from the trusted Gateway clock, and spoofed time cannot affect persisted
    timestamps. Replay and no-op paths remain zero-write.
-3. `create`: a client-supplied id and canonical request hash create a draft owned by the
-   authenticated profile. Same owner/id/hash replays its original receipt before any
-   revision/CAS path; same id with a different hash is conflict; a foreign owner never
-   receives the existing record.
+3. `create`: client-supplied id, title, objective, and criteria form the canonical request;
+   the authenticated handler constructs its hash and initial draft record. Same owner/id/hash
+   replays its original receipt before any revision/CAS path; same id with a different hash is
+   conflict; a foreign owner never receives the existing record.
 4. `get`/`list`: filter by authenticated manager, make a foreign record indistinguishable
    from missing, perform zero state writes, and keep `updatedAt desc, id asc` ordering while
    validating limit/cursor without owner RPCs.
