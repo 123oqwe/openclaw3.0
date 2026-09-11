@@ -657,8 +657,10 @@ describe("Outcome repository host adapter", () => {
 
           const delay = monitorEventLoopDelay({ resolution: 10 });
           delay.enable();
-          await new Promise<void>((resolve) => setTimeout(resolve, 20));
-          const baselineMaxMs = Number(delay.max) / 1_000_000;
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, 20);
+          });
+          const baselineMaxMs = delay.max / 1_000_000;
           delay.reset();
           const heapBeforeBytes = process.memoryUsage().heapUsed;
           const listTimings: number[] = [];
@@ -704,13 +706,15 @@ describe("Outcome repository host adapter", () => {
             });
             expect(serializedBytes(mutated)).toBeLessThanOrEqual(scenario.recordBytes);
           } finally {
-            await new Promise<void>((resolve) => setTimeout(resolve, 20));
+            await new Promise<void>((resolve) => {
+              setTimeout(resolve, 20);
+            });
             delay.disable();
           }
 
           const list = summarizeBenchmarkTimings(listTimings);
           const mutation = summarizeBenchmarkTimings(mutationTimings);
-          const maxMs = Number(delay.max) / 1_000_000;
+          const maxMs = delay.max / 1_000_000;
           const heapAfterBytes = process.memoryUsage().heapUsed;
           expect(list.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
           expect(mutation.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
@@ -969,52 +973,6 @@ describe("Outcome repository host adapter", () => {
           repository.transact(record.id, (current) => ({ result: current?.revision })),
         ).resolves.toBe(1);
         expect(warnings).toEqual([]);
-      },
-    );
-  });
-
-  it("fails closed on corrupt persisted records without mutation or deletion", async () => {
-    await withOpenClawTestState(
-      { label: "outcome-repository-corrupt", applyEnv: false },
-      async (state) => {
-        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
-          namespace: `outcomes-v1-${randomUUID()}`,
-          maxEntries: 500,
-          overflowPolicy: "reject-new",
-          env: state.env,
-        });
-        // Deliberately malformed persisted value: unknown version and missing fields.
-        const corrupt = {
-          id: "corrupt",
-          managerProfileId: "alice",
-          schemaVersion: 99,
-        } as unknown as OutcomeRecord;
-        await store.registerIfAbsent(corrupt.id, corrupt);
-        const repository = createOutcomeRepository(store);
-        await expect(repository.get(corrupt.id)).rejects.toThrow();
-        let called = false;
-        await expect(
-          repository.transact(corrupt.id, () => {
-            called = true;
-            return { result: "unexpected" };
-          }),
-        ).rejects.toMatchObject({ code: "PLUGIN_STATE_WRITE_FAILED" });
-        expect(called).toBe(false);
-        await expect(
-          repository.transactOwned("alice", corrupt.id, () => {
-            called = true;
-            return { result: "unexpected" };
-          }),
-        ).rejects.toMatchObject({ code: "PLUGIN_STATE_WRITE_FAILED" });
-        expect(called).toBe(false);
-        await expect(
-          repository.deleteIf(corrupt.id, () => {
-            called = true;
-            return true;
-          }),
-        ).rejects.toThrow();
-        expect(called).toBe(false);
-        await expect(store.lookup(corrupt.id)).resolves.toEqual(corrupt);
       },
     );
   });

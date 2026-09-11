@@ -49,6 +49,7 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/src/gateway/health.ts",
         "extensions/outcomes/src/gateway/p02-admission.contract.md",
         "extensions/outcomes/src/domain/constants.ts",
+        "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
         "extensions/outcomes/src/store/outcome-repository.ts",
         "pnpm-lock.yaml",
         "ui/src/e2e/browser-bootstrap.e2e.test.ts",

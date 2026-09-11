@@ -65,19 +65,16 @@ function currentEvidenceSourceDigests(
   ) {
     return undefined;
   }
-  const sources = new Set(
-    Array.from(linkedProjections.values()).flatMap((projection) => {
-      const identity = workRefIdentity(projection.ref);
-      return [
-        ...projection.proofs.map(
-          (source) => `${identity}\0workboard-proof\0${source.sourceId}\0${source.digest}`,
-        ),
-        ...projection.artifacts.map(
-          (source) => `${identity}\0workboard-artifact\0${source.sourceId}\0${source.digest}`,
-        ),
-      ];
-    }),
-  );
+  const sources = new Set<string>();
+  for (const projection of linkedProjections.values()) {
+    const identity = workRefIdentity(projection.ref);
+    for (const source of projection.proofs) {
+      sources.add(`${identity}\0workboard-proof\0${source.sourceId}\0${source.digest}`);
+    }
+    for (const source of projection.artifacts) {
+      sources.add(`${identity}\0workboard-artifact\0${source.sourceId}\0${source.digest}`);
+    }
+  }
   return record.evidence
     .filter(
       (evidence) =>
@@ -106,16 +103,16 @@ function currentDecision(
     planGeneration: record.planGeneration,
     sourceDigests,
   });
-  const decision = record.decisions
+  const selectedDecision = record.decisions
     .filter(
-      (decision) =>
-        decision.criterionId === criterion.id &&
-        decision.planGeneration === record.planGeneration &&
-        decision.planHash === record.planHash &&
-        decision.evidenceSetHash === expectedEvidenceSetHash,
+      (candidate) =>
+        candidate.criterionId === criterion.id &&
+        candidate.planGeneration === record.planGeneration &&
+        candidate.planHash === record.planHash &&
+        candidate.evidenceSetHash === expectedEvidenceSetHash,
     )
     .toSorted((a, b) => b.decidedRevision - a.decidedRevision)[0];
-  return decision === undefined ? undefined : { decision, sourceDigests };
+  return selectedDecision === undefined ? undefined : { decision: selectedDecision, sourceDigests };
 }
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */

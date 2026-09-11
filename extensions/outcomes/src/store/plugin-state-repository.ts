@@ -330,7 +330,7 @@ function createStrictOutcomeRepository(
 }
 
 function createCapacityDiagnostics(options: OutcomeRepositoryOptions) {
-  const now = options.now ?? performance.now;
+  const now = options.now ?? (() => performance.now());
 
   const warn = (warning: OutcomeCapacityWarning) => {
     try {

@@ -840,10 +840,11 @@ describe("CI changed Node test plan", () => {
           "extensions/outcomes/src/domain/repository.contract.test.ts",
           "extensions/outcomes/src/domain/read-model.test.ts",
           "extensions/outcomes/src/domain/schema.test.ts",
+          "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
           "extensions/outcomes/src/store/plugin-state-repository.test.ts",
         ]),
       );
-      expect(outcomeTests.length).toBeGreaterThanOrEqual(6);
+      expect(outcomeTests.length).toBeGreaterThanOrEqual(7);
       const outcomeConfig = resolveExtensionTestConfig("extensions/outcomes");
       expect(groups.every((group) => group.configs.includes(outcomeConfig))).toBe(true);
       // The planner's env shard owns the complete config inventory; verify the
