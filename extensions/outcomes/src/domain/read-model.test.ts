@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 import { parseOutcomeRecord, planHash } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
-import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 
 function first<T>(items: T[]): T {
   const item = items[0];
@@ -99,9 +99,26 @@ describe("Outcome P-01 read model", () => {
     const input = record();
     input.criteria = [
       { id: "c-required", text: "Required", required: true, workRefs: [] },
-      { id: "c-1", text: "Done", required, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }] },
+      {
+        id: "c-1",
+        text: "Done",
+        required,
+        workRefs: [
+          { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" },
+        ],
+      },
     ];
-    input.projections = [{ ref: input.criteria[1]!.workRefs[0]!, availability: "available", status: "blocked", observedAt: 1, lastSuccessfulAt: 10, proofs: [], artifacts: [] }];
+    input.projections = [
+      {
+        ref: input.criteria[1]!.workRefs[0]!,
+        availability: "available",
+        status: "blocked",
+        observedAt: 1,
+        lastSuccessfulAt: 10,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
   });
 
@@ -109,17 +126,54 @@ describe("Outcome P-01 read model", () => {
     "blocks when an operation is %s",
     (state) => {
       const input = record();
-      const ref = { owner: "workboard" as const, cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" };
+      const ref = {
+        owner: "workboard" as const,
+        cardId: "card",
+        cardCreatedAt: 1,
+        boardIdAtLink: "board",
+      };
       input.criteria[0]!.workRefs = [ref];
-      input.operations = [{ id: `op-${state}`, kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: ref, attemptedAt: 1 }];
+      input.operations = [
+        {
+          id: `op-${state}`,
+          kind: "workboard-card-start",
+          criterionId: "c-1",
+          planGeneration: 1,
+          createdRevision: 2,
+          requestHash: "b".repeat(64),
+          state,
+          target: ref,
+          attemptedAt: 1,
+        },
+      ];
       expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
     },
   );
 
   it("keeps unavailable and stale ahead of blocked", () => {
     const input = record();
-    input.criteria = [{ id: "c-1", text: "Done", required: true, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }] }];
-    input.projections = [{ ref: input.criteria[0]!.workRefs[0]!, availability: "unavailable", errorCode: "timeout", status: "blocked", observedAt: 1, lastSuccessfulAt: 10, proofs: [], artifacts: [] }];
+    input.criteria = [
+      {
+        id: "c-1",
+        text: "Done",
+        required: true,
+        workRefs: [
+          { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" },
+        ],
+      },
+    ];
+    input.projections = [
+      {
+        ref: input.criteria[0]!.workRefs[0]!,
+        availability: "unavailable",
+        errorCode: "timeout",
+        status: "blocked",
+        observedAt: 1,
+        lastSuccessfulAt: 10,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("unavailable");
     input.projections[0]!.availability = "available";
     delete input.projections[0]!.errorCode;
@@ -127,18 +181,42 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(valid(input), 24 * 60 * 60 * 1000 + 1).readiness).toBe("stale");
   });
 
-  it.each(["succeeded", "failed"] as const)("ignores terminal %s operations and preserves input", (state) => {
-    const input = record();
-    input.operations = [{ id: "op-done", kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" } }];
-    const parsed = valid(input);
-    const before = structuredClone(parsed);
-    expect(toOutcomeSummary(parsed, 10).readiness).toBe("incomplete");
-    expect(parsed).toEqual(before);
-  });
+  it.each(["succeeded", "failed"] as const)(
+    "ignores terminal %s operations and preserves input",
+    (state) => {
+      const input = record();
+      input.operations = [
+        {
+          id: "op-done",
+          kind: "workboard-card-start",
+          criterionId: "c-1",
+          planGeneration: 1,
+          createdRevision: 2,
+          requestHash: "b".repeat(64),
+          state,
+          target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" },
+        },
+      ];
+      const parsed = valid(input);
+      const before = structuredClone(parsed);
+      expect(toOutcomeSummary(parsed, 10).readiness).toBe("incomplete");
+      expect(parsed).toEqual(before);
+    },
+  );
 
   it("ignores a blocked projection after its link is removed", () => {
     const input = record();
-    input.projections = [{ ref: { owner: "workboard", cardId: "old-card", cardCreatedAt: 1, boardIdAtLink: "board" }, availability: "available", status: "blocked", observedAt: 1, lastSuccessfulAt: 10, proofs: [], artifacts: [] }];
+    input.projections = [
+      {
+        ref: { owner: "workboard", cardId: "old-card", cardCreatedAt: 1, boardIdAtLink: "board" },
+        availability: "available",
+        status: "blocked",
+        observedAt: 1,
+        lastSuccessfulAt: 10,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
     const parsed = valid(input);
     const before = structuredClone(parsed);
     expect(toOutcomeSummary(parsed, 10).readiness).toBe("incomplete");

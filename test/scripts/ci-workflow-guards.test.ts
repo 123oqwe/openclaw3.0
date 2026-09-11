@@ -13661,7 +13661,11 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     expect(setupIndex).toBeGreaterThanOrEqual(0);
     expect(prepareIndex).toBeGreaterThan(setupIndex);
-    expect(steps.some((step: WorkflowStep) => step.name === "Remove trusted CI harness from artifact workspace")).toBe(false);
+    expect(
+      steps.some(
+        (step: WorkflowStep) => step.name === "Remove trusted CI harness from artifact workspace",
+      ),
+    ).toBe(false);
   });
 
   it("does not admit the final gate for cancelled workflows or draft pull requests", () => {
@@ -16178,7 +16182,9 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs admission");
   expect(bodies).toContain("pnpm install --frozen-lockfile --ignore-scripts");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
-  expect(bodies).toContain("git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'");
+  expect(bodies).toContain(
+    "git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'",
+  );
   expect(bodies).not.toContain("rm -rf --one-file-system .ci-harness");
   expect(bodies).not.toMatch(/(?:^|\s)git push(?:\s|$)/mu);
 
