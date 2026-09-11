@@ -62,6 +62,53 @@ function malformedSnapshotPlanHash(plan: {
 }
 
 describe("Outcome create schema and canonical hash", () => {
+  it("matches fixed domain-separated hash vectors", () => {
+    const createRequest = {
+      id: "outcome",
+      title: "Ship",
+      objective: "ship",
+      criteria: [{ id: "criterion", text: "complete", required: true, workRefs: [] }],
+    };
+    const plan = {
+      outcomeId: "outcome",
+      objective: "ship",
+      contractRevision: 1,
+      planGeneration: 1,
+      criteria: createRequest.criteria,
+    };
+    const evidence = {
+      criterionId: "criterion",
+      planGeneration: 1,
+      sourceDigests: ["b", "a", "a"],
+    };
+    const closure = {
+      outcomeId: "outcome",
+      planGeneration: 1,
+      planHash: "a".repeat(64),
+      requiredCriteria: [
+        {
+          criterionId: "criterion",
+          decisionId: "decision",
+          decidedRevision: 2,
+          evidenceSetHash: "b".repeat(64),
+        },
+      ],
+    };
+
+    expect(createRequestHash(createRequest)).toBe(
+      "7ef9b61b47edc77f8f0fb2e7f9905769a1689efa8c215e1a41e33a1a6d36cdf9",
+    );
+    expect(planHash(plan)).toBe(
+      "2e11edc825a85302952b3487badf8ea73bcb227c7c49d25c2f873a83252fb2c8",
+    );
+    expect(evidenceSetHash(evidence)).toBe(
+      "3ce75240d716ece2ed727bd4caac9b8ece37b2f5b97fc492f46e98011ca7f027",
+    );
+    expect(closureHash(closure)).toBe(
+      "381236683e01bfc47e5cff0bff6fa9020bf223f8369d22dee81521cf4c635773",
+    );
+  });
+
   it("accepts at most five criteria and produces order-independent hashes", () => {
     const base = {
       id: "o-1",
