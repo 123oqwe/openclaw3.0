@@ -573,7 +573,9 @@ describe("Outcome repository host adapter", () => {
             },
           ],
         };
-        await expect(repository.create(oversized)).rejects.toThrow("131072-byte");
+        await expect(repository.create(oversized)).rejects.toMatchObject({
+          code: "outcome-capacity-exceeded",
+        });
         await expect(repository.get(oversized.id)).resolves.toBeUndefined();
 
         const existing = draftRecord("small");
