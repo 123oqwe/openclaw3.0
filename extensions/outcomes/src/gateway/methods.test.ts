@@ -297,7 +297,18 @@ describe("P-02 Outcome handlers", () => {
     harness.gatewayRequest.mockClear();
     expect(await harness.call("outcomes.refresh", { id, expectedRevision: 2 })).toMatchObject([
       true,
-      { outcome: { revision: 3 }, refresh: { status: "available" } },
+      {
+        outcome: {
+          revision: 3,
+          criteria: [{ sourcesVisibility: "complete", workRefs: [{ cardId: "card-a" }] }],
+          work: [{ ref: { cardId: "card-a" }, currentBoardId: "board-b", status: "done" }],
+          evidence: [
+            { sourceId: "proof-a", label: "Hosted proof", proofStatus: "passed" },
+            { sourceId: "artifact-a", label: "Hosted artifact" },
+          ],
+        },
+        refresh: { status: "available" },
+      },
     ]);
     expect(harness.gatewayRequest).toHaveBeenCalledOnce();
     expect(harness.records.get(id)).toMatchObject({
