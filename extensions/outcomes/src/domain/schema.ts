@@ -215,6 +215,27 @@ export const outcomeRecordSchema = z
     if (record.revision < record.contractRevision) {
       ctx.addIssue({ code: "custom", message: "revision cannot be below contractRevision" });
     }
+    const decisionRevisions = new Set<number>();
+    for (const decision of record.decisions) {
+      if (decision.decidedRevision > record.revision) {
+        ctx.addIssue({
+          code: "custom",
+          message: "decision revision cannot be ahead of the aggregate revision",
+        });
+      }
+      if (decisionRevisions.has(decision.decidedRevision)) {
+        ctx.addIssue({ code: "custom", message: "decision revisions must be unique" });
+      }
+      decisionRevisions.add(decision.decidedRevision);
+    }
+    for (const acceptance of record.acceptances) {
+      if (acceptance.acceptedRevision > record.revision) {
+        ctx.addIssue({
+          code: "custom",
+          message: "acceptance revision cannot be ahead of the aggregate revision",
+        });
+      }
+    }
     for (const [label, items] of [
       ["evidence", record.evidence],
       ["decisions", record.decisions],

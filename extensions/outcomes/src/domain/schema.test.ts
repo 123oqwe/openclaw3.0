@@ -304,6 +304,18 @@ describe("Outcome create schema and canonical hash", () => {
     };
     const valid = { ...record, decisions: [decision] };
     expect(outcomeRecordSchema.safeParse(valid).success).toBe(true);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        decisions: [decision, { ...decision, id: "decision-duplicate-revision" }],
+      }).success,
+    ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        decisions: [{ ...decision, decidedRevision: record.revision + 1 }],
+      }).success,
+    ).toBe(false);
     expect(malformedSnapshotPlanHash(plan)).toBe(planHash(plan));
     const historicalAcceptance = {
       id: "acceptance-1",
@@ -318,6 +330,12 @@ describe("Outcome create schema and canonical hash", () => {
     };
     const acceptedHistory = { ...record, acceptances: [historicalAcceptance] };
     expect(outcomeRecordSchema.safeParse(acceptedHistory).success).toBe(true);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        acceptances: [{ ...historicalAcceptance, acceptedRevision: record.revision + 1 }],
+      }).success,
+    ).toBe(false);
     const acceptanceWithDuplicateIdentity = {
       ...historicalAcceptance,
       acceptedPlan: {
