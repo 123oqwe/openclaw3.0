@@ -12,7 +12,7 @@ describe("outcome artifact policy", () => {
     expect(() =>
       assertOutcomeArtifactAdmission({
         eventName: "workflow_dispatch",
-        repository: "123oqwe/openclaw-private",
+        repository: "123oqwe/openclaw3.0",
         targetRef: TARGET_SHA,
         workflowSha: TARGET_SHA,
       }),
@@ -28,7 +28,7 @@ describe("outcome artifact policy", () => {
       expect(() =>
         assertOutcomeArtifactAdmission({
           eventName: "workflow_dispatch",
-          repository: "123oqwe/openclaw-private",
+          repository: "123oqwe/openclaw3.0",
           targetRef: TARGET_SHA,
           workflowSha: TARGET_SHA,
           ...override,

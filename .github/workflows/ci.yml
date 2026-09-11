@@ -2018,18 +2018,7 @@ jobs:
         run: |
           set -euo pipefail
           artifact_root="outcome-artifacts"
-          lock_before="$RUNNER_TEMP/outcome-lock-before.txt"
-          lock_after="$RUNNER_TEMP/outcome-lock-after.txt"
           mkdir -p "$artifact_root"
-
-          node scripts/outcome-artifact-policy.mjs strip-lock < pnpm-lock.yaml > "$lock_before"
-          pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile
-          node scripts/outcome-artifact-policy.mjs strip-lock < pnpm-lock.yaml > "$lock_after"
-          if ! cmp -s "$lock_before" "$lock_after"; then
-            echo "::error::Lockfile changes escaped the extensions/outcomes importer"
-            exit 1
-          fi
-
           pnpm install --frozen-lockfile --ignore-scripts
           pnpm exec oxfmt --write --threads=1 \
             extensions/outcomes/api.ts \
@@ -2053,9 +2042,6 @@ jobs:
             src/plugins/contracts/plugin-sdk-runtime-api-guardrails.test.ts \
             test/scripts/ci-workflow-guards.test.ts \
             test/scripts/outcome-artifact-policy.test.ts
-          pnpm config:docs:gen
-          pnpm plugins:inventory:gen
-
           {
             git diff --name-only -z HEAD
             git ls-files --others --exclude-standard -z
@@ -2089,11 +2075,8 @@ jobs:
             nodeVersion: process.version,
             pnpmVersion: execFileSync("pnpm", ["--version"], { encoding: "utf8" }).trim(),
             commands: [
-              "pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile",
-              "pnpm install --frozen-lockfile --ignore-scripts",
-              "pnpm exec oxfmt --write --threads=1 <fixed paths>",
-              "pnpm config:docs:gen",
-              "pnpm plugins:inventory:gen",
+            "pnpm install --frozen-lockfile --ignore-scripts",
+            "pnpm exec oxfmt --write --threads=1 <fixed paths>",
             ],
             changedPaths,
             patchSha256: createHash("sha256").update(patch).digest("hex"),

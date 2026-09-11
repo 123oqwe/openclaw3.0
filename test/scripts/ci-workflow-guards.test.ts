@@ -13645,7 +13645,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       expect(verifyStep.env.JOB_RESULTS).toContain(`${job}=\${{ needs.${job}.result }}|`);
     }
     expect(verifyStep.env.JOB_RESULTS).toContain(
-      "prepare-outcome-artifacts=${{ needs.prepare-outcome-artifacts.result }}|${{ github.repository == '123oqwe/openclaw-private' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}",
+      "prepare-outcome-artifacts=${{ needs.prepare-outcome-artifacts.result }}|${{ github.repository == '123oqwe/openclaw3.0' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}",
     );
     expect(resultRows).toHaveLength(gate.needs.length);
   });
@@ -16164,7 +16164,7 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   expect(job.permissions).toEqual({ contents: "read" });
   expect(job.needs).toBeUndefined();
   expect(job["runs-on"]).toBe("ubuntu-24.04");
-  expect(job.if).toContain("github.repository == '123oqwe/openclaw-private'");
+  expect(job.if).toContain("github.repository == '123oqwe/openclaw3.0'");
   expect(job.if).toContain("github.event_name == 'workflow_dispatch'");
   expect(job.if).toContain("inputs.prepare_outcome_artifacts");
   expect(workflow.jobs.preflight.if).toContain("!inputs.prepare_outcome_artifacts");
