@@ -1,6 +1,12 @@
 import { readFileSync } from "node:fs";
 import { createTestPluginApi } from "openclaw/plugin-sdk/plugin-test-api";
 import { describe, expect, it, vi } from "vitest";
+import { registerWorkboardGatewayMethods } from "../../../workboard/src/gateway.js";
+import type {
+  PersistedWorkboardCard,
+  WorkboardKeyedStore,
+} from "../../../workboard/src/persistence-types.js";
+import { WorkboardStore } from "../../../workboard/src/store.js";
 import { registerOutcomeGatewayMethods } from "../../runtime-api.js";
 import type { OutcomeRecord } from "../domain/types.js";
 
@@ -13,20 +19,29 @@ type RegisteredHandler = (call: GatewayCall) => Promise<void>;
 
 const fixture = JSON.parse(
   readFileSync(new URL("../adapters/fixtures/workboard-list.v1.json", import.meta.url), "utf8"),
-);
+) as { cards: PersistedWorkboardCard["card"][] };
 const outcomeId = "123e4567-e89b-42d3-a456-426614174020";
 const criterionId = "123e4567-e89b-42d3-a456-426614174021";
 const owner = { authenticatedUserProfile: { profileId: "manager-a" } };
 
+function createWorkboardMemoryStore(): WorkboardKeyedStore {
+  const entries = new Map<string, PersistedWorkboardCard>(
+    fixture.cards.map((card) => [card.id, { version: 1, card }]),
+  );
+  return {
+    register: async (key, value) => {
+      entries.set(key, value);
+    },
+    lookup: async (key) => entries.get(key),
+    delete: async (key) => entries.delete(key),
+    entries: async () => [...entries].map(([key, value]) => ({ key, value })),
+  };
+}
+
 function createBundledGatewayHarness() {
   const records = new Map<string, OutcomeRecord>();
   const handlers = new Map<string, RegisteredHandler>();
-  const publicWorkboardRequest = vi.fn(async (method: string, params: unknown) => {
-    if (method !== "workboard.cards.list" || params === null || typeof params !== "object") {
-      throw new Error("unexpected public Gateway request");
-    }
-    return fixture;
-  });
+  const workboardHandlers = new Map<string, RegisteredHandler>();
   const state = {
     registerIfAbsent: async (id: string, record: OutcomeRecord) => {
       if (records.has(id)) return false;
@@ -43,6 +58,28 @@ function createBundledGatewayHarness() {
     },
     deleteIf: async () => false,
   };
+  const workboardApi = {
+    runtime: { state: { openKeyedStore: () => createWorkboardMemoryStore() } },
+    registerGatewayMethod: (method: string, handler: unknown) => {
+      workboardHandlers.set(method, handler as RegisteredHandler);
+    },
+  } as never;
+  registerWorkboardGatewayMethods({
+    api: workboardApi,
+    store: new WorkboardStore(createWorkboardMemoryStore()),
+  });
+  const publicWorkboardRequest = vi.fn(async (method: string, params: unknown) => {
+    if (method !== "workboard.cards.list" || params === null || typeof params !== "object") {
+      throw new Error("unexpected public Gateway request");
+    }
+    const respond = vi.fn();
+    const handler = workboardHandlers.get(method);
+    if (handler === undefined) throw new Error("missing registered Workboard list handler");
+    await handler({ client: owner, params, respond });
+    const [ok, payload, error] = respond.mock.calls[0] ?? [];
+    if (ok !== true) throw error;
+    return payload;
+  });
   const api = createTestPluginApi({
     id: "outcomes",
     runtime: {
