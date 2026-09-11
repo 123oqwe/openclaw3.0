@@ -6,8 +6,18 @@ first real P-02 handler and must use the host registrar/authentication fixtures.
 
 ## Shared admission fixture
 
-- Obtain the request-scoped authenticated profile from the existing Gateway test
-  context; never accept a profile id from request params or ambient process state.
+- Capture plugin registration with the SDK's `createTestPluginApi` from
+  `src/plugin-sdk/plugin-test-api.ts`; use its captured `registerGatewayMethod`
+  callback only to assert plugin descriptors. It is not the admission harness.
+- Exercise the actual in-process admission path used by
+  `src/gateway/server-plugin-in-process-dispatch.authorization.dispatch.test.ts`:
+  `createGatewayMethodRegistry`, `withPluginRuntimeGatewayRequestScope`,
+  `withOperatorToolGatewayAuthority`, and `dispatchGatewayMethodInProcess`.
+  The test's local `createOperatorClient` and `createContext` show the required
+  authenticated profile and request-context shape; P-02 must build that host shape
+  rather than invent a parallel auth abstraction.
+- Obtain the request-scoped authenticated profile from that Gateway context; never
+  accept a profile id from request params or ambient process state.
 - Exercise `operator.read` and `operator.write` with the host
   `authorizeOperatorScopesForRequiredScope` semantics. `operator.write` must inherit
   read; admin inheritance is covered by the host contract rather than reimplemented.
@@ -22,6 +32,12 @@ response shape as it exists today: `{ cards, boards, statuses }`. The compatibil
 the top-level `boards` and `statuses` fields even though the adapter consumes only
 `cards`; this proves it accepts permitted owner-response additions rather than
 silently assuming a private store shape.
+
+The owner seam is `registerWorkboardGatewayMethods` in
+`extensions/workboard/src/gateway.ts`, whose `workboard.cards.list` handler calls
+`listWorkboardCards` from `extensions/workboard/src/gateway-helpers.ts`. P-02 calls
+the public Gateway method through `api.runtime.gateway.request`; it does not import
+either owner store helper.
 
 - Include a visible card with `id`, `status`, `createdAt`, `updatedAt`, and
   `metadata.automation.boardId`, plus at least one proof and one artifact. The
@@ -39,46 +55,64 @@ silently assuming a private store shape.
   a changed proof/artifact field or a changed current board must produce a new
   digest.
 
-## First handler package
+## Handler package sequence
 
-The first executable package is the complete P-02 method set:
-`outcomes.create`, `outcomes.get`, `outcomes.list`, `outcomes.update`,
-`outcomes.linkWorkboard`, `outcomes.unlinkWorkboard`, `outcomes.activate`,
-`outcomes.refresh`, and `outcomes.cancel`. It must cover:
+The first executable package registers only `outcomes.create`, `outcomes.get`,
+`outcomes.list`, `outcomes.update`, and `outcomes.cancel`. It uses the strict P-01
+repository and redacted read model, but it does not call Workboard. Its Hosted tests cover:
 
-1. Strict TypeBox request DTOs reject unknown fields, invalid UUIDs, invalid limits,
-   oversized UTF-8 payloads, duplicate criteria, and missing required criteria.
-   In particular, client-supplied timestamp/server-time fields are invalid input:
-   handlers obtain timestamps from the trusted Gateway clock, and a spoofed time
-   cannot affect persisted timestamps. Replay and no-op paths remain zero-write.
-2. Response DTOs are explicit allowlists: no manager profile, request hash, raw
-   refs/evidence, database paths, or internal operation fields are exposed.
-3. `get` and `list` filter by the authenticated manager. A record owned by another
-   profile is indistinguishable from missing to the caller (same typed not-found).
-4. `get` and `list` perform zero state writes; list uses stable `updatedAt desc, id asc`
-   ordering and validates limit/cursor without owner RPCs.
-5. `create` uses client-supplied id and canonical request hash. Same owner/id/hash
-   replays the original receipt before any revision/CAS path; same id with a different
-   hash is conflict; a foreign owner never receives the existing record.
-6. `update` requires expectedRevision, rejects an old revision atomically, preserves
-   existing links when patching definitions, and treats an empty patch/duplicate ids
-   as typed invalid input with zero writes.
-7. `linkWorkboard` and `unlinkWorkboard` require expectedRevision and obtain card identity
-   only through the authenticated Workboard adapter. They retain historical evidence while
-   changing active/accepted contracts into the next active generation, and reject missing,
-   inaccessible, colliding, or stale card identity without a write.
-8. `activate` requires expectedRevision and only accepts a draft whose required criteria
-   have at least one link. It freezes generation one and the canonical plan hash; it never
-   accepts a caller-supplied phase, generation, hash, or timestamp.
-9. `refresh` requires expectedRevision and performs at most one authenticated
-   `workboard.cards.list` request per Outcome. It maps disabled, timeout, not-found, and
-   identity-conflict distinctly; a failed refresh preserves displayable cached projection
-   fields but cannot make prior evidence current.
-10. `cancel` requires expectedRevision, permits only draft/active records, preserves
-    history and plan identity, rejects accepted/cancelled or in-flight operations,
-    and performs no write on every rejection.
-11. Typed mappings distinguish unauthenticated/forbidden/not-found/revision-conflict/
-    invalid-input/capacity/internal without leaking underlying exceptions.
+1. Registration/admission: capture all five descriptors with `createTestPluginApi`, then
+   dispatch each through the host registry/scope helpers above. Assert unauthenticated,
+   expired, revoked, and insufficient-scope requests fail with the host typed error;
+   `operator.write` also reaches read methods through normal scope implication.
+2. DTO/clock boundary: strict TypeBox request DTOs reject unknown fields, invalid UUIDs,
+   invalid limits, oversized UTF-8 payloads, duplicate criteria, and missing required
+   criteria. Client-supplied timestamp/server-time fields are invalid input: handlers obtain
+   timestamps from the trusted Gateway clock, and spoofed time cannot affect persisted
+   timestamps. Replay and no-op paths remain zero-write.
+3. `create`: a client-supplied id and canonical request hash create a draft owned by the
+   authenticated profile. Same owner/id/hash replays its original receipt before any
+   revision/CAS path; same id with a different hash is conflict; a foreign owner never
+   receives the existing record.
+4. `get`/`list`: filter by authenticated manager, make a foreign record indistinguishable
+   from missing, perform zero state writes, and keep `updatedAt desc, id asc` ordering while
+   validating limit/cursor without owner RPCs.
+5. `update`: require expectedRevision, reject an old revision atomically, preserve existing
+   links when patching definitions, and treat an empty patch/duplicate ids as typed invalid
+   input with zero writes.
+6. `cancel`: require expectedRevision; permit only draft/active; preserve history and plan
+   identity; reject accepted/cancelled or in-flight operations; and perform no write on every
+   rejection.
+7. Response DTOs are explicit allowlists: no manager profile, request hash, raw refs/evidence,
+   database paths, or internal operation fields are exposed.
+
+The second package adds `outcomes.linkWorkboard`, `outcomes.unlinkWorkboard`, and
+`outcomes.activate`. Link/unlink require expectedRevision and obtain card identity only through
+the authenticated Workboard adapter; they retain historical evidence while changing
+active/accepted contracts into the next active generation, and reject missing, inaccessible,
+colliding, or stale identity without a write. Activate requires expectedRevision and only accepts
+a draft whose required criteria have at least one link; it freezes generation one and the
+canonical plan hash without accepting a caller-supplied phase, generation, hash, or timestamp.
+
+The third package adds `outcomes.refresh` after the Workboard adapter contract is executable.
+Refresh requires expectedRevision and performs at most one authenticated `workboard.cards.list`
+request per Outcome. It maps disabled, timeout, not-found, and identity-conflict distinctly; a
+failed refresh preserves displayable cached projection fields but cannot make prior evidence
+current.
+
+All packages keep typed mappings distinct for unauthenticated, forbidden, not-found,
+revision-conflict, invalid-input, capacity, and internal failures without leaking exceptions.
+
+## First executable test draft
+
+When the P-01 technical gate permits real P-02 wiring, add
+`extensions/outcomes/src/gateway/p02-admission.test.ts` beside the handler. Its first
+three cases are: `registers only the first-package descriptors`; `rejects a client
+timestamp before repository access`; and `hides a foreign owned record as not-found`.
+The fixture registers the captured plugin descriptors in `createGatewayMethodRegistry`
+and dispatches through the scoped host helpers above. It opens the actual `outcomes-v1`
+keyed namespace only through the plugin runtime API. This is a test draft, not an
+authorization to add an import-only or mock-only test before the real handler exists.
 
 ## Evidence requirements
 
