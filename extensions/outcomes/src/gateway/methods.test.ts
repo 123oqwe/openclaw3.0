@@ -68,8 +68,9 @@ function createHarness(
       ],
     };
   });
+  const logger = { warn: vi.fn() };
   const api = {
-    logger: { warn: vi.fn() },
+    logger,
     runtime: { state: { openKeyedStore: () => store }, gateway: { request: gatewayRequest } },
     registerGatewayMethod: (method: string, handler: unknown) => {
       handlers.set(method, handler as RegisteredHandler);
@@ -81,9 +82,9 @@ function createHarness(
     const handler = handlers.get(method);
     if (!handler) throw new Error(`missing handler: ${method}`);
     await handler({ client, params, respond });
-    return respond.mock.calls[0];
+    return respond.mock.calls[0]!;
   }
-  return { call, gatewayRequest, logger: api.logger, records, writes: () => writes };
+  return { call, gatewayRequest, logger, records, writes: () => writes };
 }
 
 function createParams(id: string, title = "Outcome title") {
@@ -934,8 +935,8 @@ describe("P-02 Outcome handlers", () => {
     const secondPayload = second?.[1] as { outcomes: Array<{ id: string }> };
     expect(secondPayload.outcomes).toHaveLength(1);
     expect(
-      new Set([...firstPayload.outcomes, ...secondPayload.outcomes].map((outcome) => outcome.id)),
-    ).toHaveSize(3);
+      new Set([...firstPayload.outcomes, ...secondPayload.outcomes].map((outcome) => outcome.id)).size,
+    ).toBe(3);
     expect(harness.writes()).toBe(writes);
   });
 

@@ -39,6 +39,8 @@ describe("Outcome plugin shell", () => {
     });
     expect(packageManifest.dependencies).toEqual({
       "@openclaw/outcomes-contract": "workspace:*",
+      "@openclaw/workboard-contract": "workspace:*",
+      typebox: "1.3.18",
       zod: "4.4.3",
     });
   });
@@ -50,6 +52,9 @@ describe("Outcome plugin shell", () => {
       createTestPluginApi({
         id: "outcomes",
         name: "Outcomes",
+        runtime: {
+          state: { openKeyedStore: vi.fn(() => ({})) },
+        } as never,
         registerGatewayMethod,
       }),
     );

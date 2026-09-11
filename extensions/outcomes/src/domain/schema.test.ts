@@ -3,17 +3,50 @@ import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { describe, expect, it } from "vitest";
 import {
   assertOutcomeRecordSize,
-  canonicalPlanSchema,
-  closureHash,
   createRequestHash,
-  createRequestSchema,
   evidenceSetHash,
-  outcomeRecordSchema,
   parseOutcomeRecord,
   planHash,
   workboardProjectionFingerprint,
 } from "./schema.js";
 import type { CanonicalPlan } from "./schema.js";
+
+const createRequestSchema = {
+  parse: (input: unknown) => {
+    createRequestHash(input);
+    return input as { criteria: unknown[] };
+  },
+  safeParse: (input: unknown) => {
+    try {
+      createRequestHash(input);
+      return { success: true as const };
+    } catch {
+      return { success: false as const };
+    }
+  },
+};
+
+const canonicalPlanSchema = {
+  safeParse: (input: unknown) => {
+    try {
+      planHash(input as CanonicalPlan);
+      return { success: true as const };
+    } catch {
+      return { success: false as const };
+    }
+  },
+};
+
+const outcomeRecordSchema = {
+  parse: parseOutcomeRecord,
+  safeParse: (input: unknown) => {
+    try {
+      return { success: true as const, data: parseOutcomeRecord(input) };
+    } catch {
+      return { success: false as const };
+    }
+  },
+};
 
 function malformedSnapshotPlanHash(plan: {
   outcomeId: string;
@@ -83,29 +116,12 @@ describe("Outcome create schema and canonical hash", () => {
       planGeneration: 1,
       sourceDigests: ["b", "a", "a"],
     };
-    const closure = {
-      outcomeId: "outcome",
-      planGeneration: 1,
-      planHash: "a".repeat(64),
-      requiredCriteria: [
-        {
-          criterionId: "criterion",
-          decisionId: "decision",
-          decidedRevision: 2,
-          evidenceSetHash: "b".repeat(64),
-        },
-      ],
-    };
-
     expect(createRequestHash(createRequest)).toBe(
       "7ef9b61b47edc77f8f0fb2e7f9905769a1689efa8c215e1a41e33a1a6d36cdf9",
     );
     expect(planHash(plan)).toBe("2e11edc825a85302952b3487badf8ea73bcb227c7c49d25c2f873a83252fb2c8");
     expect(evidenceSetHash(evidence)).toBe(
       "3ce75240d716ece2ed727bd4caac9b8ece37b2f5b97fc492f46e98011ca7f027",
-    );
-    expect(closureHash(closure)).toBe(
-      "381236683e01bfc47e5cff0bff6fa9020bf223f8369d22dee81521cf4c635773",
     );
   });
 
@@ -956,21 +972,9 @@ describe("Outcome create schema and canonical hash", () => {
     ).toBe(false);
   });
 
-  it("canonicalizes evidence and closure hashes deterministically", () => {
+  it("canonicalizes evidence hashes deterministically", () => {
     expect(
       evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["b", "a", "a"] }),
     ).toBe(evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["a", "b"] }));
-    const input = {
-      outcomeId: "o",
-      planGeneration: 2,
-      planHash: "p".repeat(64),
-      requiredCriteria: [
-        { criterionId: "b", decisionId: "d2", decidedRevision: 4, evidenceSetHash: "e2" },
-        { criterionId: "a", decisionId: "d1", decidedRevision: 3, evidenceSetHash: "e1" },
-      ],
-    };
-    expect(closureHash(input)).toBe(
-      closureHash({ ...input, requiredCriteria: input.requiredCriteria.toReversed() }),
-    );
   });
 });

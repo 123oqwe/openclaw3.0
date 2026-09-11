@@ -1,21 +1,18 @@
 import { createTestPluginApi } from "openclaw/plugin-sdk/plugin-test-api";
 import { describe, expect, it, vi } from "vitest";
-import {
-  GATEWAY_CLIENT_IDS,
-  GATEWAY_CLIENT_MODES,
-} from "../../../../packages/gateway-protocol/src/client-info.js";
-import { PROTOCOL_VERSION } from "../../../../packages/gateway-protocol/src/version.js";
-import { createGatewayMethodRegistry } from "../../../../src/gateway/methods/registry.js";
+import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "../../packages/gateway-protocol/src/client-info.js";
+import { PROTOCOL_VERSION } from "../../packages/gateway-protocol/src/version.js";
+import { createGatewayMethodRegistry } from "./methods/registry.js";
 import type {
   GatewayRequestContext,
   GatewayRequestOptions,
-} from "../../../../src/gateway/server-methods/types.js";
+} from "./server-methods/types.js";
 import {
   dispatchGatewayMethodInProcess,
   withOperatorToolGatewayAuthority,
-} from "../../../../src/gateway/server-plugin-in-process-dispatch.js";
-import { withPluginRuntimeGatewayRequestScope } from "../../../../src/plugins/runtime/gateway-request-scope.js";
-import { registerOutcomeGatewayMethods } from "./registrar.js";
+} from "./server-plugin-in-process-dispatch.js";
+import { withPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
+import { registerOutcomeGatewayMethods } from "../../extensions/outcomes/src/gateway/registrar.js";
 
 const outcomeId = "123e4567-e89b-42d3-a456-426614174000";
 
@@ -89,7 +86,7 @@ function registerHarness() {
     registerGatewayMethod: (method, handler, options) => {
       registrations.push({
         method,
-        handler,
+        handler: handler as never,
         options: options as { scope: "operator.read" | "operator.write" },
       });
     },

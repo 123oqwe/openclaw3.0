@@ -91,11 +91,10 @@ export type WorkboardCard = {
 /** Parses only the frozen public cards.list fields, accepting harmless owner additions. */
 export function readWorkboardCards(value: unknown): WorkboardCard[] {
   const response = responseSchema.parse(value);
-  const seen = new Set<string>();
+  const seenCardIds = new Set<string>();
   return response.cards.map((card) => {
-    const identity = `${card.id}\0${card.createdAt}`;
-    if (seen.has(identity)) throw new WorkboardIdentityConflictError();
-    seen.add(identity);
+    if (seenCardIds.has(card.id)) throw new WorkboardIdentityConflictError();
+    seenCardIds.add(card.id);
     const proofs = card.metadata?.proof ?? [];
     const artifacts = card.metadata?.artifacts ?? [];
     if (new Set(proofs.map((proof) => proof.id)).size !== proofs.length) {

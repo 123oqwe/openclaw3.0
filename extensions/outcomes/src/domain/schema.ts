@@ -28,21 +28,21 @@ function codePointString(max: number) {
     });
 }
 
-export const workboardRefSchema = z.strictObject({
+const workboardRefSchema = z.strictObject({
   owner: z.literal("workboard"),
   cardId: z.string().min(1),
   cardCreatedAt: z.number().finite().nonnegative(),
   boardIdAtLink: z.string().min(1),
 });
 
-export const criterionSchema = z.strictObject({
+const criterionSchema = z.strictObject({
   id: codePointText(160),
   text: codePointText(1000),
   required: z.boolean(),
   workRefs: z.array(workboardRefSchema),
 });
 
-export const createRequestSchema = z
+const createRequestSchema = z
   .strictObject({
     id: codePointText(160),
     title: codePointText(160),
@@ -283,7 +283,7 @@ function safePlanHash(input: CanonicalPlan): string | null {
   }
 }
 
-export const outcomeRecordSchema = z
+const outcomeRecordSchema = z
   .strictObject({
     schemaVersion: z.literal(1),
     id: codePointText(160),
@@ -495,7 +495,7 @@ export type CanonicalPlan = {
   criteria: Criterion[];
 };
 
-export const canonicalPlanSchema = z
+const canonicalPlanSchema = z
   .strictObject({
     outcomeId: codePointText(160),
     objective: codePointText(4000),
@@ -570,30 +570,6 @@ export function evidenceSetHash(input: {
   };
   return createHash("sha256")
     .update(`openclaw:outcome-evidence-set:v1\0${stableStringify(canonical)}`, "utf8")
-    .digest("hex");
-}
-
-export function closureHash(input: {
-  outcomeId: string;
-  planGeneration: number;
-  planHash: string;
-  requiredCriteria: Array<{
-    criterionId: string;
-    decisionId: string;
-    decidedRevision: number;
-    evidenceSetHash: string;
-  }>;
-}): string {
-  const canonical = {
-    outcomeId: input.outcomeId,
-    planGeneration: input.planGeneration,
-    planHash: input.planHash,
-    requiredCriteria: [...input.requiredCriteria].toSorted((a, b) =>
-      a.criterionId < b.criterionId ? -1 : a.criterionId > b.criterionId ? 1 : 0,
-    ),
-  };
-  return createHash("sha256")
-    .update(`openclaw:outcome-closure:v1\0${stableStringify(canonical)}`, "utf8")
     .digest("hex");
 }
 

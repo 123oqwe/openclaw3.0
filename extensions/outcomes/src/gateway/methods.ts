@@ -421,36 +421,33 @@ function buildRefreshCandidate(
     if (projection.availability !== "available") return [];
     const card = matchedCards.get(workRefIdentity(projection.ref));
     if (card === undefined) return [];
-    const evidenceViews = evidence
-      .filter((item) => workRefIdentity(item.workRef) === workRefIdentity(projection.ref))
-      .flatMap((item) => {
-        if (item.kind === "workboard-proof") {
-          const proof = card.proofs.find((candidate) => candidate.id === item.sourceId);
-          if (proof === undefined) return [];
-          const url = publicSourceUrl(proof.url);
-          return [
-            {
-              ...item,
-              sourceCreatedAt: proof.createdAt,
-              ...(proof.label === undefined ? {} : { label: proof.label }),
-              proofStatus: proof.status,
-              ...(url === undefined ? {} : { url }),
-            },
-          ];
-        }
-        const artifact = card.artifacts.find((candidate) => candidate.id === item.sourceId);
-        if (artifact === undefined) return [];
-        const url = publicSourceUrl(artifact.url);
-        return [
-          {
-            ...item,
-            sourceCreatedAt: artifact.createdAt,
-            ...(artifact.label === undefined ? {} : { label: artifact.label }),
-            ...(url === undefined ? {} : { url }),
-            ...(artifact.mimeType === undefined ? {} : { mimeType: artifact.mimeType }),
-          },
-        ];
+    const evidenceViews: AuthorizedOutcomeSource["evidence"] = [];
+    for (const item of evidence) {
+      if (workRefIdentity(item.workRef) !== workRefIdentity(projection.ref)) continue;
+      if (item.kind === "workboard-proof") {
+        const proof = card.proofs.find((candidate) => candidate.id === item.sourceId);
+        if (proof === undefined) continue;
+        const url = publicSourceUrl(proof.url);
+        evidenceViews.push({
+          ...item,
+          sourceCreatedAt: proof.createdAt,
+          ...(proof.label === undefined ? {} : { label: proof.label }),
+          proofStatus: proof.status,
+          ...(url === undefined ? {} : { url }),
+        });
+        continue;
+      }
+      const artifact = card.artifacts.find((candidate) => candidate.id === item.sourceId);
+      if (artifact === undefined) continue;
+      const url = publicSourceUrl(artifact.url);
+      evidenceViews.push({
+        ...item,
+        sourceCreatedAt: artifact.createdAt,
+        ...(artifact.label === undefined ? {} : { label: artifact.label }),
+        ...(url === undefined ? {} : { url }),
+        ...(artifact.mimeType === undefined ? {} : { mimeType: artifact.mimeType }),
       });
+    }
     return [
       {
         ref: projection.ref,
