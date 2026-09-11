@@ -64,6 +64,7 @@ describe("Outcome plugin shell", () => {
       { method: "outcomes.update", options: { scope: "operator.write" } },
       { method: "outcomes.linkWorkboard", options: { scope: "operator.write" } },
       { method: "outcomes.unlinkWorkboard", options: { scope: "operator.write" } },
+      { method: "outcomes.activate", options: { scope: "operator.write" } },
       { method: "outcomes.cancel", options: { scope: "operator.write" } },
     ]);
   });

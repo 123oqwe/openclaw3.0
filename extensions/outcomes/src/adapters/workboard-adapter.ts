@@ -6,6 +6,14 @@ import {
 } from "@openclaw/workboard-contract";
 import { z } from "zod";
 
+/** The owner reused a card ID with distinct immutable creation identities. */
+export class WorkboardIdentityConflictError extends Error {
+  constructor() {
+    super("ambiguous Workboard card identity");
+    this.name = "WorkboardIdentityConflictError";
+  }
+}
+
 const optionalText = z.string().min(1).optional();
 const proofSchema = z.object({ id: z.string().min(1), status: z.enum(WORKBOARD_PROOF_STATUSES), createdAt: z.number().finite(), label: optionalText, command: optionalText, url: optionalText, note: optionalText }).passthrough();
 const artifactSchema = z.object({ id: z.string().min(1), createdAt: z.number().finite(), label: optionalText, url: optionalText, path: optionalText, mimeType: optionalText }).passthrough();
@@ -30,7 +38,7 @@ export function readWorkboardCards(value: unknown): WorkboardCard[] {
   const seen = new Set<string>();
   return response.cards.map((card) => {
     const identity = `${card.id}\0${card.createdAt}`;
-    if (seen.has(identity)) throw new Error("ambiguous Workboard card identity");
+    if (seen.has(identity)) throw new WorkboardIdentityConflictError();
     seen.add(identity);
     const proofs = card.metadata?.proof ?? [];
     const artifacts = card.metadata?.artifacts ?? [];

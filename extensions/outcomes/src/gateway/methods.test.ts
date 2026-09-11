@@ -18,7 +18,7 @@ const outcomeIds = [
   "123e4567-e89b-42d3-a456-426614174012",
 ];
 
-function createHarness(options: { registerError?: unknown } = {}) {
+function createHarness(options: { registerError?: unknown; workboardCards?: unknown[]; workboardError?: unknown } = {}) {
   const records = new Map<string, OutcomeRecord>();
   let writes = 0;
   const handlers = new Map<string, RegisteredHandler>();
@@ -41,8 +41,10 @@ function createHarness(options: { registerError?: unknown } = {}) {
     },
     deleteIf: async () => false,
   };
-  const gatewayRequest = vi.fn(async () => ({
-    cards: [
+  const gatewayRequest = vi.fn(async () => {
+    if (options.workboardError !== undefined) throw options.workboardError;
+    return {
+      cards: options.workboardCards ?? [
       {
         id: "card-a",
         status: "done",
@@ -50,8 +52,9 @@ function createHarness(options: { registerError?: unknown } = {}) {
         updatedAt: 2,
         metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] },
       },
-    ],
-  }));
+      ],
+    };
+  });
   const api = {
     runtime: { state: { openKeyedStore: () => store }, gateway: { request: gatewayRequest } },
     registerGatewayMethod: (method: string, handler: unknown) => {
@@ -278,6 +281,71 @@ describe("P-02 Outcome handlers", () => {
     expect(response).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
     expect(harness.gatewayRequest).not.toHaveBeenCalled();
     expect(harness.writes()).toBe(0);
+  });
+
+  it("rejects a duplicate owner card ID with different creation identities without writing", async () => {
+    const card = {
+      id: "card-a",
+      status: "done",
+      createdAt: 1,
+      updatedAt: 2,
+      metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] },
+    };
+    const harness = createHarness({ workboardCards: [card, { ...card, createdAt: 2 }] });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    const writes = harness.writes();
+    for (const cards of [[card, { ...card, createdAt: 2 }], [{ ...card, createdAt: 2 }, card]]) {
+      harness.gatewayRequest.mockResolvedValueOnce({ cards });
+      expect(
+        await harness.call("outcomes.linkWorkboard", {
+          id,
+          expectedRevision: 1,
+          criterionId,
+          cardId: "card-a",
+        }),
+      ).toMatchObject([false, undefined, { code: "OUTCOME_IDENTITY_CONFLICT" }]);
+    }
+    expect(harness.writes()).toBe(writes);
+    expect(harness.gatewayRequest).toHaveBeenCalledTimes(2);
+  });
+
+  it("maps missing and failed owner reads without leaking owner errors", async () => {
+    const id = outcomeIds[0]!;
+    const unavailable = createHarness({ workboardCards: [] });
+    await unavailable.call("outcomes.create", createParams(id));
+    expect(
+      await unavailable.call("outcomes.linkWorkboard", { id, expectedRevision: 1, criterionId, cardId: "card-a" }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_UNAVAILABLE" }]);
+
+    const timeout = createHarness({ workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" } });
+    await timeout.call("outcomes.create", createParams(id));
+    expect(
+      await timeout.call("outcomes.linkWorkboard", { id, expectedRevision: 1, criterionId, cardId: "card-a" }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_TIMEOUT", message: "Outcome request could not be completed" }]);
+  });
+
+  it("activates only a linked draft and freezes its first generation hash", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    expect(await harness.call("outcomes.activate", { id, expectedRevision: 2 })).toMatchObject([
+      true,
+      { outcome: { phase: "active", revision: 3, planGeneration: 1, planHash: expect.any(String) } },
+    ]);
+    const writes = harness.writes();
+    expect(await harness.call("outcomes.activate", { id, expectedRevision: 3 })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_STATE" },
+    ]);
+    expect(harness.writes()).toBe(writes);
   });
 
   it("does not write when cancellation is terminal or an operation is in flight", async () => {
