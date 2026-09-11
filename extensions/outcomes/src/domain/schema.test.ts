@@ -365,6 +365,32 @@ describe("Outcome create schema and canonical hash", () => {
         projections: [{ ...record.projections[0]!, sourceFingerprint: "f".repeat(64) }],
       }).success,
     ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [{ ...record.projections[0]!, sourceFingerprint: undefined }],
+      }).success,
+    ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [
+          {
+            ref,
+            availability: "available",
+            observedAt: 2,
+            proofs: [],
+            artifacts: [],
+          },
+        ],
+      }).success,
+    ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        projections: [{ ...record.projections[0]!, errorCode: "timeout" }],
+      }).success,
+    ).toBe(false);
   });
 
   it("applies the aggregate byte limit at the strict parse boundary", () => {
