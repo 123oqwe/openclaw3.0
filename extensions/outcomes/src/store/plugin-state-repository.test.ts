@@ -819,15 +819,23 @@ describe("Outcome repository host adapter", () => {
           onCapacityWarning: (warning) => warnings.push(warning),
         });
         await expect(
-          reopenedRepository.create(draftRecord(`capacity-${OUTCOME_CAPACITY_WARNING_ENTRIES - 1}`)),
+          reopenedRepository.create(
+            draftRecord(`capacity-${OUTCOME_CAPACITY_WARNING_ENTRIES - 1}`),
+          ),
         ).resolves.toEqual({ created: true });
         expect(warnings).toContainEqual({
           kind: "entry-count",
           observed: OUTCOME_CAPACITY_WARNING_ENTRIES,
           threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
         });
-        for (let index = OUTCOME_CAPACITY_WARNING_ENTRIES; index < OUTCOME_MAX_ENTRIES; index += 1) {
-          await expect(reopenedRepository.create(draftRecord(`capacity-${index}`))).resolves.toEqual({
+        for (
+          let index = OUTCOME_CAPACITY_WARNING_ENTRIES;
+          index < OUTCOME_MAX_ENTRIES;
+          index += 1
+        ) {
+          await expect(
+            reopenedRepository.create(draftRecord(`capacity-${index}`)),
+          ).resolves.toEqual({
             created: true,
           });
         }
@@ -840,7 +848,9 @@ describe("Outcome repository host adapter", () => {
             createRequestHash: "f".repeat(64),
           }),
         ).rejects.toMatchObject({ code: "outcome-create-conflict" });
-        await expect(reopenedRepository.create(draftRecord("capacity-overflow"))).rejects.toMatchObject({
+        await expect(
+          reopenedRepository.create(draftRecord("capacity-overflow")),
+        ).rejects.toMatchObject({
           code: "outcome-capacity-exceeded",
         });
         await expect(
