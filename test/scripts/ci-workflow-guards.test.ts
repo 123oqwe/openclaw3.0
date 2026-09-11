@@ -10831,6 +10831,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     ({ scope, packageVersion, branch, context }) => {
       const options = {
         bundledPlanner: true,
+        changedPaths: ["package.json"],
         packageVersion,
         scopeEnv: {
           OPENCLAW_CI_TARGET_REF: "a".repeat(40),
@@ -10909,6 +10910,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     ({ context, direct, peeled, packageVersion, accepted }) => {
       const result = runCiManifestFixture({
         bundledPlanner: true,
+        changedPaths: ["package.json"],
         packageVersion: packageVersion ?? "2026.9.1",
         remoteTagRefs: {
           ...(direct ? { "refs/tags/v2026.9.1": direct.repeat(40) } : {}),
@@ -11084,7 +11086,10 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
         }));
         const result = runCiManifestFixture({
           bundledPlanner: true,
-          changedPaths: ["extensions/matrix/src/channel.ts"],
+          changedPaths:
+            eventName === "workflow_dispatch"
+              ? ["package.json"]
+              : ["extensions/matrix/src/channel.ts"],
           changedPlannerSource:
             selection === "precise"
               ? `export { createNodeTestShards as createChangedNodeTestShards } from "./ci-node-test-plan.mts";
