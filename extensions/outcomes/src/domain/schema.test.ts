@@ -125,9 +125,9 @@ describe("Outcome create schema and canonical hash", () => {
       id: "c-1",
       text: "done",
       required: true,
-      workRefs: Array.from({ length: 2000 }, (_, index) => ({
+      workRefs: Array.from({ length: 10 }, (_, index) => ({
         owner: "workboard" as const,
-        cardId: `card-${index}-${"x".repeat(80)}`,
+        cardId: `card-${index}-${"x".repeat(20000)}`,
         cardCreatedAt: index,
         boardIdAtLink: "board",
       })),
@@ -227,6 +227,21 @@ describe("Outcome create schema and canonical hash", () => {
         ],
       }).success,
     ).toBe(false);
+    const nextPlan = {
+      ...plan,
+      planGeneration: 2,
+      criteria: [{ id: "c-2", text: "new", required: true, workRefs: [] }],
+    };
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...record,
+        revision: 3,
+        planGeneration: 2,
+        planHash: planHash(nextPlan),
+        criteria: nextPlan.criteria,
+        decisions: [decision],
+      }).success,
+    ).toBe(true);
   });
 
   it("preserves only coherent cancelled plan state", () => {
