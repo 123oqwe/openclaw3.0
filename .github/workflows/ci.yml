@@ -2043,7 +2043,7 @@ jobs:
             test/scripts/outcome-artifact-policy.test.ts
           {
             git diff --name-only -z HEAD
-            git ls-files --others --exclude-standard -z
+            git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'
           } | node scripts/outcome-artifact-policy.mjs paths
           if [ -n "$(git ls-files --others --exclude-standard -- docs/plugins/reference/outcomes.md)" ]; then
             git add -N -- docs/plugins/reference/outcomes.md
