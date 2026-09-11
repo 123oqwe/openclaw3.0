@@ -105,6 +105,18 @@ describe("P-02 Outcome handlers", () => {
     ).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
   });
 
+  it("keeps the original create receipt after a later revision", async () => {
+    const harness = createHarness();
+    const params = createParams(outcomeIds[0]!);
+    await harness.call("outcomes.create", params);
+    await harness.call("outcomes.update", { id: params.id, expectedRevision: 1, patch: { title: "Revised" } });
+    expect(await harness.call("outcomes.create", params)).toMatchObject([
+      true,
+      { replayed: true, outcome: { revision: 2 }, receipt: { committedRevision: 1 } },
+    ]);
+    expect(harness.writes()).toBe(2);
+  });
+
   it("constructs the only allowed initial draft and rejects client-owned record fields before writing", async () => {
     const harness = createHarness();
     const invalid = {

@@ -98,7 +98,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
     const request = normalizeCreate(params); const owner = authenticatedProfileId(client); if (!request || !owner) return fail(respond, "INVALID_REQUEST");
     const now = Date.now(); const criteria = request.criteria.map((criterion) => ({ ...criterion, workRefs: [] }));
     const record: OutcomeRecord = { schemaVersion: 1, id: request.id, createRequestHash: createRequestHash({ ...request, criteria }), managerProfileId: owner, title: request.title, objective: request.objective, phase: "draft", revision: 1, contractRevision: 1, planGeneration: 0, planHash: null, criteria, projections: [], evidence: [], decisions: [], operations: [], acceptances: [], createdAt: now, updatedAt: now };
-    try { const result = await repository.createOwned(owner, record); respond(true, { outcome: toOutcomeDetail(result.record, now), replayed: result.replayed, receipt: { kind: "create", id: result.record.id, committedRevision: result.record.revision } }); }
+    try { const result = await repository.createOwned(owner, record); respond(true, { outcome: toOutcomeDetail(result.record, now), replayed: result.replayed, receipt: { kind: "create", id: result.record.id, committedRevision: 1 } }); }
     catch (error) { respond(false, undefined, outcomeError(outcomeStorageError(error, "create"))); }
   }, { scope: "operator.write" });
   api.registerGatewayMethod("outcomes.get", async ({ client, params, respond }) => {

@@ -6,6 +6,7 @@ import {
   reduceOutcomeCancel,
   reduceOutcomeContract,
   reduceOutcomeLink,
+  reduceOutcomeUnlink,
   reduceOutcomePatch,
   reduceOutcomeTitle,
   type OutcomeMutationResult,
@@ -196,6 +197,13 @@ describe("Outcome repository atomic contract", () => {
       serverTime: 42,
     });
     expect(result).toMatchObject({ kind: "updated", record: { revision: 2, updatedAt: 42 } });
+  });
+
+  it("unlinks a current identity once and leaves an absent identity unchanged", () => {
+    const linked = reduceOutcomeLink(validRecord(), { expectedRevision: 1, criterionId: "c-1", ref: { owner: "workboard", cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }, serverTime: 42 }).record;
+    const mutation = { expectedRevision: 2, criterionId: "c-1", ref: { owner: "workboard" as const, cardId: "card-1", cardCreatedAt: 1, boardIdAtLink: "board-1" }, serverTime: 43 };
+    expect(reduceOutcomeUnlink(linked, mutation)).toMatchObject({ kind: "updated", record: { revision: 3 } });
+    expect(reduceOutcomeUnlink({ ...linked, revision: 2, criteria: [{ ...first(linked.criteria), workRefs: [] }] }, mutation).kind).toBe("noop");
   });
 
   it("rejects a duplicate create without a second write", async () => {

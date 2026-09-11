@@ -248,6 +248,21 @@ export function reduceOutcomeLink(
   return { kind: "updated", record: { ...current, criteria: current.criteria.map((item) => item.id === mutation.criterionId ? { ...item, workRefs: [...item.workRefs, mutation.ref] } : item), revision: current.revision + 1, updatedAt: mutation.serverTime } };
 }
 
+/** Atomically removes one current Workboard identity without erasing history. */
+export function reduceOutcomeUnlink(
+  current: OutcomeRecord,
+  mutation: OutcomeLinkMutation,
+): OutcomeMutationResult {
+  assertServerTime(mutation.serverTime);
+  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
+  if (current.phase === "cancelled" || hasInFlightOperation(current)) return { kind: "rejected", record: current };
+  const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
+  if (!criterion) return { kind: "rejected", record: current };
+  const workRefs = criterion.workRefs.filter((ref) => ref.cardId !== mutation.ref.cardId || ref.cardCreatedAt !== mutation.ref.cardCreatedAt);
+  if (workRefs.length === criterion.workRefs.length) return { kind: "noop", record: current };
+  return { kind: "updated", record: { ...current, criteria: current.criteria.map((item) => item.id === mutation.criterionId ? { ...item, workRefs } : item), revision: current.revision + 1, updatedAt: mutation.serverTime } };
+}
+
 export function reduceOutcomeCancel(
   current: OutcomeRecord,
   expectedRevision: number,
