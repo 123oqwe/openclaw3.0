@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseOutcomeRecord, planHash } from "./schema.js";
 import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
 
 function first<T>(items: T[]): T {
@@ -38,6 +39,17 @@ const record = (): OutcomeRecord => ({
   createdAt: 1,
   updatedAt: 2,
 });
+
+function valid(input: OutcomeRecord): OutcomeRecord {
+  input.planHash = planHash({
+    outcomeId: input.id,
+    objective: input.objective,
+    contractRevision: input.contractRevision,
+    planGeneration: input.planGeneration,
+    criteria: input.criteria,
+  });
+  return parseOutcomeRecord(input);
+}
 
 describe("Outcome P-01 read model", () => {
   it("derives a redacted summary and detail", () => {
@@ -92,7 +104,7 @@ describe("Outcome P-01 read model", () => {
       { id: "c-1", text: "Done", required, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }] },
     ];
     input.projections = [{ ref: input.criteria[1]!.workRefs[0]!, availability: "available", status: "blocked", observedAt: 1, lastSuccessfulAt: 10, proofs: [], artifacts: [] }];
-    expect(toOutcomeSummary(input, 10).readiness).toBe("blocked");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
   });
 
   it.each(["prepared", "may-have-crossed", "unknown"] as const)(
@@ -100,7 +112,7 @@ describe("Outcome P-01 read model", () => {
     (state) => {
       const input = record();
       input.operations = [{ id: `op-${state}`, kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }, attemptedAt: 1 }];
-      expect(toOutcomeSummary(input, 10).readiness).toBe("blocked");
+      expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
     },
   );
 
@@ -108,17 +120,18 @@ describe("Outcome P-01 read model", () => {
     const input = record();
     input.criteria = [{ id: "c-1", text: "Done", required: true, workRefs: [{ owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" }] }];
     input.projections = [{ ref: input.criteria[0]!.workRefs[0]!, availability: "unavailable", errorCode: "timeout", status: "blocked", observedAt: 1, lastSuccessfulAt: 10, proofs: [], artifacts: [] }];
-    expect(toOutcomeSummary(input, 10).readiness).toBe("unavailable");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("unavailable");
     input.projections[0]!.availability = "available";
+    delete input.projections[0]!.errorCode;
     input.projections[0]!.lastSuccessfulAt = 0;
-    expect(toOutcomeSummary(input, 24 * 60 * 60 * 1000 + 1).readiness).toBe("stale");
+    expect(toOutcomeSummary(valid(input), 24 * 60 * 60 * 1000 + 1).readiness).toBe("stale");
   });
 
-  it("ignores terminal operations and preserves input", () => {
+  it.each(["succeeded", "failed"] as const)("ignores terminal %s operations and preserves input", (state) => {
     const input = record();
-    input.operations = [{ id: "op-done", kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state: "succeeded", target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" } }];
+    input.operations = [{ id: "op-done", kind: "workboard-card-start", criterionId: "c-1", planGeneration: 1, createdRevision: 2, requestHash: "b".repeat(64), state, target: { owner: "workboard", cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" } }];
     const before = structuredClone(input);
-    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
     expect(input).toEqual(before);
   });
 
@@ -126,7 +139,7 @@ describe("Outcome P-01 read model", () => {
     const input = record();
     input.projections = [{ ref: { owner: "workboard", cardId: "old-card", cardCreatedAt: 1, boardIdAtLink: "board" }, availability: "available", status: "blocked", observedAt: 1, lastSuccessfulAt: 10, proofs: [], artifacts: [] }];
     const before = structuredClone(input);
-    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
     expect(input).toEqual(before);
   });
 
