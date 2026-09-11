@@ -43,6 +43,29 @@ describe("Outcome plugin shell", () => {
     });
   });
 
+  it("registers the authenticated P-02 first-package method scopes", () => {
+    const registerGatewayMethod = vi.fn();
+
+    plugin.register(
+      createTestPluginApi({
+        id: "outcomes",
+        name: "Outcomes",
+        registerGatewayMethod,
+      }),
+    );
+
+    expect(
+      registerGatewayMethod.mock.calls.map(([method, _handler, options]) => ({ method, options })),
+    ).toEqual([
+      { method: "outcomes.health", options: { scope: "operator.read" } },
+      { method: "outcomes.create", options: { scope: "operator.write" } },
+      { method: "outcomes.get", options: { scope: "operator.read" } },
+      { method: "outcomes.list", options: { scope: "operator.read" } },
+      { method: "outcomes.update", options: { scope: "operator.write" } },
+      { method: "outcomes.cancel", options: { scope: "operator.write" } },
+    ]);
+  });
+
   it("registers only the content-free operator.read health method", async () => {
     const registerGatewayMethod = vi.fn();
     const registerTool = vi.fn();
