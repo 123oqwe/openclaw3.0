@@ -318,6 +318,15 @@ describe("Outcome create schema and canonical hash", () => {
         criteria: [{ ...base.criteria[0], workRefs: refs }],
       }).success,
     ).toBe(false);
+    expect(
+      outcomeRecordSchema.safeParse({
+        ...base,
+        criteria: [{
+          ...base.criteria[0],
+          workRefs: [refs[0], refs[0]],
+        }],
+      }).success,
+    ).toBe(false);
   });
 
   it("canonicalizes evidence and closure hashes deterministically", () => {

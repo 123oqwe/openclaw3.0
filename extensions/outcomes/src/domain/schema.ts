@@ -173,6 +173,9 @@ export const outcomeRecordSchema = z
       const criterionRefs = new Set(
         criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}\0${ref.boardIdAtLink}`),
       );
+      if (criterionRefs.size !== criterion.workRefs.length) {
+        ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });
+      }
       if (criterionRefs.size > 10) {
         ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
       }
@@ -183,6 +186,22 @@ export const outcomeRecordSchema = z
     }
     if (record.revision < record.contractRevision) {
       ctx.addIssue({ code: "custom", message: "revision cannot be below contractRevision" });
+    }
+    for (const [label, items] of [
+      ["evidence", record.evidence],
+      ["decisions", record.decisions],
+      ["operations", record.operations],
+      ["acceptances", record.acceptances],
+    ] as const) {
+      const ids = new Set(items.map((item) => item.id));
+      if (ids.size !== items.length) {
+        ctx.addIssue({ code: "custom", message: `${label} ids must be unique` });
+      }
+    }
+    for (const evidence of record.evidence) {
+      if (!criterionIds.has(evidence.criterionId)) {
+        ctx.addIssue({ code: "custom", message: "evidence criterion is absent from the record" });
+      }
     }
     if (!record.criteria.some((criterion) => criterion.required)) {
       ctx.addIssue({ code: "custom", message: "at least one criterion must be required" });
