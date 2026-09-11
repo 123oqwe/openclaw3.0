@@ -11423,11 +11423,15 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       ).include as Array<Record<string, unknown>>;
       if (changedPaths[0]!.startsWith("extensions/")) {
         expect(matrix).toEqual(
-          expect.arrayContaining([expect.objectContaining({ check_name: "changed-extension-fallback-plan" })]),
+          expect.arrayContaining([
+            expect.objectContaining({ check_name: "changed-extension-fallback-plan" }),
+          ]),
         );
       } else {
         expect(matrix).not.toEqual(
-          expect.arrayContaining([expect.objectContaining({ check_name: "changed-extension-fallback-plan" })]),
+          expect.arrayContaining([
+            expect.objectContaining({ check_name: "changed-extension-fallback-plan" }),
+          ]),
         );
       }
     }
