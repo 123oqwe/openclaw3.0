@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   assertOutcomeRecordSize,
+  closureHash,
   createRequestHash,
   createRequestSchema,
+  evidenceSetHash,
   outcomeRecordSchema,
   parseOutcomeRecord,
   planHash,
@@ -275,5 +277,20 @@ describe("Outcome create schema and canonical hash", () => {
       updatedAt: 1,
     };
     expect(outcomeRecordSchema.safeParse(future).success).toBe(false);
+  });
+
+  it("canonicalizes evidence and closure hashes deterministically", () => {
+    expect(evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["b", "a", "a"] }))
+      .toBe(evidenceSetHash({ criterionId: "c", planGeneration: 2, sourceDigests: ["a", "b"] }));
+    const input = {
+      outcomeId: "o",
+      planGeneration: 2,
+      planHash: "p".repeat(64),
+      requiredCriteria: [
+        { criterionId: "b", decisionId: "d2", decidedRevision: 4, evidenceSetHash: "e2" },
+        { criterionId: "a", decisionId: "d1", decidedRevision: 3, evidenceSetHash: "e1" },
+      ],
+    };
+    expect(closureHash(input)).toBe(closureHash({ ...input, requiredCriteria: [...input.requiredCriteria].reverse() }));
   });
 });

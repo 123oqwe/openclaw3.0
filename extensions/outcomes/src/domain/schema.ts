@@ -277,6 +277,45 @@ export function planHash(input: CanonicalPlan): string {
     .digest("hex");
 }
 
+export function evidenceSetHash(input: {
+  criterionId: string;
+  planGeneration: number;
+  sourceDigests: string[];
+}): string {
+  const canonical = {
+    criterionId: input.criterionId,
+    planGeneration: input.planGeneration,
+    sourceDigests: [...new Set(input.sourceDigests)].toSorted(),
+  };
+  return createHash("sha256")
+    .update(`openclaw:outcome-evidence-set:v1\0${stableStringify(canonical)}`, "utf8")
+    .digest("hex");
+}
+
+export function closureHash(input: {
+  outcomeId: string;
+  planGeneration: number;
+  planHash: string;
+  requiredCriteria: Array<{
+    criterionId: string;
+    decisionId: string;
+    decidedRevision: number;
+    evidenceSetHash: string;
+  }>;
+}): string {
+  const canonical = {
+    outcomeId: input.outcomeId,
+    planGeneration: input.planGeneration,
+    planHash: input.planHash,
+    requiredCriteria: [...input.requiredCriteria].toSorted((a, b) =>
+      a.criterionId < b.criterionId ? -1 : a.criterionId > b.criterionId ? 1 : 0,
+    ),
+  };
+  return createHash("sha256")
+    .update(`openclaw:outcome-closure:v1\0${stableStringify(canonical)}`, "utf8")
+    .digest("hex");
+}
+
 export function assertOutcomeRecordSize(record: unknown, maxBytes = OUTCOME_MAX_RECORD_BYTES): void {
   const bytes = Buffer.byteLength(stableStringify(record), "utf8");
   if (bytes > maxBytes) {

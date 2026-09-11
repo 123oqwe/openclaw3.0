@@ -1,2 +1,2 @@
 /** Domain-separated request and plan hashing entrypoints. */
-export { createRequestHash, planHash } from "./schema.js";
+export { closureHash, createRequestHash, evidenceSetHash, planHash } from "./schema.js";
