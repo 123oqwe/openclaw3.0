@@ -1,5 +1,4 @@
 import type { OpenClawPluginApi } from "../../api.js";
-import { registerOutcomeFirstPackageMethods } from "./methods.js";
 
 const CAPABILITY_STORE_OPTIONS = {
   namespace: "outcomes-capability-v1",
@@ -7,7 +6,8 @@ const CAPABILITY_STORE_OPTIONS = {
   overflowPolicy: "reject-new" as const,
 };
 
-export function registerOutcomeGatewayMethods(api: OpenClawPluginApi): void {
+/** Registers only the independent capability probe. */
+export function registerOutcomeHealthMethod(api: OpenClawPluginApi): void {
   api.registerGatewayMethod(
     "outcomes.health",
     async ({ respond }) => {
@@ -53,5 +53,4 @@ export function registerOutcomeGatewayMethods(api: OpenClawPluginApi): void {
     },
     { scope: "operator.read" },
   );
-  registerOutcomeFirstPackageMethods(api);
 }

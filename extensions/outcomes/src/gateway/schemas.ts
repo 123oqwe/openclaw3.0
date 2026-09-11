@@ -1,12 +1,15 @@
 import { Type } from "typebox";
+import { OUTCOME_MAX_CRITERIA } from "../domain/constants.js";
 
-const outcomeId = Type.String({ minLength: 1, maxLength: 160 });
+const UUID_PATTERN = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$";
+
+const outcomeId = Type.String({ pattern: UUID_PATTERN });
 const outcomeTitle = Type.String({ minLength: 1, maxLength: 160 });
 const outcomeObjective = Type.String({ minLength: 1, maxLength: 4000 });
 
 const criterion = Type.Object(
   {
-    id: Type.String({ minLength: 1, maxLength: 160 }),
+    id: Type.String({ pattern: UUID_PATTERN }),
     text: Type.String({ minLength: 1, maxLength: 1000 }),
     required: Type.Boolean(),
   },
@@ -19,7 +22,7 @@ export const outcomeCreateParamsSchema = Type.Object(
     id: outcomeId,
     title: outcomeTitle,
     objective: outcomeObjective,
-    criteria: Type.Array(criterion, { minItems: 1, maxItems: 5 }),
+    criteria: Type.Array(criterion, { minItems: 1, maxItems: OUTCOME_MAX_CRITERIA }),
   },
   { additionalProperties: false },
 );
@@ -37,10 +40,15 @@ export const outcomeListParamsSchema = Type.Object(
 export const outcomeUpdateParamsSchema = Type.Object(
   {
     id: outcomeId,
-    expectedRevision: Type.Integer({ minimum: 1 }),
-    title: Type.Optional(outcomeTitle),
-    objective: Type.Optional(outcomeObjective),
-    criteria: Type.Optional(Type.Array(criterion, { minItems: 1, maxItems: 5 })),
+    expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+    patch: Type.Object(
+      {
+        title: Type.Optional(outcomeTitle),
+        objective: Type.Optional(outcomeObjective),
+        criteria: Type.Optional(Type.Array(criterion, { minItems: 1, maxItems: OUTCOME_MAX_CRITERIA })),
+      },
+      { additionalProperties: false },
+    ),
   },
   { additionalProperties: false },
 );
@@ -48,7 +56,7 @@ export const outcomeUpdateParamsSchema = Type.Object(
 export const outcomeCancelParamsSchema = Type.Object(
   {
     id: outcomeId,
-    expectedRevision: Type.Integer({ minimum: 1 }),
+    expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
   },
   { additionalProperties: false },
 );

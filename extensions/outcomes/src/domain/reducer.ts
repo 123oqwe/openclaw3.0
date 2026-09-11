@@ -27,6 +27,15 @@ export type OutcomeContractMutation = {
   serverTime: number;
 };
 
+export type OutcomePatchMutation = {
+  expectedRevision: number;
+  title?: string;
+  objective?: string;
+  criteria?: Criterion[];
+  /** Supplied by the authenticated server context, never client payload. */
+  serverTime: number;
+};
+
 export type OutcomeActivateResult =
   | { kind: "conflict"; record: OutcomeRecord }
   | { kind: "rejected"; record: OutcomeRecord }
@@ -165,6 +174,58 @@ export function reduceOutcomeTitle(
     record: {
       ...current,
       title: mutation.title,
+      revision: current.revision + 1,
+      updatedAt: mutation.serverTime,
+    },
+  };
+}
+
+/**
+ * Applies the public update patch in one CAS decision. Contract changes retain
+ * refs supplied by the gateway and advance the plan exactly once; a title-only
+ * change leaves the contract generation alone.
+ */
+export function reduceOutcomePatch(
+  current: OutcomeRecord,
+  mutation: OutcomePatchMutation,
+): OutcomeMutationResult {
+  assertServerTime(mutation.serverTime);
+  if (current.phase === "cancelled") return { kind: "rejected", record: current };
+  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
+  if (hasInFlightOperation(current)) return { kind: "rejected", record: current };
+
+  const title = mutation.title ?? current.title;
+  const objective = mutation.objective ?? current.objective;
+  const criteria = mutation.criteria ?? current.criteria;
+  const contractChanged =
+    objective !== current.objective ||
+    stableStringify(criteria) !== stableStringify(current.criteria);
+  if (title === current.title && !contractChanged) return { kind: "noop", record: current };
+
+  if (!contractChanged) {
+    return {
+      kind: "updated",
+      record: { ...current, title, revision: current.revision + 1, updatedAt: mutation.serverTime },
+    };
+  }
+
+  const planGeneration = current.phase === "draft" ? 0 : current.planGeneration + 1;
+  const phase = current.phase === "accepted" ? "active" : current.phase;
+  const contractRevision = current.contractRevision + 1;
+  return {
+    kind: "updated",
+    record: {
+      ...current,
+      title,
+      objective,
+      criteria,
+      phase,
+      contractRevision,
+      planGeneration,
+      planHash:
+        planGeneration === 0
+          ? null
+          : planHash({ outcomeId: current.id, objective, contractRevision, planGeneration, criteria }),
       revision: current.revision + 1,
       updatedAt: mutation.serverTime,
     },

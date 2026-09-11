@@ -95,10 +95,10 @@ function createLegacyOutcomeRepository(
       }
       const existing = await store.lookup(record.id);
       if (!existing) {
-        throw new Error("Outcome is not owned by the requested manager");
+        throw new OutcomeRepositoryConflictError();
       }
       if (existing.managerProfileId !== managerProfileId) {
-        throw new Error("Outcome is not owned by the requested manager");
+        throw new OutcomeRepositoryConflictError();
       }
       if (existing.createRequestHash !== record.createRequestHash) {
         throw new OutcomeRepositoryConflictError();
@@ -236,7 +236,7 @@ function createStrictOutcomeRepository(
       }
       const existing = parseOutcomeRecord(rawExisting);
       if (existing.managerProfileId !== owner) {
-        throw new Error("Outcome is not owned by the requested manager");
+        throw new OutcomeRepositoryConflictError();
       }
       if (existing.createRequestHash !== parsed.createRequestHash) {
         throw new OutcomeRepositoryConflictError();

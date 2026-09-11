@@ -5,6 +5,7 @@ import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,
   reduceOutcomeContract,
+  reduceOutcomePatch,
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "./reducer.js";
@@ -229,6 +230,28 @@ describe("Outcome repository atomic contract", () => {
     ).toEqual({
       kind: "updated",
       record: { ...record, title: "new", revision: 3, updatedAt: 42 },
+    });
+  });
+
+  it("applies title and contract fields in one revision", () => {
+    const record = { ...activeRecord(), revision: 2, title: "old" };
+    const result = reduceOutcomePatch(record, {
+      expectedRevision: 2,
+      title: "new",
+      objective: "new objective",
+      criteria: record.criteria,
+      serverTime: 42,
+    });
+    expect(result).toMatchObject({
+      kind: "updated",
+      record: {
+        title: "new",
+        objective: "new objective",
+        revision: 3,
+        contractRevision: record.contractRevision + 1,
+        planGeneration: record.planGeneration + 1,
+        updatedAt: 42,
+      },
     });
   });
 
