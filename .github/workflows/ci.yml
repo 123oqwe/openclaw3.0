@@ -1966,7 +1966,7 @@ jobs:
   prepare-outcome-artifacts:
     permissions:
       contents: read
-    if: ${{ github.repository == '123oqwe/openclaw-private' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}
+    if: ${{ github.repository == '123oqwe/openclaw3.0' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -5705,7 +5705,7 @@ jobs:
           JOB_RESULTS: |
             preflight=${{ needs.preflight.result }}|true
             security-fast=${{ needs.security-fast.result }}|true
-            prepare-outcome-artifacts=${{ needs.prepare-outcome-artifacts.result }}|${{ github.repository == '123oqwe/openclaw-private' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}
+            prepare-outcome-artifacts=${{ needs.prepare-outcome-artifacts.result }}|${{ github.repository == '123oqwe/openclaw3.0' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}
             pnpm-store-warmup=${{ needs.pnpm-store-warmup.result }}|${{ (needs.preflight.outputs.run_node == 'true' || needs.preflight.outputs.run_check_docs == 'true') && (needs.preflight.outputs.runner_profile == 'github' || needs.preflight.outputs.runner_profile == 'hybrid' || (!(github.repository == 'openclaw/openclaw' && github.event_name == 'push' && github.ref == 'refs/heads/main') && !(github.repository == 'openclaw/openclaw' && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && needs.preflight.outputs.run_node == 'true'))) }}
             build-artifacts=${{ needs.build-artifacts.result }}|${{ needs.preflight.outputs.run_build_artifacts }}
             control-ui-performance=${{ needs.control-ui-performance.result }}|${{ needs.preflight.outputs.run_build_artifacts == 'true' || needs.preflight.outputs.run_ui_tests == 'true' }}
