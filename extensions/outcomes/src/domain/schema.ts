@@ -107,7 +107,10 @@ const projectionSchema = z
       sourceUpdatedAt: projection.sourceUpdatedAt,
     });
     if (projection.sourceFingerprint !== sourceFingerprint) {
-      ctx.addIssue({ code: "custom", message: "sourceFingerprint does not match projection source" });
+      ctx.addIssue({
+        code: "custom",
+        message: "sourceFingerprint does not match projection source",
+      });
     }
   });
 
