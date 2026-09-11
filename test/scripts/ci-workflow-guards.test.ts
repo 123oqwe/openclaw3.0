@@ -2341,6 +2341,12 @@ NODE
     const changedScopeStep = preflightSteps.find(
       (step: WorkflowStep) => step.name === "Detect changed scopes",
     );
+    const ensureBaseStep = preflightSteps.find(
+      (step: WorkflowStep) => step.name === "Ensure preflight base commit",
+    );
+    expect(ensureBaseStep.if).toBeUndefined();
+    expect(ensureBaseStep.with["base-sha"]).toContain("steps.diff_base.outputs.sha");
+    expect(ensureBaseStep.with["fetch-ref"]).toContain("github.event.repository.default_branch");
     expect(changedScopeStep.if).toContain("github.event_name == 'workflow_dispatch'");
     expect(changedScopeStep.env?.OPENCLAW_ALLOW_RELEASE_GENERATED_MIX).toContain(
       "github.event_name == 'workflow_dispatch'",
