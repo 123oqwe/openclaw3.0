@@ -29,13 +29,42 @@ export function toOutcomeSummary(record: OutcomeRecord, observedAt: number): Out
       projection.lastSuccessfulAt === undefined ||
       observedAt - projection.lastSuccessfulAt >= OUTCOME_PROJECTION_MAX_AGE_MS,
   );
+  const currentDecisions = record.criteria.map((criterion) => {
+    const decisions = record.decisions
+      .filter(
+        (decision) =>
+          decision.criterionId === criterion.id && decision.planGeneration === record.planGeneration,
+      )
+      .toSorted((left, right) => right.decidedRevision - left.decidedRevision);
+    return { criterion, decision: decisions[0] };
+  });
+  const hasRejectedDecision = currentDecisions.some(({ decision }) => decision?.status === "rejected");
+  const hasUncertainOperation = record.operations.some((operation) =>
+    ["prepared", "unknown", "may-have-crossed"].includes(operation.state),
+  );
+  const hasBlockedSource = currentProjections.some(
+    (projection) => projection.availability !== "available" || projection.upstreamStale === true,
+  );
+  const hasIncompleteRequired = currentDecisions.some(
+    ({ criterion, decision }) =>
+      criterion.required &&
+      (criterion.workRefs.length === 0 ||
+        !record.evidence.some(
+          (evidence) =>
+            evidence.criterionId === criterion.id &&
+            evidence.planGeneration === record.planGeneration,
+        ) ||
+        decision?.status !== "verified"),
+  );
   const readiness = hasUnavailableSource
     ? "unavailable"
     : hasStaleSource
       ? "stale"
-      : record.phase === "cancelled"
+      : hasRejectedDecision || hasUncertainOperation || hasBlockedSource || record.phase === "cancelled"
         ? "blocked"
-        : "incomplete";
+        : hasIncompleteRequired || record.phase === "draft"
+          ? "incomplete"
+          : "ready";
   const acceptanceValidity = record.acceptances.length === 0 ? "none" : "needs-review";
   return {
     id: record.id,

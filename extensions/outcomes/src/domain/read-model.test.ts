@@ -238,4 +238,74 @@ describe("Outcome P-01 read model", () => {
     expect(() => parseOutcomeRecord(input)).not.toThrow();
     expect(toOutcomeSummary(input, 10).acceptanceValidity).toBe("needs-review");
   });
+
+  it("reports ready only for current-generation verified required evidence", () => {
+    const input = record();
+    const criterion = first(input.criteria);
+    const ref = { owner: "workboard" as const, cardId: "card", cardCreatedAt: 1, boardIdAtLink: "board" };
+    criterion.workRefs = [ref];
+    input.projections = [
+      { ref, availability: "available", observedAt: 10, lastSuccessfulAt: 10, proofs: [], artifacts: [] },
+    ];
+    input.evidence = [
+      {
+        id: "e-1",
+        criterionId: criterion.id,
+        planGeneration: input.planGeneration,
+        workRef: ref,
+        kind: "workboard-proof",
+        sourceId: "proof-1",
+        sourceDigest: "digest-1",
+        observedAt: 10,
+      },
+    ];
+    input.decisions = [
+      {
+        id: "d-1",
+        criterionId: criterion.id,
+        planGeneration: input.planGeneration,
+        decidedRevision: input.revision,
+        status: "verified",
+        requestHash: "a".repeat(64),
+        profileId: "manager-1",
+        planHash: input.planHash!,
+        decidedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: input.contractRevision,
+          planGeneration: input.planGeneration,
+          criteria: input.criteria,
+        },
+        evidenceSetHash: "e".repeat(64),
+        decidedAt: 10,
+      },
+    ];
+    expect(toOutcomeSummary(input, 10).readiness).toBe("ready");
+  });
+
+  it("blocks current readiness for rejected decisions and uncertain operations", () => {
+    const input = record();
+    input.decisions = [
+      {
+        id: "d-1",
+        criterionId: "c-1",
+        planGeneration: input.planGeneration,
+        decidedRevision: input.revision,
+        status: "rejected",
+        requestHash: "a".repeat(64),
+        profileId: "manager-1",
+        planHash: input.planHash!,
+        decidedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: input.contractRevision,
+          planGeneration: input.planGeneration,
+          criteria: input.criteria,
+        },
+        evidenceSetHash: "e".repeat(64),
+        decidedAt: 10,
+      },
+    ];
+    expect(toOutcomeSummary(input, 10).readiness).toBe("blocked");
+  });
 });
