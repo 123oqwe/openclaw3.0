@@ -67,10 +67,11 @@ method. P-04/P-05/P-06 methods remain unregistered.
 
 The test suite covers the following cases when collected by Hosted CI:
 
-1. Registration/admission: capture every registered P-02 descriptor with `createTestPluginApi`, then
-   dispatch each through the host registry/scope helpers above. Assert unauthenticated,
-   expired, revoked, and insufficient-scope requests fail with the host typed error;
-   `operator.write` also reaches read methods through normal scope implication.
+1. Registration/admission: capture all nine P-02 descriptors with `createTestPluginApi` and
+   verify each required scope. Dispatch each once with insufficient effective scopes and assert
+   host rejection before its handler. Representative `get` requests cover missing and expired
+   authenticated authority; `create` covers effective write-authority revocation after exact
+   replay. The remaining common authority combinations reuse corresponding host tests.
 2. DTO/clock boundary: strict TypeBox request DTOs reject unknown fields, invalid UUIDs,
    invalid limits, oversized UTF-8 payloads, duplicate criteria, and missing required
    criteria. Client-supplied timestamp/server-time fields are invalid input: handlers obtain
