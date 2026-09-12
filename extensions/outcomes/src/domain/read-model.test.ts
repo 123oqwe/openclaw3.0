@@ -285,6 +285,34 @@ describe("Outcome P-01 read model", () => {
     expect(detail.nextActions).toEqual(["refresh", "unlink-work", "cancel"]);
   });
 
+  it("keeps refresh available for a fresh linked Outcome", () => {
+    const input = record();
+    input.phase = "active";
+    const criterion = first(input.criteria);
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "current-card",
+      cardCreatedAt: 4,
+      boardIdAtLink: "board",
+    };
+    criterion.workRefs = [ref];
+    input.projections = [
+      {
+        ref,
+        availability: "available",
+        currentBoardId: "board",
+        status: "done",
+        observedAt: 5,
+        proofs: [{ id: "proof-current", status: "passed", createdAt: 5 }],
+        artifacts: [],
+      },
+    ];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.nextActions).toEqual(["refresh", "unlink-work", "cancel"]);
+  });
+
   it.each([
     ["required", true],
     ["optional", false],

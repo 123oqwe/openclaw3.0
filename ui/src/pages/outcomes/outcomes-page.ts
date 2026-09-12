@@ -1278,7 +1278,6 @@ class OutcomesPage extends OpenClawLightDomElement {
     const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
     let mutationResultWasCurrent = false;
-    let revalidateAfterSuccess = false;
     try {
       const activated = await activateOutcome(client, id, detail.revision);
       if (
@@ -1290,7 +1289,6 @@ class OutcomesPage extends OpenClawLightDomElement {
         mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(activated, requestStartedAt);
-        revalidateAfterSuccess = true;
       }
     } catch (error) {
       if (
@@ -1303,7 +1301,7 @@ class OutcomesPage extends OpenClawLightDomElement {
       }
     } finally {
       this.endOutcomeMutation(mutationLock);
-      if (!mutationResultWasCurrent || revalidateAfterSuccess) {
+      if (!mutationResultWasCurrent) {
         this.revalidateAfterSettledMutation(mutationLock);
       }
     }
