@@ -255,8 +255,21 @@ suite.define(() => {
       },
       async ({ page }) => {
         await page.clock.install();
-        await page.goto(await outcomesUrl());
+        const handoffUrl = await outcomesUrl();
+        const bootstrapToken = new URLSearchParams(new URL(handoffUrl).hash.slice(1)).get(
+          "bootstrapToken",
+        );
+        if (!bootstrapToken) {
+          throw new Error("Outcome dashboard handoff omitted its bootstrap token");
+        }
+        await page.goto(handoffUrl);
         await waitForControlUiGatewayReady(page);
+        expect(
+          await page.evaluate((secret) => ({
+            body: document.body.textContent?.includes(secret) ?? false,
+            url: location.href.includes(secret),
+          }), bootstrapToken),
+        ).toEqual({ body: false, url: false });
 
         await page.locator('[data-outcome-action="create"]').click();
         const createForm = page.locator("[data-outcome-create-form]");
