@@ -398,12 +398,12 @@ describe("P-02 Outcome handlers", () => {
         },
       ],
       evidence: [
-        expect.objectContaining({ criterionId, sourceId: "proof-a", kind: "workboard-proof" }),
         expect.objectContaining({
           criterionId,
           sourceId: "artifact-a",
           kind: "workboard-artifact",
         }),
+        expect.objectContaining({ criterionId, sourceId: "proof-a", kind: "workboard-proof" }),
       ],
     });
   });
