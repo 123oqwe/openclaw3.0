@@ -456,6 +456,40 @@ describe("OutcomesPage", () => {
     expect(page.textContent).toContain("Refresh");
   });
 
+  it("renders a Workboard-disabled source issue as an explicit unavailable state", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: {
+            ...outcomeDetail("outcome-a", "Outcome A"),
+            readiness: "unavailable" as const,
+            sourceIssues: [{ criterionId: "criterion-1", reason: "workboard-disabled" }],
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
+      expect(page.textContent).toContain("Workboard is disabled");
+    });
+  });
+
   it("does not let an old selected Outcome detail overwrite a newer selection", async () => {
     let resolveFirstDetail: ((result: { outcome: OutcomeDetail }) => void) | undefined;
     const request = vi.fn((method: string, params: { id?: string }) => {
