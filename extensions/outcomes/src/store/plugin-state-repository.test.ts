@@ -647,6 +647,36 @@ describe("Outcome repository host adapter", () => {
       withinTargets: { eventLoopLagDelta: boolean; listP95: boolean; mutationP95: boolean };
       warmupCounts: { list: number; mutation: number };
     }> = [];
+    const buildReport = (complete: boolean) => ({
+      schemaVersion: 1,
+      complete,
+      expectedScenarios: OUTCOME_PERFORMANCE_SCENARIOS.length,
+      completedScenarios: reports.length,
+      job: {
+        id: process.env.GITHUB_JOB ?? "local",
+        name: process.env.OPENCLAW_OUTCOME_BENCHMARK_JOB_NAME ?? "local",
+        runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? "local",
+        runId: process.env.GITHUB_RUN_ID ?? "local",
+        shard: process.env.OPENCLAW_OUTCOME_BENCHMARK_SHARD ?? "local",
+      },
+      measurementDefinition: {
+        eventLoopAndHeap: "whole-scenario-including-validation",
+        listWarmupSamples: 1,
+        mutationWarmupSamples: 0,
+        samplesPerOperation: OUTCOME_PERFORMANCE_SAMPLES,
+        scenarios: OUTCOME_PERFORMANCE_SCENARIOS,
+      },
+      runner: {
+        arch: process.arch,
+        image: process.env.ImageOS ?? process.env.RUNNER_IMAGE ?? null,
+        node: process.version,
+        platform: process.platform,
+      },
+      testedCheckoutSha:
+        process.env.OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA ?? process.env.GITHUB_SHA ?? "local",
+      workflowSha: process.env.OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA ?? "local",
+      reports,
+    });
 
     await withOpenClawTestState(
       { label: "outcome-repository-performance", applyEnv: false },
@@ -826,39 +856,14 @@ describe("Outcome repository host adapter", () => {
             },
             warmupCounts: { list: 1, mutation: 0 },
           });
+          writeOutcomeBenchmarkArtifact(buildReport(false));
         }
       },
     );
 
     expect(reports).toHaveLength(OUTCOME_PERFORMANCE_SCENARIOS.length);
-    const report = {
-      schemaVersion: 1,
-      job: {
-        id: process.env.GITHUB_JOB ?? "local",
-        name: process.env.OPENCLAW_OUTCOME_BENCHMARK_JOB_NAME ?? "local",
-        runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? "local",
-        runId: process.env.GITHUB_RUN_ID ?? "local",
-        shard: process.env.OPENCLAW_OUTCOME_BENCHMARK_SHARD ?? "local",
-      },
-      measurementDefinition: {
-        eventLoopAndHeap: "whole-scenario-including-validation",
-        listWarmupSamples: 1,
-        mutationWarmupSamples: 0,
-        samplesPerOperation: OUTCOME_PERFORMANCE_SAMPLES,
-        scenarios: OUTCOME_PERFORMANCE_SCENARIOS,
-      },
-      runner: {
-        arch: process.arch,
-        image: process.env.ImageOS ?? process.env.RUNNER_IMAGE ?? null,
-        node: process.version,
-        platform: process.platform,
-      },
-      testedCheckoutSha:
-        process.env.OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA ?? process.env.GITHUB_SHA ?? "local",
-      workflowSha: process.env.OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA ?? "local",
-      reports,
-    };
+    const report = buildReport(true);
     writeOutcomeBenchmarkArtifact(report);
     console.info(`[outcome-plugin-state-benchmark] ${JSON.stringify(report)}`);
-  });
+  }, 300_000);
 });
