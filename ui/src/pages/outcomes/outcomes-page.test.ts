@@ -890,7 +890,9 @@ describe("OutcomesPage", () => {
         page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]'),
       ).not.toBeNull();
     });
-    page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.click();
+    const create = page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]');
+    create?.focus();
+    create?.click();
 
     await vi.waitFor(() => {
       expect(page.querySelector('openclaw-modal-dialog[label="Create outcome"]')).not.toBeNull();
@@ -933,6 +935,9 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => {
       expect(page.textContent).toContain("Launch the release");
       expect(page.querySelector('openclaw-modal-dialog[label="Create outcome"]')).toBeNull();
+      expect(document.activeElement).toBe(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]'),
+      );
     });
   });
 

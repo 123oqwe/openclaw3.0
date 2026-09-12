@@ -2,7 +2,12 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
+import { loadOrCreateDeviceIdentity } from "../../../src/infra/device-identity.js";
 import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
+import {
+  connectGatewayClient,
+  disconnectGatewayClient,
+} from "../../../src/gateway/test-helpers.e2e.js";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
@@ -165,21 +170,22 @@ async function revokeOperatorToken(deviceId: string): Promise<void> {
   if (!instance) {
     throw new Error("Outcome Gateway fixture was not started");
   }
-  const result = await instance.cli([
-    "--no-color",
-    "devices",
-    "revoke",
-    "--url",
-    instance.url,
-    "--token",
-    instance.gatewayToken,
-    "--device",
-    deviceId,
-    "--role",
-    "operator",
-    "--json",
-  ]);
-  expect(result.code, result.stderr).toBe(0);
+  const client = await connectGatewayClient({
+    url: instance.url,
+    token: instance.gatewayToken,
+    role: "operator",
+    scopes: ["operator.admin", "operator.read", "operator.write"],
+    deviceIdentity: loadOrCreateDeviceIdentity({
+      path: path.join(instance.stateDir, "outcomes-revocation-admin.sqlite"),
+    }),
+    requestTimeoutMs: 10_000,
+    timeoutMs: 10_000,
+  });
+  try {
+    await client.request("device.token.revoke", { deviceId, role: "operator" });
+  } finally {
+    await disconnectGatewayClient(client);
+  }
 }
 
 function requireNewBrowserDeviceId(

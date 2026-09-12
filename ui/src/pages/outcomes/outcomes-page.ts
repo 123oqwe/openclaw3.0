@@ -123,6 +123,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   private createRequest: OutcomeCreateParams | null = null;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
   private pendingListFocusId: string | null = null;
+  private pendingCreateFocus = false;
   private detailFreshnessDeadline: number | null = null;
   private detailFreshnessTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
 
@@ -245,6 +246,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.createObjective = "";
     this.createCriteria = [""];
     this.createRequest = null;
+    this.pendingCreateFocus = false;
     this.createRequestSequence += 1;
     this.editDialogOpen = false;
     this.editing = false;
@@ -425,6 +427,19 @@ class OutcomesPage extends OpenClawLightDomElement {
           return;
         }
       }
+    });
+  }
+
+  private restoreCreateFocus() {
+    this.pendingCreateFocus = true;
+    void this.updateComplete.then(() => {
+      if (!this.pendingCreateFocus || this.createDialogOpen) {
+        return;
+      }
+      this.pendingCreateFocus = false;
+      this.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.focus({
+        preventScroll: true,
+      });
     });
   }
 
@@ -619,6 +634,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     }
     this.createDialogOpen = false;
     this.createError = null;
+    this.restoreCreateFocus();
   }
 
   private abandonPendingCreateRequest() {
@@ -723,6 +739,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.createObjective = "";
         this.createCriteria = [""];
         this.createRequest = null;
+        this.restoreCreateFocus();
       }
     } catch (error) {
       if (sequence === this.createRequestSequence && this.gateway.isCurrent(scope)) {
