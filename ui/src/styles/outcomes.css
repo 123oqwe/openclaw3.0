@@ -86,6 +86,35 @@
   min-height: 44px;
 }
 
+.outcome-detail__cancel,
+.outcome-cancel-dialog__actions button {
+  min-height: 44px;
+}
+
+.outcome-detail__cancel {
+  margin-top: var(--space-3);
+}
+
+.outcome-cancel-dialog {
+  padding: var(--space-4);
+}
+
+.outcome-cancel-dialog h2,
+.outcome-cancel-dialog p {
+  margin: 0;
+}
+
+.outcome-cancel-dialog p {
+  margin-top: var(--space-2);
+}
+
+.outcome-cancel-dialog__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+}
+
 .outcome-detail__criterion-kind {
   display: block;
   margin-top: var(--space-1);

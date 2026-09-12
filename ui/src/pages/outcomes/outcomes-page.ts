@@ -9,7 +9,7 @@ import { formatUiError } from "../../lib/format-error.ts";
 import { canCallGatewayMethod } from "../../lib/gateway-methods.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
-import { getOutcome, listOutcomes, refreshOutcome } from "./client.ts";
+import { cancelOutcome, getOutcome, listOutcomes, refreshOutcome } from "./client.ts";
 import { renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
 type OutcomeGatewayIdentity = {
@@ -36,6 +36,9 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private detailError: string | null = null;
   @state() private detailLoading = false;
   @state() private detailRevalidating = false;
+  @state() private cancelConfirmationOpen = false;
+  @state() private cancelError: string | null = null;
+  @state() private cancelling = false;
   @state() private refreshError: string | null = null;
   @state() private refreshing = false;
   @state() private selectedOutcomeId: string | null = null;
@@ -123,6 +126,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailError = null;
     this.refreshError = null;
     this.refreshing = false;
+    this.cancelConfirmationOpen = false;
+    this.cancelError = null;
+    this.cancelling = false;
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
@@ -167,10 +173,16 @@ class OutcomesPage extends OpenClawLightDomElement {
   }
 
   private selectOutcome(id: string) {
+    this.mutationSequence += 1;
     this.selectedOutcomeId = id;
     this.detail = null;
     this.detailError = null;
     this.detailRevalidating = false;
+    this.refreshError = null;
+    this.refreshing = false;
+    this.cancelConfirmationOpen = false;
+    this.cancelError = null;
+    this.cancelling = false;
     void this.loadSelectedOutcome();
   }
 
@@ -183,6 +195,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRevalidating = false;
     this.refreshError = null;
     this.refreshing = false;
+    this.cancelConfirmationOpen = false;
+    this.cancelError = null;
+    this.cancelling = false;
     this.mutationSequence += 1;
   }
 
@@ -193,6 +208,101 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.gatewayIdentity?.canRead &&
         canCallGatewayMethod(this.gateway.snapshot, "outcomes.refresh", "operator.write"),
     );
+  }
+
+  private canCancelOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+        this.detail.nextActions.includes("cancel") &&
+        this.gatewayIdentity?.canRead &&
+        canCallGatewayMethod(this.gateway.snapshot, "outcomes.cancel", "operator.write"),
+    );
+  }
+
+  private replaceOutcome(detail: OutcomeDetail) {
+    this.detail = detail;
+    this.outcomes = this.outcomes.map((outcome) =>
+      outcome.id === detail.id
+        ? {
+            acceptanceValidity: detail.acceptanceValidity,
+            id: detail.id,
+            phase: detail.phase,
+            readiness: detail.readiness,
+            revision: detail.revision,
+            title: detail.title,
+            updatedAt: detail.updatedAt,
+          }
+        : outcome,
+    );
+  }
+
+  private openCancelConfirmation() {
+    if (!this.canCancelOutcome() || this.cancelling) {
+      return;
+    }
+    this.cancelError = null;
+    this.cancelConfirmationOpen = true;
+  }
+
+  private dismissCancelConfirmation(event?: Event) {
+    if (this.cancelling) {
+      event?.preventDefault();
+      return;
+    }
+    this.cancelConfirmationOpen = false;
+    this.cancelError = null;
+  }
+
+  private async cancelSelectedOutcome() {
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    if (
+      this.cancelling ||
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canCancelOutcome()
+    ) {
+      return;
+    }
+    const sequence = ++this.mutationSequence;
+    this.detailRequestSequence += 1;
+    this.cancelError = null;
+    this.cancelling = true;
+    try {
+      const cancelled = await cancelOutcome(client, id, detail.revision);
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        cancelled.revision >= detail.revision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.replaceOutcome(cancelled);
+        this.cancelConfirmationOpen = false;
+      }
+    } catch (error) {
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.cancelError = t("outcomesPage.cancelFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.cancelling = false;
+      }
+    }
   }
 
   private async refreshSelectedOutcome() {
@@ -225,20 +335,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         refreshed.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
-        this.detail = refreshed;
-        this.outcomes = this.outcomes.map((outcome) =>
-          outcome.id === refreshed.id
-            ? {
-                acceptanceValidity: refreshed.acceptanceValidity,
-                id: refreshed.id,
-                phase: refreshed.phase,
-                readiness: refreshed.readiness,
-                revision: refreshed.revision,
-                title: refreshed.title,
-                updatedAt: refreshed.updatedAt,
-              }
-            : outcome,
-        );
+        this.replaceOutcome(refreshed);
       }
     } catch (error) {
       if (
@@ -332,8 +429,15 @@ class OutcomesPage extends OpenClawLightDomElement {
         detail: this.detail,
         error: this.detailError,
         loading: this.detailLoading,
+        canCancel: this.canCancelOutcome(),
         canRefresh: this.canRefreshOutcome(),
+        cancelConfirmationOpen: this.cancelConfirmationOpen,
+        cancelError: this.cancelError,
+        cancelling: this.cancelling,
         mutationError: this.refreshError,
+        onCancelConfirmationDismiss: (event) => this.dismissCancelConfirmation(event),
+        onConfirmCancel: () => void this.cancelSelectedOutcome(),
+        onRequestCancel: () => this.openCancelConfirmation(),
         onRefresh: () => void this.refreshSelectedOutcome(),
         revalidating: this.detailRevalidating,
         refreshing: this.refreshing,

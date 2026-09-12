@@ -8,6 +8,7 @@ import type {
   OutcomeSummary,
 } from "@openclaw/outcomes-contract";
 import { html, nothing } from "lit";
+import "../../components/modal-dialog.ts";
 import { t } from "../../i18n/index.ts";
 import "../../styles/outcomes.css";
 
@@ -23,11 +24,18 @@ export type OutcomesListViewData = {
 };
 
 export type OutcomeDetailViewData = {
+  canCancel: boolean;
   canRefresh: boolean;
+  cancelConfirmationOpen: boolean;
+  cancelError: string | null;
+  cancelling: boolean;
   detail: OutcomeDetail | null;
   error: string | null;
   loading: boolean;
   onBack: () => void;
+  onCancelConfirmationDismiss: (event: Event) => void;
+  onConfirmCancel: () => void;
+  onRequestCancel: () => void;
   onRefresh: () => void;
   mutationError: string | null;
   revalidating: boolean;
@@ -273,6 +281,52 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               </p>`
             : nothing}
         </section>`
+      : nothing}
+    ${data.canCancel && data.detail.nextActions.includes("cancel")
+      ? html`<button
+          class="outcome-detail__cancel"
+          data-outcome-action="cancel"
+          type="button"
+          ?disabled=${data.cancelling}
+          @click=${data.onRequestCancel}
+        >
+          ${t("outcomesPage.cancel")}
+        </button>`
+      : nothing}
+    ${data.cancelConfirmationOpen
+      ? html`<openclaw-modal-dialog
+          label=${t("outcomesPage.cancelOutcome")}
+          description=${t("outcomesPage.cancelHelp")}
+          @modal-cancel=${data.onCancelConfirmationDismiss}
+        >
+          <section class="outcome-cancel-dialog" aria-busy=${data.cancelling ? "true" : "false"}>
+            <h2>${t("outcomesPage.cancelOutcome")}</h2>
+            <p>${t("outcomesPage.cancelHelp")}</p>
+            ${data.cancelError
+              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                  ${data.cancelError}
+                </p>`
+              : nothing}
+            <div class="outcome-cancel-dialog__actions">
+              <button
+                data-outcome-dismiss-cancel
+                type="button"
+                ?disabled=${data.cancelling}
+                @click=${() => data.onCancelConfirmationDismiss(new Event("modal-cancel"))}
+              >
+                ${t("common.back")}
+              </button>
+              <button
+                data-outcome-confirm-cancel
+                type="button"
+                ?disabled=${data.cancelling}
+                @click=${data.onConfirmCancel}
+              >
+                ${data.cancelling ? t("outcomesPage.cancelling") : t("outcomesPage.confirmCancel")}
+              </button>
+            </div>
+          </section>
+        </openclaw-modal-dialog>`
       : nothing}
   </article>`;
 }
