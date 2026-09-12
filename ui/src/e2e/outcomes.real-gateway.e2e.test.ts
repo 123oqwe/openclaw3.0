@@ -373,10 +373,12 @@ suite.define(() => {
           .toBe(true);
         const evidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
         await evidence.waitFor({ state: "visible" });
-        await expect.poll(async () => await evidence.textContent()).toContain(
-          "Proof: Outcome E2E verification",
-        );
-        await expect.poll(async () => await evidence.textContent()).toContain("Proof status: passed");
+        await expect
+          .poll(async () => await evidence.textContent())
+          .toContain("Proof: Outcome E2E verification");
+        await expect
+          .poll(async () => await evidence.textContent())
+          .toContain("Proof status: passed");
         if (captureUiProofEnabled) {
           await writeFile(
             path.join(suite.artifactDir, "outcomes-desktop-accessibility.yml"),
@@ -463,9 +465,9 @@ suite.define(() => {
         });
         const restoredEvidence = restoredDetail.locator(`[data-outcome-evidence="${proofId}"]`);
         await restoredEvidence.waitFor({ state: "visible" });
-        await expect.poll(async () => await restoredEvidence.textContent()).toContain(
-          "Proof: Outcome E2E verification",
-        );
+        await expect
+          .poll(async () => await restoredEvidence.textContent())
+          .toContain("Proof: Outcome E2E verification");
         await expect
           .poll(async () => await restoredEvidence.textContent())
           .toContain("Proof status: passed");
