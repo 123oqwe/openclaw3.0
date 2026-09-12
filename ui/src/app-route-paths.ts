@@ -72,6 +72,7 @@ const APP_ROUTE_DEFINITIONS = {
   // /settings/* aliases keep pre-restructure bookmarks and deep links working.
   "memory-import": { path: "/memory-import", aliases: ["/settings/memory-import"] },
   workboard: { path: "/workboard" },
+  outcomes: { path: "/outcomes" },
   worktrees: { path: "/worktrees", aliases: ["/settings/worktrees"] },
   sessions: { path: "/sessions", aliases: ["/settings/sessions"] },
   usage: { path: "/usage" },
