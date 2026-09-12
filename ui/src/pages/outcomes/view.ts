@@ -38,6 +38,7 @@ export type OutcomeDetailViewData = {
   onRequestCancel: () => void;
   onRefresh: () => void;
   mutationError: string | null;
+  mutationInFlight: boolean;
   revalidating: boolean;
   refreshing: boolean;
   selectedOutcomeId: string | null;
@@ -270,7 +271,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           <button
             data-outcome-action="refresh"
             type="button"
-            ?disabled=${data.refreshing}
+            ?disabled=${data.refreshing || data.mutationInFlight}
             @click=${data.onRefresh}
           >
             ${data.refreshing ? t("outcomesPage.refreshing") : t("outcomesPage.refresh")}
@@ -287,7 +288,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           class="outcome-detail__cancel"
           data-outcome-action="cancel"
           type="button"
-          ?disabled=${data.cancelling}
+          ?disabled=${data.cancelling || data.mutationInFlight}
           @click=${data.onRequestCancel}
         >
           ${t("outcomesPage.cancel")}

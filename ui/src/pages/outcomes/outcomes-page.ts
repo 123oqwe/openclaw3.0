@@ -42,6 +42,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private refreshError: string | null = null;
   @state() private refreshing = false;
   @state() private selectedOutcomeId: string | null = null;
+  @state() private mutationInFlightOutcomeIds: readonly string[] = [];
 
   private requestGeneration = 0;
   private detailRequestSequence = 0;
@@ -219,6 +220,20 @@ class OutcomesPage extends OpenClawLightDomElement {
     );
   }
 
+  private outcomeMutationIsInFlight(id: string | null): boolean {
+    return id !== null && this.mutationInFlightOutcomeIds.includes(id);
+  }
+
+  private beginOutcomeMutation(id: string) {
+    this.mutationInFlightOutcomeIds = [...this.mutationInFlightOutcomeIds, id];
+  }
+
+  private endOutcomeMutation(id: string) {
+    this.mutationInFlightOutcomeIds = this.mutationInFlightOutcomeIds.filter(
+      (outcomeId) => outcomeId !== id,
+    );
+  }
+
   private replaceOutcome(detail: OutcomeDetail) {
     this.detail = detail;
     this.outcomes = this.outcomes.map((outcome) =>
@@ -237,7 +252,11 @@ class OutcomesPage extends OpenClawLightDomElement {
   }
 
   private openCancelConfirmation() {
-    if (!this.canCancelOutcome() || this.cancelling) {
+    if (
+      !this.canCancelOutcome() ||
+      this.cancelling ||
+      this.outcomeMutationIsInFlight(this.selectedOutcomeId)
+    ) {
       return;
     }
     this.cancelError = null;
@@ -267,7 +286,8 @@ class OutcomesPage extends OpenClawLightDomElement {
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
-      !this.canCancelOutcome()
+      !this.canCancelOutcome() ||
+      this.outcomeMutationIsInFlight(id)
     ) {
       return;
     }
@@ -275,6 +295,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRequestSequence += 1;
     this.cancelError = null;
     this.cancelling = true;
+    this.beginOutcomeMutation(id);
     try {
       const cancelled = await cancelOutcome(client, id, detail.revision);
       if (
@@ -295,6 +316,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.cancelError = t("outcomesPage.cancelFailed", { error: formatUiError(error) });
       }
     } finally {
+      this.endOutcomeMutation(id);
       if (
         sequence === this.mutationSequence &&
         id === this.selectedOutcomeId &&
@@ -319,7 +341,8 @@ class OutcomesPage extends OpenClawLightDomElement {
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
-      !this.canRefreshOutcome()
+      !this.canRefreshOutcome() ||
+      this.outcomeMutationIsInFlight(id)
     ) {
       return;
     }
@@ -327,6 +350,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRequestSequence += 1;
     this.refreshError = null;
     this.refreshing = true;
+    this.beginOutcomeMutation(id);
     try {
       const refreshed = await refreshOutcome(client, id, detail.revision);
       if (
@@ -346,6 +370,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.refreshError = t("outcomesPage.refreshFailed", { error: formatUiError(error) });
       }
     } finally {
+      this.endOutcomeMutation(id);
       if (
         sequence === this.mutationSequence &&
         id === this.selectedOutcomeId &&
@@ -435,6 +460,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         cancelError: this.cancelError,
         cancelling: this.cancelling,
         mutationError: this.refreshError,
+        mutationInFlight: this.outcomeMutationIsInFlight(this.selectedOutcomeId),
         onCancelConfirmationDismiss: (event) => this.dismissCancelConfirmation(event),
         onConfirmCancel: () => void this.cancelSelectedOutcome(),
         onRequestCancel: () => this.openCancelConfirmation(),
