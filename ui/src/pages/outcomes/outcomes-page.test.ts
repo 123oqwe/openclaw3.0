@@ -584,8 +584,10 @@ describe("OutcomesPage", () => {
     });
     expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).toBeNull();
     expect(
-      page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
-    ).toHaveAttribute("aria-current", "true");
+      page
+        .querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')
+        ?.getAttribute("aria-current"),
+    ).toBe("true");
     expect(page.textContent).toContain("Revalidating outcome details");
 
     resolveRevalidatedDetail?.({ outcome: outcomeDetail("outcome-a", "Outcome A (revalidated)") });
