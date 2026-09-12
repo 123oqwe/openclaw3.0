@@ -3,6 +3,10 @@
   gap: var(--space-3);
 }
 
+.outcomes-list-panel > [data-outcome-action="create"] {
+  min-height: 44px;
+}
+
 .outcomes-state,
 .outcome-summary {
   padding: var(--space-4);

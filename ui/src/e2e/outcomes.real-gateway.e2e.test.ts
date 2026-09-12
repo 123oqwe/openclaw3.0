@@ -534,6 +534,7 @@ suite.define(() => {
     await suite.withPage(
       {
         locale: "en-US",
+        reducedMotion: "reduce",
         serviceWorkers: "block",
         viewport: { height: 852, width: 393 },
       },
@@ -543,6 +544,17 @@ suite.define(() => {
 
         const titleText = "x".repeat(160);
         const create = page.locator('[data-outcome-action="create"]');
+        await expect
+          .poll(() => page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches))
+          .toBe(true);
+        expect(await create.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(
+          44,
+        );
+        expect(
+          await page
+            .locator("openclaw-outcomes-page")
+            .evaluate((element) => element.getAnimations({ subtree: true }).length),
+        ).toBe(0);
         await create.focus();
         await page.keyboard.press("Enter");
         const form = page.locator("[data-outcome-create-form]");
@@ -570,9 +582,19 @@ suite.define(() => {
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
         const summary = page.locator(".outcome-summary", { hasText: titleText });
+        expect(
+          await summary
+            .locator("[data-outcome-select]")
+            .evaluate((element) => element.getBoundingClientRect().height),
+        ).toBeGreaterThanOrEqual(44);
         await summary.locator("[data-outcome-select]").click();
         const detail = page.locator("[data-outcome-detail-id]");
         await detail.waitFor({ state: "visible" });
+        expect(
+          await detail
+            .locator(".outcome-detail__back")
+            .evaluate((element) => element.getBoundingClientRect().height),
+        ).toBeGreaterThanOrEqual(44);
         expect(
           await page
             .locator(".outcomes-list-panel")
