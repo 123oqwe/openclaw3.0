@@ -49,6 +49,7 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/src/domain/schema.ts",
   "extensions/outcomes/src/domain/types.ts",
   "extensions/outcomes/src/store/plugin-state-repository.test.ts",
+  "extensions/outcomes/src/store/plugin-state-repository.capacity.test.ts",
   "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
   "extensions/outcomes/src/store/plugin-state-repository.ts",
   "extensions/outcomes/src/store/outcome-repository.ts",
