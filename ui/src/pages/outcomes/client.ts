@@ -3,6 +3,7 @@ import type {
   OutcomeCreateResult,
   OutcomeDetail,
   OutcomeListResult,
+  OutcomeListParams,
   OutcomeMutationResult,
   OutcomeRefreshResult,
   OutcomeUpdateParams,
@@ -11,8 +12,11 @@ import type {
 import type { WorkboardListResult } from "@openclaw/workboard-contract";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 
-export async function listOutcomes(client: GatewayBrowserClient): Promise<OutcomeListResult> {
-  return client.request<OutcomeListResult>("outcomes.list", {});
+export async function listOutcomes(
+  client: GatewayBrowserClient,
+  params: OutcomeListParams = {},
+): Promise<OutcomeListResult> {
+  return client.request<OutcomeListResult>("outcomes.list", params);
 }
 
 export async function getOutcome(client: GatewayBrowserClient, id: string): Promise<OutcomeDetail> {

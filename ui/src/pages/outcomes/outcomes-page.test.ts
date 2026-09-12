@@ -205,6 +205,49 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("loads the next opaque Outcome page without duplicating or reordering summaries", async () => {
+    const request = vi.fn((_method: string, params: Record<string, unknown>) => {
+      if (params.cursor === undefined) {
+        return Promise.resolve({
+          nextCursor: "opaque-page-two",
+          outcomes: [
+            { ...outcomeSummary("outcome-a", "Outcome A"), updatedAt: 10 },
+            { ...outcomeSummary("outcome-c", "Outcome C"), updatedAt: 5 },
+          ],
+        });
+      }
+      return Promise.resolve({
+        outcomes: [
+          { ...outcomeSummary("outcome-a", "Outcome A refreshed"), updatedAt: 11 },
+          { ...outcomeSummary("outcome-b", "Outcome B"), updatedAt: 8 },
+        ],
+      });
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="load-more"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="load-more"]')?.click();
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.list", { cursor: "opaque-page-two" });
+    });
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-action="load-more"]')).toBeNull();
+    });
+
+    expect(
+      Array.from(page.querySelectorAll<HTMLElement>("[data-outcome-id]")).map((item) =>
+        item.getAttribute("data-outcome-id"),
+      ),
+    ).toEqual(["outcome-a", "outcome-b", "outcome-c"]);
+    expect(page.textContent).toContain("Outcome A refreshed");
+    expect(page.querySelectorAll('[data-outcome-id="outcome-a"]')).toHaveLength(1);
+  });
+
   it("renders a failed authenticated read as an error instead of an empty Outcome list", async () => {
     const request = vi.fn(async () => {
       throw new Error("gateway unavailable");

@@ -12,6 +12,7 @@ const enOutcomes = {
     revalidatingDetail: "Checking outcome details",
     empty: "No outcomes",
     loadFailed: "Couldn't load outcomes: {error}",
+    loadMore: "Load more outcomes",
     loadDetailFailed: "Couldn't load outcome details: {error}",
     mutationFailed: "Request failed: {error}",
     createOutcome: "Create outcome",

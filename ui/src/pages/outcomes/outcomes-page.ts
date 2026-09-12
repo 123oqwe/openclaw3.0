@@ -39,6 +39,28 @@ type OutcomeGatewayIdentity = {
   selfUserId: string | null;
 };
 
+function compareOutcomeSummaries(left: OutcomeSummary, right: OutcomeSummary): number {
+  if (left.updatedAt !== right.updatedAt) {
+    return right.updatedAt - left.updatedAt;
+  }
+  return left.id < right.id ? -1 : left.id > right.id ? 1 : 0;
+}
+
+function mergeOutcomeSummaries(
+  existing: readonly OutcomeSummary[],
+  incoming: readonly OutcomeSummary[],
+): OutcomeSummary[] {
+  const byId = new Map(existing.map((outcome) => [outcome.id, outcome]));
+  for (const outcome of incoming) {
+    byId.set(outcome.id, outcome);
+  }
+  return [...byId.values()].toSorted(compareOutcomeSummaries);
+}
+
+function sortOutcomeSummaries(outcomes: readonly OutcomeSummary[]): OutcomeSummary[] {
+  return [...outcomes].toSorted(compareOutcomeSummaries);
+}
+
 class OutcomesPage extends OpenClawLightDomElement {
   @consume({ context: applicationContext, subscribe: true })
   private context!: ApplicationContext;
@@ -49,6 +71,9 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private loading = false;
   @state() private loaded = false;
   @state() private error: string | null = null;
+  @state() private nextCursor: string | null = null;
+  @state() private loadingMore = false;
+  @state() private loadMoreError: string | null = null;
   @state() private detail: OutcomeDetail | null = null;
   @state() private detailError: string | null = null;
   @state() private detailLoading = false;
@@ -162,6 +187,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.loading = false;
     this.loaded = false;
     this.error = null;
+    this.nextCursor = null;
+    this.loadingMore = false;
+    this.loadMoreError = null;
     this.detailRequestSequence += 1;
     this.detail = null;
     this.detailError = null;
@@ -221,7 +249,8 @@ class OutcomesPage extends OpenClawLightDomElement {
     try {
       const result = await listOutcomes(client);
       if (generation === this.requestGeneration && this.gateway.isCurrent(scope)) {
-        this.outcomes = result.outcomes;
+        this.outcomes = mergeOutcomeSummaries([], result.outcomes);
+        this.nextCursor = result.nextCursor ?? null;
         this.loaded = true;
       }
     } catch (error) {
@@ -232,6 +261,51 @@ class OutcomesPage extends OpenClawLightDomElement {
     } finally {
       if (generation === this.requestGeneration && this.gateway.isCurrent(scope)) {
         this.loading = false;
+      }
+    }
+  }
+
+  private async loadMoreOutcomes() {
+    const cursor = this.nextCursor;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    const generation = this.requestGeneration;
+    if (
+      this.loading ||
+      this.loadingMore ||
+      !cursor ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.gatewayIdentity?.canRead ||
+      !canCallGatewayMethod(snapshot, "outcomes.list", "operator.read")
+    ) {
+      return;
+    }
+    this.loadingMore = true;
+    this.loadMoreError = null;
+    try {
+      const result = await listOutcomes(client, { cursor });
+      if (
+        generation === this.requestGeneration &&
+        cursor === this.nextCursor &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.outcomes = mergeOutcomeSummaries(this.outcomes, result.outcomes);
+        this.nextCursor = result.nextCursor ?? null;
+      }
+    } catch (error) {
+      if (
+        generation === this.requestGeneration &&
+        cursor === this.nextCursor &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.loadMoreError = t("outcomesPage.loadFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      if (generation === this.requestGeneration && this.gateway.isCurrent(scope)) {
+        this.loadingMore = false;
       }
     }
   }
@@ -381,9 +455,11 @@ class OutcomesPage extends OpenClawLightDomElement {
       updatedAt: detail.updatedAt,
     };
     const hasOutcome = this.outcomes.some((outcome) => outcome.id === detail.id);
-    this.outcomes = hasOutcome
-      ? this.outcomes.map((outcome) => (outcome.id === detail.id ? summary : outcome))
-      : [...this.outcomes, summary];
+    this.outcomes = sortOutcomeSummaries(
+      hasOutcome
+        ? this.outcomes.map((outcome) => (outcome.id === detail.id ? summary : outcome))
+        : [...this.outcomes, summary],
+    );
   }
 
   private openCreateDialog() {
@@ -1069,7 +1145,11 @@ class OutcomesPage extends OpenClawLightDomElement {
         loading: this.loading,
         loaded: this.loaded,
         error: this.error,
+        hasMore: this.nextCursor !== null,
         canCreate: this.canCreateOutcome(),
+        loadingMore: this.loadingMore,
+        loadMoreError: this.loadMoreError,
+        onLoadMore: () => void this.loadMoreOutcomes(),
         onRequestCreate: () => this.openCreateDialog(),
         onSelect: (id) => this.selectOutcome(id),
         selectedOutcomeId: this.selectedOutcomeId,

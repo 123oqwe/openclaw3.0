@@ -21,8 +21,12 @@ export type OutcomesListViewData = {
   canCreate: boolean;
   disconnected: boolean;
   error: string | null;
+  hasMore: boolean;
   loaded: boolean;
   loading: boolean;
+  loadingMore: boolean;
+  loadMoreError: string | null;
+  onLoadMore: () => void;
   onRequestCreate: () => void;
   onSelect: (id: string) => void;
   outcomes: readonly OutcomeSummary[];
@@ -251,7 +255,20 @@ export function renderOutcomesList(data: OutcomesListViewData) {
         </article>
       `,
     )}
-  </section>`;
+  </section>
+  ${data.loadMoreError
+    ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.loadMoreError}</p>`
+    : nothing}
+  ${data.hasMore
+    ? html`<button
+        data-outcome-action="load-more"
+        type="button"
+        ?disabled=${data.loadingMore}
+        @click=${data.onLoadMore}
+      >
+        ${data.loadingMore ? t("common.loading") : t("outcomesPage.loadMore")}
+      </button>`
+    : nothing}`;
 }
 
 export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
