@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import type { OutcomeListResult } from "@openclaw/outcomes-contract";
+import type { OutcomeDetail, OutcomeListResult, OutcomeSummary } from "@openclaw/outcomes-contract";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { ApplicationContext, ApplicationGatewaySnapshot } from "../../app/context.ts";
@@ -17,6 +17,39 @@ type MutableGateway = {
   snapshot: ApplicationGatewaySnapshot;
   subscribe: ApplicationContext["gateway"]["subscribe"];
 };
+
+function outcomeSummary(id: string, title: string): OutcomeSummary {
+  return {
+    acceptanceValidity: "none",
+    id,
+    phase: "draft",
+    readiness: "incomplete",
+    revision: 1,
+    title,
+    updatedAt: 1,
+  };
+}
+
+function outcomeDetail(id: string, title: string): OutcomeDetail {
+  return {
+    ...outcomeSummary(id, title),
+    acceptance: { acceptanceValidity: "none" },
+    attention: [],
+    closureHash: null,
+    contractRevision: 1,
+    createdAt: 1,
+    criteria: [],
+    evidence: [],
+    nextActions: [],
+    objective: `${title} objective`,
+    observedAt: 1,
+    planGeneration: 0,
+    planHash: null,
+    recheckAfter: null,
+    sourceIssues: [],
+    work: [],
+  };
+}
 
 function createGateway(client: GatewayBrowserClient): ApplicationContext["gateway"] {
   const snapshot: ApplicationGatewaySnapshot = {
@@ -365,5 +398,76 @@ describe("OutcomesPage", () => {
 
     expect(page.querySelector('[data-outcome-id="outcome-after-revocation"]')).toBeNull();
     expect(page.textContent).toContain("Outcome access is unavailable");
+  });
+
+  it("loads the selected Outcome detail through the authenticated Gateway", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({ outcome: outcomeDetail("outcome-a", "Outcome A") });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.get", { id: "outcome-a" });
+      expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
+    });
+    expect(page.textContent).toContain("Outcome A objective");
+  });
+
+  it("does not let an old selected Outcome detail overwrite a newer selection", async () => {
+    let resolveFirstDetail: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string, params: { id?: string }) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({
+          outcomes: [outcomeSummary("outcome-a", "Outcome A"), outcomeSummary("outcome-b", "Outcome B")],
+        });
+      }
+      if (method === "outcomes.get" && params.id === "outcome-a") {
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveFirstDetail = resolve;
+        });
+      }
+      if (method === "outcomes.get" && params.id === "outcome-b") {
+        return Promise.resolve({ outcome: outcomeDetail("outcome-b", "Outcome B") });
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.get", { id: "outcome-a" });
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
+    });
+
+    resolveFirstDetail?.({ outcome: outcomeDetail("outcome-a", "Outcome A") });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await page.updateComplete;
+
+    expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).toBeNull();
+    expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
   });
 });
