@@ -247,7 +247,7 @@ describe("OutcomesPage", () => {
     receiveSnapshot?.({ ...gateway.snapshot, client: null, phase: "stopped", selfUser: null });
     await page.updateComplete;
 
-    expect(page.textContent).toContain("Outcome connection is unavailable");
+    expect(page.textContent).toContain("Outcome connection unavailable");
     resolveList?.({ outcomes: [] });
     await page.updateComplete;
     expect(page.textContent).not.toContain("No outcomes yet");
@@ -486,7 +486,7 @@ describe("OutcomesPage", () => {
 
     await vi.waitFor(() => {
       expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
-      expect(page.textContent).toContain("Workboard is disabled");
+      expect(page.textContent).toContain("Workboard disabled");
     });
   });
 
@@ -541,7 +541,9 @@ describe("OutcomesPage", () => {
       true,
     );
     expect(
-      page.querySelector('[data-outcome-detail-id="outcome-a"]')?.getAttribute("data-outcome-readiness"),
+      page
+        .querySelector('[data-outcome-detail-id="outcome-a"] .outcome-detail__readiness')
+        ?.getAttribute("data-outcome-readiness"),
     ).toBe("stale");
 
     resolveRefresh?.({
@@ -549,7 +551,9 @@ describe("OutcomesPage", () => {
     });
     await vi.waitFor(() => {
       expect(
-        page.querySelector('[data-outcome-detail-id="outcome-a"]')?.getAttribute("data-outcome-readiness"),
+        page
+          .querySelector('[data-outcome-detail-id="outcome-a"] .outcome-detail__readiness')
+          ?.getAttribute("data-outcome-readiness"),
       ).toBe("blocked");
     });
   });
@@ -652,7 +656,7 @@ describe("OutcomesPage", () => {
         .querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')
         ?.getAttribute("aria-current"),
     ).toBe("true");
-    expect(page.textContent).toContain("Revalidating outcome details");
+    expect(page.textContent).toContain("Checking outcome details");
 
     resolveRevalidatedDetail?.({ outcome: outcomeDetail("outcome-a", "Outcome A (revalidated)") });
     await vi.waitFor(() => {
