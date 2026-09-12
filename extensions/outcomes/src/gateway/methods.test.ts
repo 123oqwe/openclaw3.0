@@ -28,7 +28,6 @@ function createHarness(
   } = {},
 ) {
   const records = new Map<string, OutcomeRecord>();
-  let entryReads = 0;
   let writes = 0;
   const storeCalls = { deleteIf: 0, entries: 0, lookup: 0, registerIfAbsent: 0, update: 0 };
   const handlers = new Map<string, RegisteredHandler>();
@@ -56,7 +55,6 @@ function createHarness(
     },
     entries: async () => {
       storeCalls.entries += 1;
-      entryReads += 1;
       return [...records].map(([key, value]) => ({ key, value, createdAt: 0 }));
     },
     update: async (
@@ -113,7 +111,7 @@ function createHarness(
   }
   return {
     call,
-    entryReads: () => entryReads,
+    entryReads: () => storeCalls.entries,
     gatewayRequest,
     logger,
     records,
@@ -167,16 +165,8 @@ describe("P-02 Outcome handlers", () => {
       undefined,
       { code: "OUTCOME_INVALID_REQUEST" },
     ]);
-    expect(harness.entryReads()).toBe(0);
     expect(harness.gatewayRequest).not.toHaveBeenCalled();
-    expect(harness.storeCalls).toEqual({
-      deleteIf: 0,
-      entries: 0,
-      lookup: 0,
-      registerIfAbsent: 0,
-      update: 0,
-    });
-    expect(harness.writes()).toBe(0);
+    expect(Object.values(harness.storeCalls)).toEqual([0, 0, 0, 0, 0]);
   });
 
   it("maps a bounded host capacity failure without exposing its exception", async () => {
@@ -973,16 +963,7 @@ describe("P-02 Outcome handlers", () => {
 
   it("samples namespace capacity only during a single owner-isolated list scan", async () => {
     const harness = createHarness();
-    const { id } = await createOutcome(harness);
-    await harness.call("outcomes.create", createParams(id));
-    expect(
-      await harness.call("outcomes.update", {
-        id,
-        expectedRevision: 1,
-        patch: { title: "Outcome title" },
-      }),
-    ).toMatchObject([true, { outcome: { revision: 1 } }]);
-    const template = harness.records.get(id)!;
+    const { id, record: template } = await createOutcome(harness);
     for (let index = 1; index <= 398; index += 1) {
       harness.records.set(`00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`, {
         ...template,

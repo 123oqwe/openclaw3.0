@@ -1,6 +1,6 @@
-import { Value } from "typebox/value";
-import type { TSchema } from "typebox";
 import type { GatewayRequestHandlerOptions } from "openclaw/plugin-sdk/gateway-runtime";
+import type { TSchema } from "typebox";
+import { Value } from "typebox/value";
 import { fail, authenticatedProfileId } from "./method-helpers.js";
 
 type MissingOwnerCode = "INVALID_REQUEST" | "NOT_FOUND";
