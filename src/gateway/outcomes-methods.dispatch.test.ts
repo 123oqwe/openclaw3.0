@@ -291,7 +291,9 @@ function registerHarness(
   const store = options.store ?? {
     registerIfAbsent: async (key: string, value: unknown) => {
       storeMutationCalls.registers += 1;
-      if (records.has(key)) return false;
+      if (records.has(key)) {
+        return false;
+      }
       records.set(key, value);
       return true;
     },
@@ -300,14 +302,18 @@ function registerHarness(
     update: async (key: string, decide: (current: unknown) => unknown) => {
       storeMutationCalls.updates += 1;
       const next = decide(records.get(key));
-      if (next === undefined) return false;
+      if (next === undefined) {
+        return false;
+      }
       records.set(key, next);
       return true;
     },
     deleteIf: async (key: string, predicate: (current: unknown) => boolean) => {
       storeMutationCalls.deletes += 1;
       const current = records.get(key);
-      if (current === undefined || !predicate(current)) return false;
+      if (current === undefined || !predicate(current)) {
+        return false;
+      }
       records.delete(key);
       return true;
     },
@@ -322,11 +328,11 @@ function registerHarness(
         request: options.gatewayRequest ?? (async () => ({})),
       },
     } as never,
-    registerGatewayMethod: (method, handler, options) => {
+    registerGatewayMethod: (method, handler, registrationOptions) => {
       registrations.push({
         method,
         handler: handler as never,
-        options: options as { scope: "operator.read" | "operator.write" },
+        options: registrationOptions as { scope: "operator.read" | "operator.write" },
       });
     },
   });
@@ -361,7 +367,9 @@ async function dispatch(params: {
         profileId: params.client.authenticatedUserProfile!.profileId,
         signal: authority.signal,
         assertCurrent: () => {
-          if (params.revoked) throw new Error("authenticated request authority expired");
+          if (params.revoked) {
+            throw new Error("authenticated request authority expired");
+          }
           authority.signal.throwIfAborted();
         },
       },
