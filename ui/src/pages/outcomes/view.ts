@@ -51,7 +51,7 @@ function phaseLabel(phase: OutcomePhase): string {
     case "draft":
       return t("outcomesPage.phase.draft");
     case "active":
-      return t("outcomesPage.phase.active");
+      return t("common.active");
     case "accepted":
       return t("outcomesPage.phase.accepted");
     case "cancelled":
@@ -110,9 +110,9 @@ function nextActionLabel(action: OutcomeNextAction): string {
     case "activate":
       return t("outcomesPage.nextAction.activate");
     case "refresh":
-      return t("outcomesPage.nextAction.refresh");
+      return t("common.refresh");
     case "cancel":
-      return t("outcomesPage.nextAction.cancel");
+      return t("common.cancel");
     case "review-evidence":
       return t("outcomesPage.nextAction.reviewEvidence");
     case "accept":
