@@ -5,8 +5,8 @@ import { state } from "lit/decorators.js";
 import { titleForRoute, subtitleForRoute } from "../../app-navigation.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
 import { t } from "../../i18n/index.ts";
-import { canCallGatewayMethod } from "../../lib/gateway-methods.ts";
 import { formatUiError } from "../../lib/format-error.ts";
+import { canCallGatewayMethod } from "../../lib/gateway-methods.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { renderOutcomesList } from "./view.ts";
@@ -47,8 +47,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     const identity: OutcomeGatewayIdentity = {
       authorizationKey: this.authorizationKey(snapshot),
       canRead: Boolean(
-        snapshot.selfUser?.id &&
-          canCallGatewayMethod(snapshot, "outcomes.list", "operator.read"),
+        snapshot.selfUser?.id && canCallGatewayMethod(snapshot, "outcomes.list", "operator.read"),
       ),
       client: snapshot.client,
       connectionRevision: gateway?.connectionRevision ?? -1,

@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
-import { afterEach, describe, expect, it, vi } from "vitest";
 import type { OutcomeListResult } from "@openclaw/outcomes-contract";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { ApplicationContext, ApplicationGatewaySnapshot } from "../../app/context.ts";
 import { gatewayHelloForMethods } from "../../test-helpers/gateway-methods.ts";
@@ -317,7 +317,9 @@ describe("OutcomesPage", () => {
       ],
     });
     await vi.waitFor(() => {
-      expect(page.querySelector('[data-outcome-id="outcome-visible-before-revocation"]')).not.toBeNull();
+      expect(
+        page.querySelector('[data-outcome-id="outcome-visible-before-revocation"]'),
+      ).not.toBeNull();
     });
     updateSnapshot({ hello: gatewayHelloForMethods(["outcomes.list"], []) });
     await page.updateComplete;
