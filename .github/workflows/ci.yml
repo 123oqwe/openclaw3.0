@@ -3529,7 +3529,7 @@ jobs:
             --maxWorkers=1 \
             --no-file-parallelism \
             --testNamePattern '^Outcome repository host adapter measures bounded host-adapter list and mutation behavior across the P-01 matrix$' \
-            extensions/outcomes/src/store/plugin-state-repository.test.ts
+            extensions/outcomes/src/store/plugin-state-repository.capacity.test.ts
 
       - name: Upload Outcome plugin-state benchmark
         if: always() && hashFiles('.artifacts/outcomes-benchmark/*.json') != ''

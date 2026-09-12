@@ -1,8 +1,5 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
-import path from "node:path";
-import { monitorEventLoopDelay, performance } from "node:perf_hooks";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import {
   createPluginStateKeyedStoreForTests,
@@ -10,7 +7,6 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
-import { summarizeBenchmarkTimings } from "../../../../scripts/lib/benchmark-harness.mts";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import {
   reduceOutcomeActivate,
@@ -19,7 +15,6 @@ import {
 } from "../domain/reducer.js";
 import {
   createRequestHash,
-  parseOutcomeRecord,
   planHash,
   workboardProjectionFingerprint,
 } from "../domain/schema.js";
@@ -29,16 +24,6 @@ import {
   OutcomeRepositoryNotFoundError,
   createOutcomeRepository,
 } from "./plugin-state-repository.js";
-
-const OUTCOME_PERFORMANCE_SAMPLES = 20;
-const OUTCOME_PERFORMANCE_SCENARIOS = [
-  { recordCount: 50, recordBytes: 4 * 1024 },
-  { recordCount: 50, recordBytes: 96 * 1024 },
-  { recordCount: 50, recordBytes: 128 * 1024 },
-  { recordCount: 500, recordBytes: 4 * 1024 },
-  { recordCount: 500, recordBytes: 96 * 1024 },
-  { recordCount: 500, recordBytes: 128 * 1024 },
-] as const;
 
 function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
   const request = {
@@ -103,65 +88,6 @@ function oversizedAvailableProjection(digest: string): OutcomeRecord["projection
   };
 }
 
-function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
-  const draft = draftRecord(id);
-  const plan = {
-    outcomeId: draft.id,
-    objective: draft.objective,
-    contractRevision: draft.contractRevision,
-    planGeneration: 1,
-    criteria: draft.criteria,
-  };
-  const activePlanHash = planHash(plan);
-  const record: OutcomeRecord = {
-    ...draft,
-    phase: "active",
-    revision: 100,
-    planGeneration: 1,
-    planHash: activePlanHash,
-    createdAt: 100,
-    updatedAt: 100,
-  };
-  for (let index = 1; index <= 100 && serializedBytes(record) < targetBytes; index += 1) {
-    const decision = {
-      id: `decision-${index}`,
-      criterionId: "c-1",
-      planGeneration: 1,
-      decidedRevision: index,
-      status: "verified" as const,
-      requestHash: `${index.toString(16).padStart(2, "0")}${"a".repeat(62)}`,
-      profileId: record.managerProfileId,
-      planHash: activePlanHash,
-      decidedPlan: plan,
-      evidenceSetHash: "b".repeat(64),
-      note: "x".repeat(2_000),
-      decidedAt: index,
-    };
-    record.decisions.push(decision);
-    const overshoot = serializedBytes(record) - targetBytes;
-    if (overshoot > 0) {
-      decision.note = decision.note.slice(0, Math.max(0, decision.note.length - overshoot));
-      if (serializedBytes(record) > targetBytes) {
-        record.decisions.pop();
-        break;
-      }
-    }
-  }
-  const actualBytes = serializedBytes(record);
-  if (actualBytes > targetBytes || actualBytes < targetBytes * 0.9) {
-    throw new Error(`unable to construct ${targetBytes}-byte Outcome record; got ${actualBytes}`);
-  }
-  return record;
-}
-
-function writeOutcomeBenchmarkArtifact(report: object): void {
-  const artifactPath = process.env.OPENCLAW_OUTCOME_BENCHMARK_ARTIFACT_PATH;
-  if (!artifactPath) {
-    return;
-  }
-  mkdirSync(path.dirname(artifactPath), { recursive: true });
-  writeFileSync(artifactPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
-}
 
 afterEach(() => resetPluginStateStoreForTests());
 
@@ -620,256 +546,4 @@ describe("Outcome repository host adapter", () => {
     );
   });
 
-  it("measures bounded host-adapter list and mutation behavior across the P-01 matrix", async () => {
-    const reports: Array<{
-      actualRecordBytes: number;
-      eventLoop: { baselineMaxMs: number; maxMs: number; deltaMs: number; resolutionMs: number };
-      heap: { afterBytes: number; beforeBytes: number; deltaBytes: number };
-      list: ReturnType<typeof summarizeBenchmarkTimings>;
-      listDiagnostics: {
-        componentProbeScope: string;
-        hostEntries: ReturnType<typeof summarizeBenchmarkTimings>;
-        hostEntriesSamplesMs: number[];
-        schemaAndHash: ReturnType<typeof summarizeBenchmarkTimings>;
-        schemaAndHashSamplesMs: number[];
-        sort: ReturnType<typeof summarizeBenchmarkTimings>;
-        sortSamplesMs: number[];
-      };
-      measurementScope: {
-        eventLoop: "whole-scenario-including-validation";
-        heap: "whole-scenario-including-validation";
-      };
-      mutation: ReturnType<typeof summarizeBenchmarkTimings>;
-      recordCount: number;
-      requestedRecordBytes: number;
-      samples: number;
-      targetsMs: { eventLoopLagDelta: number; listP95: number; mutationP95: number };
-      withinTargets: { eventLoopLagDelta: boolean; listP95: boolean; mutationP95: boolean };
-      warmupCounts: { list: number; mutation: number };
-    }> = [];
-    const buildReport = (complete: boolean) => ({
-      schemaVersion: 1,
-      complete,
-      expectedScenarios: OUTCOME_PERFORMANCE_SCENARIOS.length,
-      completedScenarios: reports.length,
-      job: {
-        id: process.env.GITHUB_JOB ?? "local",
-        name: process.env.OPENCLAW_OUTCOME_BENCHMARK_JOB_NAME ?? "local",
-        runAttempt: process.env.GITHUB_RUN_ATTEMPT ?? "local",
-        runId: process.env.GITHUB_RUN_ID ?? "local",
-        shard: process.env.OPENCLAW_OUTCOME_BENCHMARK_SHARD ?? "local",
-      },
-      measurementDefinition: {
-        eventLoopAndHeap: "whole-scenario-including-validation",
-        listWarmupSamples: 1,
-        mutationWarmupSamples: 0,
-        samplesPerOperation: OUTCOME_PERFORMANCE_SAMPLES,
-        scenarios: OUTCOME_PERFORMANCE_SCENARIOS,
-      },
-      execution: {
-        fileParallelism: process.env.OPENCLAW_OUTCOME_BENCHMARK_FILE_PARALLELISM ?? null,
-        maxWorkers: process.env.OPENCLAW_VITEST_MAX_WORKERS ?? null,
-        mode: process.env.OPENCLAW_OUTCOME_BENCHMARK_MODE ?? "normal-shard",
-        testNamePattern: process.env.OPENCLAW_OUTCOME_BENCHMARK_TEST_NAME_PATTERN ?? null,
-      },
-      runner: {
-        arch: process.arch,
-        image: process.env.ImageOS ?? process.env.RUNNER_IMAGE ?? null,
-        node: process.version,
-        platform: process.platform,
-      },
-      testedCheckoutSha:
-        process.env.OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA ?? process.env.GITHUB_SHA ?? "local",
-      workflowSha: process.env.OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA ?? "local",
-      reports,
-    });
-
-    await withOpenClawTestState(
-      { label: "outcome-repository-performance", applyEnv: false },
-      async (state) => {
-        for (const scenario of OUTCOME_PERFORMANCE_SCENARIOS) {
-          const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
-            namespace: `outcomes-v1-performance-${randomUUID()}`,
-            maxEntries: OUTCOME_MAX_ENTRIES,
-            overflowPolicy: "reject-new",
-            env: state.env,
-          });
-          const repository = createOutcomeRepository(store);
-          const records = Array.from({ length: scenario.recordCount }, (_, index) =>
-            activeRecordAtSize(
-              `performance-${scenario.recordCount}-${scenario.recordBytes}-${index}`,
-              scenario.recordBytes,
-            ),
-          );
-          const actualRecordBytes = records.map(serializedBytes);
-          expect(new Set(actualRecordBytes).size).toBe(1);
-          expect(actualRecordBytes[0]).toBeGreaterThanOrEqual(scenario.recordBytes * 0.9);
-          expect(actualRecordBytes[0]).toBeLessThanOrEqual(scenario.recordBytes);
-          for (const record of records) {
-            await expect(repository.create(record)).resolves.toEqual({ created: true });
-          }
-          const expectedIds = new Set(records.map((record) => record.id));
-          const seeded = await repository.list();
-          expect(seeded).toHaveLength(scenario.recordCount);
-          expect(new Set(seeded.map((record) => record.id))).toEqual(expectedIds);
-
-          const delay = monitorEventLoopDelay({ resolution: 10 });
-          delay.enable();
-          await new Promise<void>((resolve) => {
-            setTimeout(resolve, 20);
-          });
-          const baselineMaxMs = delay.max / 1_000_000;
-          delay.reset();
-          const heapBeforeBytes = process.memoryUsage().heapUsed;
-          const listTimings: number[] = [];
-          const mutationTimings: number[] = [];
-          try {
-            for (let sample = 0; sample < OUTCOME_PERFORMANCE_SAMPLES; sample += 1) {
-              const startedAt = performance.now();
-              const listed = await repository.list();
-              listTimings.push(performance.now() - startedAt);
-              expect(listed).toHaveLength(scenario.recordCount);
-              expect(new Set(listed.map((record) => record.id))).toEqual(expectedIds);
-            }
-            const mutationId = records[0]?.id;
-            if (!mutationId) {
-              throw new Error("performance scenario must contain a record");
-            }
-            for (let sample = 0; sample < OUTCOME_PERFORMANCE_SAMPLES; sample += 1) {
-              const startedAt = performance.now();
-              const result = await repository.transact(mutationId, (current) => {
-                if (!current) {
-                  throw new Error("performance mutation record disappeared");
-                }
-                const next = {
-                  ...current,
-                  title: "perf",
-                  revision: current.revision + 1,
-                  updatedAt: 101 + sample,
-                };
-                return { result: next.revision, next };
-              });
-              mutationTimings.push(performance.now() - startedAt);
-              expect(result).toBe(101 + sample);
-            }
-            const mutated = await repository.get(mutationId);
-            if (!mutated) {
-              throw new Error("performance mutation record could not be read back");
-            }
-            expect(mutated).toMatchObject({
-              id: mutationId,
-              revision: 100 + OUTCOME_PERFORMANCE_SAMPLES,
-              title: "perf",
-              updatedAt: 100 + OUTCOME_PERFORMANCE_SAMPLES,
-            });
-            expect(serializedBytes(mutated)).toBeLessThanOrEqual(scenario.recordBytes);
-          } finally {
-            await new Promise<void>((resolve) => {
-              setTimeout(resolve, 20);
-            });
-            delay.disable();
-          }
-
-          const list = summarizeBenchmarkTimings(listTimings);
-          const mutation = summarizeBenchmarkTimings(mutationTimings);
-          const maxMs = delay.max / 1_000_000;
-          const heapAfterBytes = process.memoryUsage().heapUsed;
-          const hostEntriesSamplesMs: number[] = [];
-          const schemaAndHashSamplesMs: number[] = [];
-          const sortSamplesMs: number[] = [];
-          for (let sample = 0; sample < OUTCOME_PERFORMANCE_SAMPLES; sample += 1) {
-            const entriesStartedAt = performance.now();
-            const entries = await store.entries();
-            hostEntriesSamplesMs.push(performance.now() - entriesStartedAt);
-
-            const schemaAndHashStartedAt = performance.now();
-            const parsed = entries.map((entry) => parseOutcomeRecord(entry.value));
-            schemaAndHashSamplesMs.push(performance.now() - schemaAndHashStartedAt);
-
-            const sortStartedAt = performance.now();
-            const sorted = parsed.toSorted(
-              (left, right) =>
-                right.updatedAt - left.updatedAt ||
-                (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
-            );
-            sortSamplesMs.push(performance.now() - sortStartedAt);
-            expect(sorted).toHaveLength(scenario.recordCount);
-            expect(new Set(sorted.map((record) => record.id))).toEqual(expectedIds);
-          }
-          const hostEntries = summarizeBenchmarkTimings(hostEntriesSamplesMs);
-          const schemaAndHash = summarizeBenchmarkTimings(schemaAndHashSamplesMs);
-          const sort = summarizeBenchmarkTimings(sortSamplesMs);
-          expect(list.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
-          expect(mutation.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
-          for (const timing of [
-            ...listTimings,
-            ...mutationTimings,
-            ...hostEntriesSamplesMs,
-            ...schemaAndHashSamplesMs,
-            ...sortSamplesMs,
-          ]) {
-            expect(Number.isFinite(timing)).toBe(true);
-            expect(timing).toBeGreaterThanOrEqual(0);
-          }
-          expect(list.p95).toBeTypeOf("number");
-          expect(mutation.p95).toBeTypeOf("number");
-          for (const timing of [list.p50, list.p95, mutation.p50, mutation.p95]) {
-            expect(Number.isFinite(timing)).toBe(true);
-            expect(timing).toBeGreaterThanOrEqual(0);
-          }
-          expect(Number.isFinite(maxMs)).toBe(true);
-          expect(Number.isFinite(heapBeforeBytes)).toBe(true);
-          expect(Number.isFinite(heapAfterBytes)).toBe(true);
-          const targetsMs = { mutationP95: 100, listP95: 1_000, eventLoopLagDelta: 20 };
-          const eventLoopDeltaMs = Math.max(0, maxMs - baselineMaxMs);
-          reports.push({
-            recordCount: scenario.recordCount,
-            requestedRecordBytes: scenario.recordBytes,
-            actualRecordBytes: actualRecordBytes[0] ?? 0,
-            samples: OUTCOME_PERFORMANCE_SAMPLES,
-            list,
-            listDiagnostics: {
-              componentProbeScope:
-                "separate exact store read, strict parse/hash, and canonical sort probes; not additive to list timing",
-              hostEntries,
-              hostEntriesSamplesMs,
-              schemaAndHash,
-              schemaAndHashSamplesMs,
-              sort,
-              sortSamplesMs,
-            },
-            mutation,
-            eventLoop: {
-              resolutionMs: 10,
-              baselineMaxMs,
-              maxMs,
-              deltaMs: eventLoopDeltaMs,
-            },
-            heap: {
-              beforeBytes: heapBeforeBytes,
-              afterBytes: heapAfterBytes,
-              deltaBytes: heapAfterBytes - heapBeforeBytes,
-            },
-            measurementScope: {
-              eventLoop: "whole-scenario-including-validation",
-              heap: "whole-scenario-including-validation",
-            },
-            targetsMs,
-            withinTargets: {
-              mutationP95: (mutation.p95 ?? Number.POSITIVE_INFINITY) <= targetsMs.mutationP95,
-              listP95: (list.p95 ?? Number.POSITIVE_INFINITY) <= targetsMs.listP95,
-              eventLoopLagDelta: eventLoopDeltaMs <= targetsMs.eventLoopLagDelta,
-            },
-            warmupCounts: { list: 1, mutation: 0 },
-          });
-          writeOutcomeBenchmarkArtifact(buildReport(false));
-        }
-      },
-    );
-
-    expect(reports).toHaveLength(OUTCOME_PERFORMANCE_SCENARIOS.length);
-    const report = buildReport(true);
-    writeOutcomeBenchmarkArtifact(report);
-    console.info(`[outcome-plugin-state-benchmark] ${JSON.stringify(report)}`);
-  }, 300_000);
 });

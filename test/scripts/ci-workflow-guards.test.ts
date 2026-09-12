@@ -13782,7 +13782,9 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     const controlIndex = steps.findIndex(
       ({ name }) => name === "Run isolated Outcome plugin-state benchmark control",
     );
-    const uploadIndex = steps.findIndex(({ name }) => name === "Upload Outcome plugin-state benchmark");
+    const uploadIndex = steps.findIndex(
+      ({ name }) => name === "Upload Outcome plugin-state benchmark",
+    );
     expect(control.if).toBe(
       "success() && hashFiles(format('.artifacts/outcomes-benchmark/{0}-{1}.json', github.job, matrix.shard_name)) != ''",
     );
@@ -13802,7 +13804,9 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(control.run).toContain(
       "--testNamePattern '^Outcome repository host adapter measures bounded host-adapter list and mutation behavior across the P-01 matrix$'",
     );
-    expect(control.run).toContain("extensions/outcomes/src/store/plugin-state-repository.test.ts");
+    expect(control.run).toContain(
+      "extensions/outcomes/src/store/plugin-state-repository.capacity.test.ts",
+    );
     const originalStep = expectDefined(
       steps.find(({ name }) => name === "Run Node test shard"),
       "normal Outcome benchmark shard",
