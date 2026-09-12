@@ -1,9 +1,9 @@
-import { WorkboardIdentityConflictError } from "../adapters/workboard-adapter.js";
 import {
   OUTCOME_ERROR_CODES,
   type OutcomeError,
   type OutcomeErrorCode,
 } from "@openclaw/outcomes-contract";
+import { WorkboardIdentityConflictError } from "../adapters/workboard-adapter.js";
 import {
   OutcomeRepositoryCapacityError,
   OutcomeRepositoryConflictError,

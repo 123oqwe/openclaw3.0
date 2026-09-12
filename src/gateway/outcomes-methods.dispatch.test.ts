@@ -3,19 +3,19 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { performance } from "node:perf_hooks";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
-import { createTestPluginApi } from "openclaw/plugin-sdk/plugin-test-api";
 import {
   createPluginStateKeyedStoreForTests,
   resetPluginStateStoreForTests,
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
+import { createTestPluginApi } from "openclaw/plugin-sdk/plugin-test-api";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { summarizeBenchmarkTimings } from "../../scripts/lib/benchmark-harness.mts";
 import {
   GATEWAY_CLIENT_IDS,
   GATEWAY_CLIENT_MODES,
 } from "../../packages/gateway-protocol/src/client-info.js";
 import { PROTOCOL_VERSION } from "../../packages/gateway-protocol/src/version.js";
+import { summarizeBenchmarkTimings } from "../../scripts/lib/benchmark-harness.mts";
 import { loadBundledPluginPublicSurfaceModuleSync } from "../plugin-sdk/facade-runtime.js";
 import { withPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
 import { createGatewayMethodRegistry } from "./methods/registry.js";
@@ -263,29 +263,27 @@ function registerHarness(
     handler: never;
     options: { scope: "operator.read" | "operator.write" };
   }> = [];
-  const store =
-    options.store ??
-    ({
-      registerIfAbsent: async (key: string, value: unknown) => {
-        if (records.has(key)) return false;
-        records.set(key, value);
-        return true;
-      },
-      lookup: async (key: string) => records.get(key),
-      entries: async () => Array.from(records, ([key, value]) => ({ key, value })),
-      update: async (key: string, decide: (current: unknown) => unknown) => {
-        const next = decide(records.get(key));
-        if (next === undefined) return false;
-        records.set(key, next);
-        return true;
-      },
-      deleteIf: async (key: string, predicate: (current: unknown) => boolean) => {
-        const current = records.get(key);
-        if (current === undefined || !predicate(current)) return false;
-        records.delete(key);
-        return true;
-      },
-    });
+  const store = options.store ?? {
+    registerIfAbsent: async (key: string, value: unknown) => {
+      if (records.has(key)) return false;
+      records.set(key, value);
+      return true;
+    },
+    lookup: async (key: string) => records.get(key),
+    entries: async () => Array.from(records, ([key, value]) => ({ key, value })),
+    update: async (key: string, decide: (current: unknown) => unknown) => {
+      const next = decide(records.get(key));
+      if (next === undefined) return false;
+      records.set(key, next);
+      return true;
+    },
+    deleteIf: async (key: string, predicate: (current: unknown) => boolean) => {
+      const current = records.get(key);
+      if (current === undefined || !predicate(current)) return false;
+      records.delete(key);
+      return true;
+    },
+  };
   const api = createTestPluginApi({
     id: "outcomes",
     name: "Outcomes",
@@ -692,14 +690,12 @@ describe("P-02 Outcome Gateway admission", () => {
             env: state.env,
           },
         );
-        const diagnosticRecord = activeBenchmarkRecord(
-          randomUUID(),
-          4 * 1024,
-          [{ ...BENCHMARK_OWNER_CARD }],
-        );
-        await expect(diagnosticStore.registerIfAbsent(diagnosticRecord.id, diagnosticRecord)).resolves.toBe(
-          true,
-        );
+        const diagnosticRecord = activeBenchmarkRecord(randomUUID(), 4 * 1024, [
+          { ...BENCHMARK_OWNER_CARD },
+        ]);
+        await expect(
+          diagnosticStore.registerIfAbsent(diagnosticRecord.id, diagnosticRecord),
+        ).resolves.toBe(true);
         let diagnosticRegisterCalls = 0;
         let diagnosticSuccessfulUpdates = 0;
         let diagnosticUpdateCalls = 0;
@@ -786,9 +782,7 @@ describe("P-02 Outcome Gateway admission", () => {
           expect(diagnosticRegisterCalls).toBe(mutationsBeforeRefresh.registers);
           expect(diagnosticDeleteCalls).toBe(mutationsBeforeRefresh.deletes);
           expect(diagnosticUpdateCalls).toBe(mutationsBeforeRefresh.updates + 1);
-          expect(diagnosticSuccessfulUpdates).toBe(
-            mutationsBeforeRefresh.successfulUpdates + 1,
-          );
+          expect(diagnosticSuccessfulUpdates).toBe(mutationsBeforeRefresh.successfulUpdates + 1);
           await expect(diagnosticStore.lookup(diagnosticRecord.id)).resolves.toMatchObject({
             revision: 101 + sample,
           });
@@ -816,7 +810,9 @@ describe("P-02 Outcome Gateway admission", () => {
             setupAndAssertionsExcludedFromTimings: true,
           },
           ownerDiagnostics: {
-            actualRecordBytes: outcomeRecordBytes(await diagnosticStore.lookup(diagnosticRecord.id)),
+            actualRecordBytes: outcomeRecordBytes(
+              await diagnosticStore.lookup(diagnosticRecord.id),
+            ),
             get: { samplesMs: getSamplesMs, summary: summarizeBenchmarkTimings(getSamplesMs) },
             refresh: {
               samplesMs: refreshSamplesMs,
@@ -839,7 +835,9 @@ describe("P-02 Outcome Gateway admission", () => {
             platform: process.platform,
           },
           testedCheckoutSha:
-            process.env.OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA ?? process.env.GITHUB_SHA ?? "local",
+            process.env.OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA ??
+            process.env.GITHUB_SHA ??
+            "local",
           workflowSha: process.env.OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA ?? "local",
         });
       },

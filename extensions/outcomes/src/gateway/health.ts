@@ -1,6 +1,6 @@
+import type { OutcomeHealthResult } from "@openclaw/outcomes-contract";
 import { Value } from "typebox/value";
 import type { OpenClawPluginApi } from "../../api.js";
-import type { OutcomeHealthResult } from "@openclaw/outcomes-contract";
 import { fail } from "./method-helpers.js";
 import { outcomeHealthParamsSchema } from "./schemas.js";
 
