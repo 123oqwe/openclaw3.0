@@ -528,6 +528,52 @@ describe("OutcomesPage", () => {
     expect(page.querySelector('[data-outcome-action="refresh"]')).toBeNull();
   });
 
+  it("marks an expired observation stale and withholds tracking until it is refreshed", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: {
+            ...outcomeDetail("outcome-a", "Outcome A"),
+            nextActions: ["activate", "refresh"],
+            observedAt: 1,
+            recheckAfter: 1,
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client) as unknown as MutableGateway;
+    gateway.snapshot = {
+      ...gateway.snapshot,
+      hello: gatewayHelloForMethods(
+        ["outcomes.activate", "outcomes.get", "outcomes.list", "outcomes.refresh"],
+        ["operator.read", "operator.write"],
+      ),
+    };
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("Outcome details need refreshing before tracking can start.");
+    });
+    expect(page.querySelector('[data-outcome-readiness="stale"]')).not.toBeNull();
+    expect(page.querySelector('[data-outcome-acceptance="needs-review"]')).not.toBeNull();
+    expect(page.querySelector('[data-outcome-action="activate"]')).toBeNull();
+    expect(page.querySelector('[data-outcome-action="refresh"]')).not.toBeNull();
+  });
+
   it("renders a Workboard-disabled source issue as an explicit unavailable state", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {

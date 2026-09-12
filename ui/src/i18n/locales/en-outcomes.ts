@@ -16,6 +16,7 @@ const enOutcomes = {
     proofStatus: "Proof status: {status}",
     loadingDetail: "Loading details",
     revalidatingDetail: "Checking outcome details",
+    detailsExpired: "Outcome details need refreshing before tracking can start.",
     empty: "No outcomes",
     loadFailed: "Couldn't load outcomes: {error}",
     loadMore: "Load more outcomes",

@@ -64,6 +64,7 @@ export type OutcomeDetailViewData = {
   cancelError: string | null;
   cancelling: boolean;
   detail: OutcomeDetail | null;
+  detailExpired?: boolean;
   editCriteria: readonly OutcomeCriterionInput[];
   editDialogOpen: boolean;
   editError: string | null;
@@ -443,14 +444,23 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     <p class="outcome-detail__phase" data-outcome-phase=${data.detail.phase}>
       ${phaseLabel(data.detail.phase)}
     </p>
-    <p class="outcome-detail__acceptance" data-outcome-acceptance=${data.detail.acceptanceValidity}>
+    <p
+      class="outcome-detail__acceptance"
+      data-outcome-acceptance=${data.detailExpired ? "needs-review" : data.detail.acceptanceValidity}
+    >
       ${t("outcomesPage.acceptanceLabel")}: ${acceptanceValidityLabel(
-        data.detail.acceptanceValidity,
+        data.detailExpired ? "needs-review" : data.detail.acceptanceValidity,
       )}
     </p>
-    <p class="outcome-detail__readiness" data-outcome-readiness=${data.detail.readiness}>
-      ${readinessLabel(data.detail.readiness)}
+    <p
+      class="outcome-detail__readiness"
+      data-outcome-readiness=${data.detailExpired ? "stale" : data.detail.readiness}
+    >
+      ${readinessLabel(data.detailExpired ? "stale" : data.detail.readiness)}
     </p>
+    ${data.detailExpired
+      ? html`<section class="outcomes-state" role="alert">${t("outcomesPage.detailsExpired")}</section>`
+      : nothing}
     ${data.detail.sourceIssues.length > 0
       ? html`<section class="outcome-detail__section" role="alert">
           <ul>

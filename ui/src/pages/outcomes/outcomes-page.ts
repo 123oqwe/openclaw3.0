@@ -27,6 +27,7 @@ import {
   updateOutcome,
   unlinkOutcomeWorkboard,
 } from "./client.ts";
+import { isOutcomeDetailFresh, outcomeDetailFreshnessDeadline } from "./freshness.ts";
 import { renderCreateOutcomeDialog, renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
 type OutcomeGatewayIdentity = {
@@ -78,6 +79,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private detailError: string | null = null;
   @state() private detailLoading = false;
   @state() private detailRevalidating = false;
+  @state() private detailExpired = false;
   @state() private cancelConfirmationOpen = false;
   @state() private cancelError: string | null = null;
   @state() private cancelling = false;
@@ -113,6 +115,20 @@ class OutcomesPage extends OpenClawLightDomElement {
   private linkRequestSequence = 0;
   private createRequest: OutcomeCreateParams | null = null;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
+  private detailFreshnessDeadline: number | null = null;
+  private detailFreshnessTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
+
+  private readonly handleVisibilityChange = () => {
+    if (document.visibilityState === "visible") {
+      this.revalidateAfterPageResume();
+    }
+  };
+
+  private readonly handlePageShow = (event: PageTransitionEvent) => {
+    if (event.persisted) {
+      this.revalidateAfterPageResume();
+    }
+  };
 
   private readonly gateway = new GatewayPageController(this, {
     getGateway: () => this.context?.gateway,
@@ -120,6 +136,19 @@ class OutcomesPage extends OpenClawLightDomElement {
     ensureInitialData: () => this.loadOutcomes(),
     onSnapshot: (change) => this.observeGatewaySnapshot(change.snapshot),
   });
+
+  override connectedCallback() {
+    super.connectedCallback();
+    document.addEventListener("visibilitychange", this.handleVisibilityChange);
+    globalThis.addEventListener("pageshow", this.handlePageShow);
+  }
+
+  override disconnectedCallback() {
+    document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    globalThis.removeEventListener("pageshow", this.handlePageShow);
+    this.clearDetailFreshness();
+    super.disconnectedCallback();
+  }
 
   private observeGatewaySnapshot(snapshot: ApplicationContext["gateway"]["snapshot"]) {
     const gateway = this.context?.gateway;
@@ -192,6 +221,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.loadMoreError = null;
     this.detailRequestSequence += 1;
     this.detail = null;
+    this.clearDetailFreshness();
     this.detailError = null;
     this.mutationError = null;
     this.refreshing = false;
@@ -315,6 +345,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.editRequestSequence += 1;
     this.selectedOutcomeId = id;
     this.detail = null;
+    this.clearDetailFreshness();
     this.detailError = null;
     this.detailRevalidating = false;
     this.mutationError = null;
@@ -341,6 +372,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.editRequestSequence += 1;
     this.selectedOutcomeId = null;
     this.detail = null;
+    this.clearDetailFreshness();
     this.detailError = null;
     this.detailLoading = false;
     this.detailRevalidating = false;
@@ -409,8 +441,9 @@ class OutcomesPage extends OpenClawLightDomElement {
 
   private canActivateOutcome(): boolean {
     return Boolean(
-      this.detail &&
+        this.detail &&
         this.detail.nextActions.includes("activate") &&
+        !this.detailExpired &&
         this.gatewayIdentity?.canRead &&
         canCallGatewayMethod(this.gateway.snapshot, "outcomes.activate", "operator.write"),
     );
@@ -439,9 +472,53 @@ class OutcomesPage extends OpenClawLightDomElement {
     );
   }
 
-  private replaceOutcome(detail: OutcomeDetail) {
+  private replaceOutcome(detail: OutcomeDetail, requestStartedAt = performance.now()) {
     this.detail = detail;
+    this.setDetailFreshness(detail, requestStartedAt);
     this.replaceOutcomeSummary(detail);
+  }
+
+  private clearDetailFreshness() {
+    if (this.detailFreshnessTimer !== undefined) {
+      globalThis.clearTimeout(this.detailFreshnessTimer);
+      this.detailFreshnessTimer = undefined;
+    }
+    this.detailFreshnessDeadline = null;
+    this.detailExpired = false;
+  }
+
+  private setDetailFreshness(detail: OutcomeDetail, requestStartedAt: number) {
+    this.clearDetailFreshness();
+    const deadline = outcomeDetailFreshnessDeadline(detail, requestStartedAt);
+    this.detailFreshnessDeadline = deadline;
+    this.detailExpired = !isOutcomeDetailFresh(deadline, performance.now());
+    if (deadline === null || this.detailExpired) {
+      return;
+    }
+    this.detailFreshnessTimer = globalThis.setTimeout(() => {
+      if (!isOutcomeDetailFresh(this.detailFreshnessDeadline, performance.now())) {
+        this.detailExpired = true;
+      }
+    }, Math.max(0, deadline - performance.now()));
+  }
+
+  private revalidateAfterPageResume() {
+    if (!this.selectedOutcomeId || document.visibilityState !== "visible") {
+      return;
+    }
+    this.requestGeneration += 1;
+    this.detailRequestSequence += 1;
+    this.detail = null;
+    this.clearDetailFreshness();
+    this.detailError = null;
+    this.detailLoading = true;
+    this.detailRevalidating = true;
+    this.outcomes = [];
+    this.loaded = false;
+    this.nextCursor = null;
+    this.loading = false;
+    void this.loadOutcomes();
+    void this.loadSelectedOutcome();
   }
 
   private replaceOutcomeSummary(detail: OutcomeDetail) {
@@ -682,6 +759,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.editing = true;
     this.detailRequestSequence += 1;
     this.beginOutcomeMutation(id);
+    const requestStartedAt = performance.now();
     try {
       const updated = await updateOutcome(client, id, expectedRevision, { criteria, objective, title });
       if (
@@ -690,7 +768,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         updated.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
-        this.replaceOutcome(updated);
+        this.replaceOutcome(updated, requestStartedAt);
         this.editDialogOpen = false;
       }
     } catch (error) {
@@ -818,6 +896,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.linking = true;
     this.detailRequestSequence += 1;
     this.beginOutcomeMutation(id);
+    const requestStartedAt = performance.now();
     try {
       const linked = await linkOutcomeWorkboard(client, { cardId, criterionId, expectedRevision, id });
       if (
@@ -826,7 +905,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         linked.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
-        this.replaceOutcome(linked);
+        this.replaceOutcome(linked, requestStartedAt);
         this.linkDialogOpen = false;
       }
     } catch (error) {
@@ -876,6 +955,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.mutationError = null;
     this.detailRequestSequence += 1;
     this.beginOutcomeMutation(id);
+    const requestStartedAt = performance.now();
     try {
       const unlinked = await unlinkOutcomeWorkboard(client, {
         cardId,
@@ -889,7 +969,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         unlinked.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
-        this.replaceOutcome(unlinked);
+        this.replaceOutcome(unlinked, requestStartedAt);
       }
     } catch (error) {
       if (
@@ -949,6 +1029,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.cancelError = null;
     this.cancelling = true;
     this.beginOutcomeMutation(id);
+    const requestStartedAt = performance.now();
     try {
       const cancelled = await cancelOutcome(client, id, detail.revision);
       if (
@@ -957,7 +1038,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         cancelled.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
-        this.replaceOutcome(cancelled);
+        this.replaceOutcome(cancelled, requestStartedAt);
         this.cancelConfirmationOpen = false;
       }
     } catch (error) {
@@ -1004,6 +1085,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.mutationError = null;
     this.refreshing = true;
     this.beginOutcomeMutation(id);
+    const requestStartedAt = performance.now();
     try {
       const refreshed = await refreshOutcome(client, id, detail.revision);
       if (
@@ -1012,7 +1094,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         refreshed.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
-        this.replaceOutcome(refreshed);
+        this.replaceOutcome(refreshed, requestStartedAt);
       }
     } catch (error) {
       if (
@@ -1056,6 +1138,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRequestSequence += 1;
     this.mutationError = null;
     this.beginOutcomeMutation(id);
+    const requestStartedAt = performance.now();
     try {
       const activated = await activateOutcome(client, id, detail.revision);
       if (
@@ -1064,7 +1147,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         activated.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
-        this.replaceOutcome(activated);
+        this.replaceOutcome(activated, requestStartedAt);
       }
     } catch (error) {
       if (
@@ -1096,6 +1179,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     }
     const generation = this.requestGeneration;
     const sequence = ++this.detailRequestSequence;
+    const requestStartedAt = performance.now();
     this.detailLoading = true;
     this.detailError = null;
     try {
@@ -1106,7 +1190,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
-        this.detail = detail;
+        this.replaceOutcome(detail, requestStartedAt);
       }
     } catch (error) {
       if (
@@ -1172,6 +1256,7 @@ class OutcomesPage extends OpenClawLightDomElement {
       })}
       ${renderOutcomeDetail({
         detail: this.detail,
+        detailExpired: this.detailExpired,
         error: this.detailError,
         loading: this.detailLoading,
         canActivate: this.canActivateOutcome(),
