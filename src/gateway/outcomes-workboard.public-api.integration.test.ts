@@ -393,7 +393,7 @@ describe("Outcome public Workboard Gateway integration", () => {
     );
   });
 
-  it("keeps get read-only and persists an unavailable refresh after the real Workboard registration disappears", async () => {
+  it("keeps get read-only and persists a typed unavailable refresh after the real Workboard registration disappears", async () => {
     await withOpenClawTestState(
       { label: "outcome-public-workboard-disabled", scenario: "minimal" },
       async (state) => {
@@ -422,6 +422,9 @@ describe("Outcome public Workboard Gateway integration", () => {
           method: "outcomes.linkWorkboard",
           request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: card.card.id },
         });
+        // Removing the registration makes host dispatch fall back to its process registry. That
+        // registry rejects the internal operator.read request as FORBIDDEN, which Outcome must
+        // preserve as a typed unavailable reason rather than rewriting as workboard-disabled.
         harness.setWorkboardAvailable(false);
         const writesBeforeGet = { ...harness.outcomeWrites };
         await expect(
@@ -431,7 +434,7 @@ describe("Outcome public Workboard Gateway integration", () => {
             method: "outcomes.get",
             request: { id: outcomeId },
           }),
-        ).resolves.toMatchObject({ outcome: { sourceIssues: [{ reason: "workboard-disabled" }] } });
+        ).resolves.toMatchObject({ outcome: { sourceIssues: [{ reason: "forbidden" }] } });
         expect(harness.outcomeWrites).toEqual(writesBeforeGet);
         await expect(
           dispatch({
@@ -441,7 +444,7 @@ describe("Outcome public Workboard Gateway integration", () => {
             request: { id: outcomeId, expectedRevision: 2 },
           }),
         ).resolves.toMatchObject({
-          refresh: { status: "unavailable", reason: "workboard-disabled" },
+          refresh: { status: "unavailable", reason: "forbidden" },
         });
         expect(harness.outcomeWrites.update).toBe(writesBeforeGet.update + 1);
         await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toMatchObject({
@@ -449,7 +452,7 @@ describe("Outcome public Workboard Gateway integration", () => {
           projections: [
             {
               availability: "unavailable",
-              errorCode: "workboard-disabled",
+              errorCode: "forbidden",
               ref: { cardId: card.card.id },
             },
           ],
