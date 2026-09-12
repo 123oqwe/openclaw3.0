@@ -25,19 +25,35 @@ function proofFields(proof: WorkboardCard["proofs"][number]): CanonicalSourceFie
     status: proof.status,
     createdAt: proof.createdAt,
   };
-  if (proof.label !== undefined) { fields.label = proof.label; }
-  if (proof.command !== undefined) { fields.command = proof.command; }
-  if (proof.url !== undefined) { fields.url = proof.url; }
-  if (proof.note !== undefined) { fields.note = proof.note; }
+  if (proof.label !== undefined) {
+    fields.label = proof.label;
+  }
+  if (proof.command !== undefined) {
+    fields.command = proof.command;
+  }
+  if (proof.url !== undefined) {
+    fields.url = proof.url;
+  }
+  if (proof.note !== undefined) {
+    fields.note = proof.note;
+  }
   return fields;
 }
 
 function artifactFields(artifact: WorkboardCard["artifacts"][number]): CanonicalSourceFields {
   const fields: CanonicalSourceFields = { id: artifact.id, createdAt: artifact.createdAt };
-  if (artifact.label !== undefined) { fields.label = artifact.label; }
-  if (artifact.url !== undefined) { fields.url = artifact.url; }
-  if (artifact.path !== undefined) { fields.path = artifact.path; }
-  if (artifact.mimeType !== undefined) { fields.mimeType = artifact.mimeType; }
+  if (artifact.label !== undefined) {
+    fields.label = artifact.label;
+  }
+  if (artifact.url !== undefined) {
+    fields.url = artifact.url;
+  }
+  if (artifact.path !== undefined) {
+    fields.path = artifact.path;
+  }
+  if (artifact.mimeType !== undefined) {
+    fields.mimeType = artifact.mimeType;
+  }
   return fields;
 }
 

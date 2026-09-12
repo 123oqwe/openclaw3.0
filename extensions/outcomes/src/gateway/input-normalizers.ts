@@ -73,7 +73,8 @@ export function normalizeCreate(params: unknown): PublicCreate | undefined {
   const title = normalizedText(input.title, 1, 160);
   const objective = normalizedText(input.objective, 1, 4000);
   const criteria = normalizeCriteria(input.criteria);
-  const result = id && title && objective && criteria ? { id, title, objective, criteria } : undefined;
+  const result =
+    id && title && objective && criteria ? { id, title, objective, criteria } : undefined;
   return result && withinBudget(result) ? result : undefined;
 }
 

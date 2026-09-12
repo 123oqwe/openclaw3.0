@@ -93,7 +93,9 @@ export function readWorkboardCards(value: unknown): WorkboardCard[] {
   const response = responseSchema.parse(value);
   const seenCardIds = new Set<string>();
   return response.cards.map((card) => {
-    if (seenCardIds.has(card.id)) { throw new WorkboardIdentityConflictError(); }
+    if (seenCardIds.has(card.id)) {
+      throw new WorkboardIdentityConflictError();
+    }
     seenCardIds.add(card.id);
     const proofs = card.metadata?.proof ?? [];
     const artifacts = card.metadata?.artifacts ?? [];

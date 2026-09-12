@@ -294,7 +294,9 @@ describe("Outcome repository atomic contract", () => {
       },
     );
     expect(result).toMatchObject({ kind: "updated", record: { revision: 2, updatedAt: 42 } });
-    if (result.kind !== "updated") { return; }
+    if (result.kind !== "updated") {
+      return;
+    }
     expect(result.record.evidence).toEqual([refreshedEvidence, historicalEvidence]);
     expect(first(result.record.projections).ref).toEqual(ref);
   });
@@ -419,7 +421,9 @@ describe("Outcome repository atomic contract", () => {
         updatedAt: 42,
       },
     });
-    if (linked.kind !== "updated") { return; }
+    if (linked.kind !== "updated") {
+      return;
+    }
     expect(linked.record.planHash).toMatch(/^[0-9a-f]{64}$/);
 
     const accepted = { ...activeRecord("accepted-unlink"), phase: "accepted" as const };

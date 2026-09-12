@@ -1,7 +1,4 @@
-import type {
-  OutcomeRefreshStatus,
-  OutcomeSourceIssueReason,
-} from "@openclaw/outcomes-contract";
+import type { OutcomeRefreshStatus, OutcomeSourceIssueReason } from "@openclaw/outcomes-contract";
 import { Value } from "typebox/value";
 import type { OpenClawPluginApi } from "../../api.js";
 import {
@@ -11,10 +8,7 @@ import {
 import { extractWorkboardEvidence } from "../assurance/evidence.js";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
 import { createRequestHash, workboardProjectionFingerprint } from "../domain/hash.js";
-import {
-  toOutcomeSummary,
-  type AuthorizedOutcomeSource,
-} from "../domain/read-model.js";
+import { toOutcomeSummary, type AuthorizedOutcomeSource } from "../domain/read-model.js";
 import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,
@@ -22,14 +16,15 @@ import {
   reduceOutcomeRefresh,
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
-import type {
-  EvidenceRef,
-  OutcomeRecord,
-  WorkProjection,
-  WorkboardRef,
-} from "../domain/types.js";
+import type { EvidenceRef, OutcomeRecord, WorkProjection, WorkboardRef } from "../domain/types.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
+import {
+  OutcomeErrorCodes,
+  outcomeError,
+  outcomeOwnerError,
+  outcomeStorageError,
+} from "./errors.js";
 import {
   normalizeCreate,
   normalizePatch,
@@ -37,12 +32,6 @@ import {
   normalizedUuid,
   withRefs,
 } from "./input-normalizers.js";
-import {
-  OutcomeErrorCodes,
-  outcomeError,
-  outcomeOwnerError,
-  outcomeStorageError,
-} from "./errors.js";
 import {
   authenticatedProfileId,
   fail,
