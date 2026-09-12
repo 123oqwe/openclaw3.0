@@ -160,7 +160,9 @@ describe("Outcome repository capacity diagnostics", () => {
             createRequestHash: "f".repeat(64),
           }),
         ).rejects.toMatchObject({ code: "outcome-create-conflict" });
-        await expect(reopenedRepository.create(draftRecord("capacity-overflow"))).rejects.toMatchObject({
+        await expect(
+          reopenedRepository.create(draftRecord("capacity-overflow")),
+        ).rejects.toMatchObject({
           code: "outcome-capacity-exceeded",
         });
         await expect(
