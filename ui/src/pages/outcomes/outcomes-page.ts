@@ -16,6 +16,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   private context!: ApplicationContext;
 
   @state() private outcomes: OutcomeSummary[] = [];
+  @state() private disconnected = false;
   @state() private loading = false;
   @state() private loaded = false;
   @state() private error: string | null = null;
@@ -26,6 +27,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     getGateway: () => this.context?.gateway,
     invalidateRequests: () => this.resetGatewayState(),
     ensureInitialData: () => this.loadOutcomes(),
+    onSnapshot: (change) => {
+      this.disconnected = change.snapshot.phase !== "connected";
+    },
   });
 
   private resetGatewayState() {
@@ -79,6 +83,7 @@ class OutcomesPage extends OpenClawLightDomElement {
       </section>
       ${renderOutcomesList({
         outcomes: this.outcomes,
+        disconnected: this.disconnected,
         loading: this.loading,
         loaded: this.loaded,
         error: this.error,

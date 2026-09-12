@@ -2469,6 +2469,7 @@ export const en: TranslationMap & {
     loading: "Loading outcomes",
     empty: "No outcomes yet",
     loadFailed: "Could not load outcomes: {error}",
+    disconnected: "Outcome connection is unavailable",
   },
   modelSetup: {
     missingAuth: "No provider credential is configured for this model. Set it up in Model Setup.",

@@ -4,6 +4,7 @@ import { t } from "../../i18n/index.ts";
 import "../../styles/outcomes.css";
 
 export type OutcomesListViewData = {
+  disconnected: boolean;
   error: string | null;
   loaded: boolean;
   loading: boolean;
@@ -11,6 +12,11 @@ export type OutcomesListViewData = {
 };
 
 export function renderOutcomesList(data: OutcomesListViewData) {
+  if (data.disconnected) {
+    return html`<section class="outcomes-state" role="status">
+      ${t("outcomesPage.disconnected")}
+    </section>`;
+  }
   if (data.loading && !data.loaded) {
     return html`<section class="outcomes-state" role="status" aria-live="polite">
       ${t("outcomesPage.loading")}
