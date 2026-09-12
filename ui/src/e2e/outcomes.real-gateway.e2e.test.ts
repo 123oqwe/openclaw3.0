@@ -346,6 +346,10 @@ suite.define(() => {
         const confirmLink = linkForm.locator("[data-outcome-confirm-link]");
         await confirmLink.focus();
         await page.keyboard.press("Enter");
+        await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
+        await detail
+          .locator(`[data-outcome-unlink-card="${cardId}"]`)
+          .waitFor({ state: "visible" });
         const linked = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
         expect(linked).toMatchObject({
           criteria: [
@@ -355,10 +359,6 @@ suite.define(() => {
           ],
           work: [{ ref: { cardId } }],
         });
-        await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
-        await detail
-          .locator(`[data-outcome-unlink-card="${cardId}"]`)
-          .waitFor({ state: "visible" });
 
         await callGateway("workboard.cards.proof", {
           id: cardId,
