@@ -499,9 +499,7 @@ export function reduceOutcomeRefresh(
             ...(cached.sourceUpdatedAt === undefined
               ? {}
               : { sourceUpdatedAt: cached.sourceUpdatedAt }),
-            ...(cached.upstreamStale === undefined
-              ? {}
-              : { upstreamStale: cached.upstreamStale }),
+            ...(cached.upstreamStale === undefined ? {} : { upstreamStale: cached.upstreamStale }),
             ...(cached.sourceFingerprint === undefined
               ? {}
               : { sourceFingerprint: cached.sourceFingerprint }),

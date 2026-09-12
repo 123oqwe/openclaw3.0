@@ -891,7 +891,10 @@ describe("P-02 Outcome Gateway admission", () => {
             client,
             context,
             method: "outcomes.refresh",
-            request: { id: diagnosticRecord.id, expectedRevision: diagnosticRecord.revision + sample },
+            request: {
+              id: diagnosticRecord.id,
+              expectedRevision: diagnosticRecord.revision + sample,
+            },
           });
           refreshSamplesMs.push(performance.now() - refreshStartedAt);
           expect(refresh).toMatchObject({
@@ -962,7 +965,10 @@ describe("P-02 Outcome Gateway admission", () => {
         });
         const availableRecord = await diagnosticStore.lookup(diagnosticRecord.id);
         const availableProjection = availableRecord?.projections[0];
-        expect(availableProjection).toMatchObject({ availability: "available", upstreamStale: false });
+        expect(availableProjection).toMatchObject({
+          availability: "available",
+          upstreamStale: false,
+        });
         expect(availableProjection).not.toHaveProperty("errorCode");
 
         ownerRequest.mockImplementationOnce(async () => {
@@ -978,7 +984,9 @@ describe("P-02 Outcome Gateway admission", () => {
               expectedRevision: diagnosticRecord.revision + OUTCOME_BENCHMARK_SAMPLES,
             },
           }),
-        ).resolves.toMatchObject({ refresh: { status: "unavailable", reason: "workboard-disabled" } });
+        ).resolves.toMatchObject({
+          refresh: { status: "unavailable", reason: "workboard-disabled" },
+        });
         const unavailableRecord = await diagnosticStore.lookup(diagnosticRecord.id);
         const unavailableProjection = unavailableRecord?.projections[0];
         expect(unavailableProjection).toMatchObject({
