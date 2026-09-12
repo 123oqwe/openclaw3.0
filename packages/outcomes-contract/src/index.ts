@@ -43,12 +43,13 @@ export const OUTCOME_NEXT_ACTIONS = [
 export const OUTCOME_EVIDENCE_KINDS = ["workboard-proof", "workboard-artifact"] as const;
 export const OUTCOME_PROOF_STATUSES = ["passed", "failed", "skipped", "unknown"] as const;
 export const OUTCOME_REFRESH_STATUSES = ["available", "unavailable", "identity-conflict"] as const;
-/** Public P-02 failure vocabulary; handlers never expose lower-level exceptions. */
+/** Public Outcome failure vocabulary; handlers never expose lower-level exceptions. */
 export const OUTCOME_ERROR_CODES = {
   INVALID_REQUEST: "OUTCOME_INVALID_REQUEST",
   INVALID_CURSOR: "OUTCOME_INVALID_CURSOR",
   NOT_FOUND: "OUTCOME_NOT_FOUND",
   ID_UNAVAILABLE: "OUTCOME_ID_UNAVAILABLE",
+  OPERATION_CONFLICT: "OUTCOME_OPERATION_CONFLICT",
   REVISION_CONFLICT: "OUTCOME_REVISION_CONFLICT",
   CAPACITY_EXCEEDED: "OUTCOME_CAPACITY_EXCEEDED",
   INVALID_STATE: "OUTCOME_INVALID_STATE",
@@ -56,6 +57,7 @@ export const OUTCOME_ERROR_CODES = {
   OWNER_FORBIDDEN: "OUTCOME_OWNER_FORBIDDEN",
   OWNER_TIMEOUT: "OUTCOME_OWNER_TIMEOUT",
   IDENTITY_CONFLICT: "OUTCOME_IDENTITY_CONFLICT",
+  CLOSURE_INCOMPLETE: "OUTCOME_CLOSURE_INCOMPLETE",
   NOT_QUIESCENT: "OUTCOME_NOT_QUIESCENT",
   INTERNAL: "OUTCOME_INTERNAL",
 } as const;

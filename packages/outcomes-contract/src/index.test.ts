@@ -22,9 +22,10 @@ describe("outcomes public contract", () => {
     expect(OUTCOME_REFRESH_STATUSES).toEqual(["available", "unavailable", "identity-conflict"]);
   });
 
-  it("publishes the bounded P-02 error-code vocabulary", () => {
+  it("publishes the bounded Outcome error-code vocabulary, including reserved later-stage codes", () => {
     expect(OUTCOME_ERROR_CODES).toEqual({
       CAPACITY_EXCEEDED: "OUTCOME_CAPACITY_EXCEEDED",
+      CLOSURE_INCOMPLETE: "OUTCOME_CLOSURE_INCOMPLETE",
       IDENTITY_CONFLICT: "OUTCOME_IDENTITY_CONFLICT",
       ID_UNAVAILABLE: "OUTCOME_ID_UNAVAILABLE",
       INTERNAL: "OUTCOME_INTERNAL",
@@ -33,6 +34,7 @@ describe("outcomes public contract", () => {
       INVALID_STATE: "OUTCOME_INVALID_STATE",
       NOT_FOUND: "OUTCOME_NOT_FOUND",
       NOT_QUIESCENT: "OUTCOME_NOT_QUIESCENT",
+      OPERATION_CONFLICT: "OUTCOME_OPERATION_CONFLICT",
       OWNER_FORBIDDEN: "OUTCOME_OWNER_FORBIDDEN",
       OWNER_TIMEOUT: "OUTCOME_OWNER_TIMEOUT",
       OWNER_UNAVAILABLE: "OUTCOME_OWNER_UNAVAILABLE",
