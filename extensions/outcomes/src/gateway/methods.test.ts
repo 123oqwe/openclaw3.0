@@ -13,6 +13,7 @@ type RegisteredHandler = (call: GatewayCall) => Promise<void>;
 
 const owner = { authenticatedUserProfile: { profileId: "manager-a" } };
 const criterionId = "123e4567-e89b-42d3-a456-426614174001";
+const secondaryCriterionId = "123e4567-e89b-42d3-a456-426614174002";
 const outcomeIds = [
   "123e4567-e89b-42d3-a456-426614174010",
   "123e4567-e89b-42d3-a456-426614174011",
@@ -392,6 +393,7 @@ describe("P-02 Outcome handlers", () => {
       {},
       { scopes: ["operator.read"], requireAuthenticatedRequest: true, timeoutMs: 10_000 },
     );
+    expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
     expect(
       await harness.call("outcomes.unlinkWorkboard", {
         id,
@@ -400,6 +402,88 @@ describe("P-02 Outcome handlers", () => {
         cardId: "card-a",
       }),
     ).toMatchObject([true, { outcome: { revision: 3, contractRevision: 3 } }]);
+  });
+
+  it("preserves every source from one authorized read across link and later mutations", async () => {
+    const harness = createHarness({
+      workboardCards: [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 2,
+          metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] },
+        },
+        {
+          id: "card-b",
+          status: "todo",
+          createdAt: 3,
+          updatedAt: 4,
+          metadata: { automation: { boardId: "board-b" }, proof: [], artifacts: [] },
+        },
+      ],
+    });
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", {
+      ...createParams(id),
+      criteria: [
+        { id: criterionId, text: "First required criterion", required: true },
+        { id: secondaryCriterionId, text: "Second required criterion", required: true },
+      ],
+    });
+    await harness.call("outcomes.linkWorkboard", defaultLinkParams(id));
+    const secondLink = await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 2,
+      criterionId: secondaryCriterionId,
+      cardId: "card-b",
+    });
+    expect(secondLink).toMatchObject([
+      true,
+      {
+        outcome: {
+          work: [
+            { ref: { cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" } },
+            { ref: { cardId: "card-b", cardCreatedAt: 3, boardIdAtLink: "board-b" } },
+          ],
+        },
+      },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledTimes(2);
+
+    harness.gatewayRequest.mockResolvedValueOnce({
+      cards: [
+        {
+          id: "card-b",
+          status: "todo",
+          createdAt: 3,
+          updatedAt: 4,
+          metadata: { automation: { boardId: "board-b" }, proof: [], artifacts: [] },
+        },
+      ],
+    });
+    const titleUpdate = await harness.call("outcomes.update", {
+      id,
+      expectedRevision: 3,
+      patch: { title: "Updated without access to card A" },
+    });
+    expect(titleUpdate).toMatchObject([
+      true,
+      {
+        outcome: {
+          criteria: [
+            { id: criterionId, workRefs: [], sourcesVisibility: "restricted" },
+            {
+              id: secondaryCriterionId,
+              workRefs: [{ cardId: "card-b", cardCreatedAt: 3, boardIdAtLink: "board-b" }],
+              sourcesVisibility: "complete",
+            },
+          ],
+          work: [{ ref: { cardId: "card-b", cardCreatedAt: 3, boardIdAtLink: "board-b" } }],
+        },
+      },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledTimes(3);
   });
 
   it("hides foreign unlinks and lets the owner remove an unavailable source link", async () => {

@@ -10,17 +10,19 @@ import type { AuthorizedOutcomeSource } from "../domain/read-model.js";
 import type { EvidenceRef, OutcomeRecord, WorkProjection, WorkboardRef } from "../domain/types.js";
 import { OutcomeErrorCodes, outcomeOwnerError } from "./errors.js";
 
-export async function readAuthorizedWorkboardCard(api: OpenClawPluginApi, cardId: string) {
-  const response = await api.runtime.gateway.request(
-    "workboard.cards.list",
-    {},
-    { scopes: ["operator.read"], requireAuthenticatedRequest: true, timeoutMs: 10_000 },
-  );
-  const matches = readWorkboardCards(response).filter((card) => card.id === cardId);
+export function findAuthorizedWorkboardCard(
+  cards: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>,
+  cardId: string,
+) {
+  const matches = cards.filter((card) => card.id === cardId);
   if (matches.length > 1) {
     throw new WorkboardIdentityConflictError();
   }
   return matches[0];
+}
+
+export async function readAuthorizedWorkboardCard(api: OpenClawPluginApi, cardId: string) {
+  return findAuthorizedWorkboardCard(await readAuthorizedWorkboardCards(api), cardId);
 }
 
 class InvalidWorkboardResponseError extends Error {

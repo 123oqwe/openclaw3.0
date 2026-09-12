@@ -41,7 +41,7 @@ import {
 import { reduceGatewayOutcomePatch } from "./update-reducer.js";
 import {
   buildRefreshCandidate,
-  readAuthorizedWorkboardCard,
+  findAuthorizedWorkboardCard,
   readAuthorizedWorkboardCards,
   refreshReason,
   unavailableRefresh,
@@ -53,6 +53,37 @@ const OUTCOME_STORE = {
   maxEntries: OUTCOME_MAX_ENTRIES,
   overflowPolicy: OUTCOME_OVERFLOW_POLICY,
 };
+
+async function mutationPresentation(
+  api: OpenClawPluginApi,
+  decision: { kind: "updated" | "noop" | "conflict" | "rejected"; record: OutcomeRecord },
+  now: number,
+  authorizedCards?: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>,
+) {
+  if (
+    (decision.kind !== "updated" && decision.kind !== "noop") ||
+    decision.record.criteria.every((criterion) => criterion.workRefs.length === 0)
+  ) {
+    return undefined;
+  }
+  try {
+    const candidate = buildRefreshCandidate(
+      decision.record,
+      authorizedCards ?? (await readAuthorizedWorkboardCards(api)),
+      now,
+    );
+    return {
+      authorizedSources: candidate.authorizedSources,
+      projections: candidate.projections,
+    };
+  } catch (error) {
+    const candidate = unavailableRefresh(decision.record, now, refreshReason(error));
+    return {
+      authorizedSources: candidate.authorizedSources,
+      projections: candidate.projections,
+    };
+  }
+}
 
 /** Register the P-02 first package; every persisted access is scoped to the authenticated owner. */
 export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void {
@@ -234,7 +265,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        respondMutation(respond, decision, now);
+        respondMutation(respond, decision, now, await mutationPresentation(api, decision, now));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
@@ -275,14 +306,16 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       if (record.phase === "cancelled") {
         return fail(respond, "INVALID_STATE");
       }
-      let card: Awaited<ReturnType<typeof readAuthorizedWorkboardCard>>;
+      let cards: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>> | undefined;
+      let card: (Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>)[number] | undefined;
       try {
-        card = await readAuthorizedWorkboardCard(api, request.cardId);
+        cards = await readAuthorizedWorkboardCards(api);
+        card = findAuthorizedWorkboardCard(cards, request.cardId);
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeOwnerError(error)));
         return;
       }
-      if (!card) {
+      if (!cards || !card) {
         return fail(respond, "OWNER_UNAVAILABLE");
       }
       try {
@@ -304,11 +337,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        const presentation =
-          decision.kind === "updated" || decision.kind === "noop"
-            ? buildRefreshCandidate(decision.record, [card], now)
-            : undefined;
-        respondMutation(respond, decision, now, presentation);
+        respondMutation(respond, decision, now, await mutationPresentation(api, decision, now, cards));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
@@ -347,7 +376,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        respondMutation(respond, decision, now);
+        respondMutation(respond, decision, now, await mutationPresentation(api, decision, now));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
@@ -381,7 +410,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        respondMutation(respond, decision, now);
+        respondMutation(respond, decision, now, await mutationPresentation(api, decision, now));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
@@ -507,7 +536,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        respondMutation(respond, decision, now);
+        respondMutation(respond, decision, now, await mutationPresentation(api, decision, now));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
