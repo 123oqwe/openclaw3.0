@@ -44,6 +44,10 @@ let instance: OpenClawTestInstance | undefined;
 
 type GatewayCallResult = Record<string, unknown>;
 
+function isGatewayCallResult(value: unknown): value is GatewayCallResult {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
 async function callGateway(method: string, params: Record<string, unknown>): Promise<GatewayCallResult> {
   if (!instance) {
     throw new Error("Outcome Gateway fixture was not started");
@@ -59,7 +63,7 @@ async function callGateway(method: string, params: Record<string, unknown>): Pro
   expect(result.code, `${method} failed: ${result.stderr}`).toBe(0);
   expect(result.signal).toBeNull();
   const parsed: unknown = JSON.parse(result.stdout);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (!isGatewayCallResult(parsed)) {
     throw new Error(`${method} returned an invalid Gateway payload`);
   }
   return parsed;
@@ -72,10 +76,10 @@ async function outcomesUrl(): Promise<string> {
   const result = await instance.cli(["--no-color", "dashboard", "--json"]);
   expect(result.code, result.stderr).toBe(0);
   const parsed: unknown = JSON.parse(result.stdout);
-  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+  if (!isGatewayCallResult(parsed)) {
     throw new Error("Gateway dashboard handoff was invalid");
   }
-  const browserUrl = (parsed as Record<string, unknown>).browserUrl;
+  const browserUrl = parsed.browserUrl;
   if (typeof browserUrl !== "string") {
     throw new Error("Gateway dashboard handoff omitted its browser URL");
   }
@@ -87,10 +91,10 @@ async function outcomesUrl(): Promise<string> {
 
 function requireCardId(payload: GatewayCallResult): string {
   const card = payload.card;
-  if (!card || typeof card !== "object" || Array.isArray(card)) {
+  if (!isGatewayCallResult(card)) {
     throw new Error("Workboard create omitted its card");
   }
-  const id = (card as Record<string, unknown>).id;
+  const id = card.id;
   if (typeof id !== "string") {
     throw new Error("Workboard create omitted its card ID");
   }
@@ -99,10 +103,18 @@ function requireCardId(payload: GatewayCallResult): string {
 
 function requireOutcome(payload: GatewayCallResult): GatewayCallResult {
   const outcome = payload.outcome;
-  if (!outcome || typeof outcome !== "object" || Array.isArray(outcome)) {
+  if (!isGatewayCallResult(outcome)) {
     throw new Error("Outcome Gateway response omitted its outcome");
   }
-  return outcome as GatewayCallResult;
+  return outcome;
+}
+
+function requireNumber(payload: GatewayCallResult, key: string): number {
+  const value = payload[key];
+  if (typeof value !== "number") {
+    throw new Error(`Outcome Gateway response omitted numeric ${key}`);
+  }
+  return value;
 }
 
 suite.define(() => {
@@ -144,7 +156,7 @@ suite.define(() => {
         const linkForm = page.locator("[data-outcome-link-form]");
         await linkForm.locator('select[name="card"]').selectOption(cardId);
         await linkForm.locator("[data-outcome-confirm-link]").click();
-        await expect(detail.getByText(`Card ${cardId}`, { exact: true })).toBeVisible();
+        await detail.getByText(`Card ${cardId}`, { exact: true }).waitFor({ state: "visible" });
 
         await callGateway("workboard.cards.proof", {
           id: cardId,
@@ -152,17 +164,21 @@ suite.define(() => {
           status: "passed",
         });
         await detail.locator('[data-outcome-action="activate"]').click();
-        await expect(detail.locator('[data-outcome-phase="active"]')).toBeVisible();
-        await expect(detail.locator('[data-outcome-action="activate"]')).toHaveCount(0);
+        await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
+        await expect.poll(() => detail.locator('[data-outcome-action="activate"]').count()).toBe(0);
         const activated = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
         expect(activated.phase).toBe("active");
-        expect(activated.revision).toEqual(expect.any(Number));
+        const activatedRevision = requireNumber(activated, "revision");
 
         await detail.locator('[data-outcome-action="refresh"]').click();
-        await expect(detail.locator('[data-outcome-action="refresh"]')).toBeEnabled();
-        await expect(detail.getByText("Proof: Outcome E2E verification", { exact: true })).toBeVisible();
+        await expect
+          .poll(() => detail.locator('[data-outcome-action="refresh"]').isEnabled())
+          .toBe(true);
+        await detail
+          .getByText("Proof: Outcome E2E verification", { exact: true })
+          .waitFor({ state: "visible" });
         const refreshed = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
-        expect(refreshed.revision).toBeGreaterThan(activated.revision as number);
+        expect(requireNumber(refreshed, "revision")).toBeGreaterThan(activatedRevision);
         expect(refreshed.evidence).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ label: "Outcome E2E verification", proofStatus: "passed" }),
@@ -173,18 +189,19 @@ suite.define(() => {
           throw new Error("Outcome Gateway fixture was not started");
         }
         await instance.stopGateway();
-        await expect(page.getByText("Outcome connection unavailable", { exact: true })).toBeVisible();
-        await expect(detail).toHaveCount(0);
+        await page.getByText("Outcome connection unavailable", { exact: true }).waitFor({ state: "visible" });
+        await expect.poll(() => detail.count()).toBe(0);
         await instance.startGateway();
         await waitForControlUiGatewayReady(page);
         await page.reload();
         await waitForControlUiGatewayReady(page);
-        await expect(page.locator(".outcome-summary", { hasText: "Release Outcome E2E" })).toBeVisible();
+        await page
+          .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
+          .waitFor({ state: "visible" });
         await page.locator('[data-outcome-select]').click();
-        await expect(page.locator('[data-outcome-detail-id]')).toHaveAttribute(
-          "data-outcome-detail-id",
-          outcomeId,
-        );
+        await expect
+          .poll(() => page.locator('[data-outcome-detail-id]').getAttribute("data-outcome-detail-id"))
+          .toBe(outcomeId);
       },
     );
   });

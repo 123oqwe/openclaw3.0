@@ -741,7 +741,9 @@ describe("OutcomesPage", () => {
     objective.dispatchEvent(new InputEvent("input", { bubbles: true }));
     criterion.value = "Release evidence is available";
     criterion.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    page
+      .querySelector<HTMLFormElement>("[data-outcome-create-form]")
+      ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => {
       expect(request).toHaveBeenCalledWith("outcomes.create", {
@@ -824,7 +826,9 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => {
       expect(page.querySelector('[data-outcome-create-form] [role="alert"]')).not.toBeNull();
     });
-    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    page
+      .querySelector<HTMLFormElement>("[data-outcome-create-form]")
+      ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
 
     await vi.waitFor(() => {
       expect(createParams).toHaveLength(2);
@@ -890,10 +894,15 @@ describe("OutcomesPage", () => {
       expect(page.querySelector("[data-outcome-pending-create]")).not.toBeNull();
     });
 
-    expect(title.disabled).toBe(true);
-    title.value = "Changed title";
-    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    const pendingForm = page.querySelector<HTMLFormElement>("[data-outcome-create-form]");
+    const pendingTitle = pendingForm?.querySelector<HTMLInputElement>('input[name="title"]');
+    if (!pendingForm || !pendingTitle) {
+      throw new Error("Pending Outcome create form fields are missing");
+    }
+    expect(pendingTitle.disabled).toBe(true);
+    pendingTitle.value = "Changed title";
+    pendingTitle.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    pendingForm.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(createParams).toHaveLength(2));
     expect(createParams[1]).toEqual(createParams[0]);
     await vi.waitFor(() => {
@@ -903,10 +912,15 @@ describe("OutcomesPage", () => {
     page
       .querySelector<HTMLButtonElement>("[data-outcome-abandon-pending-create]")
       ?.click();
-    await vi.waitFor(() => expect(title.disabled).toBe(false));
-    title.value = "Changed title";
-    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
-    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    const editableForm = page.querySelector<HTMLFormElement>("[data-outcome-create-form]");
+    const editableTitle = editableForm?.querySelector<HTMLInputElement>('input[name="title"]');
+    if (!editableForm || !editableTitle) {
+      throw new Error("Editable Outcome create form fields are missing");
+    }
+    await vi.waitFor(() => expect(editableTitle.disabled).toBe(false));
+    editableTitle.value = "Changed title";
+    editableTitle.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    editableForm.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(createParams).toHaveLength(3));
     expect(createParams[2]).toMatchObject({ title: "Changed title" });
     expect(createParams[2]).not.toEqual(createParams[0]);

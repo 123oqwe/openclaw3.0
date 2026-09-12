@@ -135,6 +135,18 @@ function evidenceKindLabel(kind: OutcomeEvidenceKind): string {
     : t("outcomesPage.evidence.artifact");
 }
 
+function formControlValue(event: Event): string {
+  const target = event.target;
+  if (
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLSelectElement ||
+    target instanceof HTMLTextAreaElement
+  ) {
+    return target.value;
+  }
+  return "";
+}
+
 function readinessLabel(readiness: OutcomeReadiness): string {
   switch (readiness) {
     case "incomplete":
@@ -314,8 +326,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
           required
           ?disabled=${data.creating || data.pendingRequest}
           .value=${data.title}
-          @input=${(event: InputEvent) =>
-            data.onInput("title", (event.target as HTMLInputElement).value)}
+          @input=${(event: InputEvent) => data.onInput("title", formControlValue(event))}
         />
       </label>
       <label>
@@ -325,8 +336,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
           required
           ?disabled=${data.creating || data.pendingRequest}
           .value=${data.objective}
-          @input=${(event: InputEvent) =>
-            data.onInput("objective", (event.target as HTMLTextAreaElement).value)}
+          @input=${(event: InputEvent) => data.onInput("objective", formControlValue(event))}
         ></textarea>
       </label>
       <fieldset class="outcome-create-dialog__criteria">
@@ -341,8 +351,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
                   required
                   ?disabled=${data.creating || data.pendingRequest}
                   .value=${criterion}
-                  @input=${(event: InputEvent) =>
-                    data.onCriterionInput(index, (event.target as HTMLInputElement).value)}
+                  @input=${(event: InputEvent) => data.onCriterionInput(index, formControlValue(event))}
                 />
               </label>
               ${data.criteria.length > 1
@@ -662,8 +671,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 required
                 ?disabled=${data.editing}
                 .value=${data.editTitle}
-                @input=${(event: InputEvent) =>
-                  data.onEditInput("title", (event.target as HTMLInputElement).value)}
+                @input=${(event: InputEvent) => data.onEditInput("title", formControlValue(event))}
               />
             </label>
             <label>
@@ -673,8 +681,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 required
                 ?disabled=${data.editing}
                 .value=${data.editObjective}
-                @input=${(event: InputEvent) =>
-                  data.onEditInput("objective", (event.target as HTMLTextAreaElement).value)}
+                @input=${(event: InputEvent) => data.onEditInput("objective", formControlValue(event))}
               ></textarea>
             </label>
             <fieldset class="outcome-create-dialog__criteria">
@@ -689,11 +696,8 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                         required
                         ?disabled=${data.editing}
                         .value=${criterion.text}
-                        @input=${(event: InputEvent) =>
-                          data.onEditCriterionInput(
-                            index,
-                            (event.target as HTMLInputElement).value,
-                          )}
+                          @input=${(event: InputEvent) =>
+                            data.onEditCriterionInput(index, formControlValue(event))}
                       />
                     </label>
                     ${data.editCriteria.length > 1
@@ -762,8 +766,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 required
                 ?disabled=${data.linking || data.linkCardsLoading}
                 .value=${data.linkCriterionId}
-                @change=${(event: Event) =>
-                  data.onLinkCriterionChange((event.target as HTMLSelectElement).value)}
+                @change=${(event: Event) => data.onLinkCriterionChange(formControlValue(event))}
               >
                 ${data.detail.criteria.map(
                   (criterion) => html`<option value=${criterion.id}>${criterion.text}</option>`,
@@ -777,8 +780,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 required
                 ?disabled=${data.linking || data.linkCardsLoading || data.linkCards.length === 0}
                 .value=${data.linkCardId}
-                @change=${(event: Event) =>
-                  data.onLinkCardChange((event.target as HTMLSelectElement).value)}
+                @change=${(event: Event) => data.onLinkCardChange(formControlValue(event))}
               >
                 <option value="">${t("outcomesPage.selectCard")}</option>
                 ${data.linkCards.map(
