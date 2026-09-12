@@ -29,7 +29,7 @@ function createBundledGatewayHarness() {
   });
   const state = {
     registerIfAbsent: async (id: string, record: OutcomeRecord) => {
-      if (records.has(id)) return false;
+      if (records.has(id)) { return false; }
       records.set(id, record);
       return true;
     },
@@ -40,7 +40,7 @@ function createBundledGatewayHarness() {
       decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined,
     ) => {
       const next = decide(records.get(id));
-      if (next === undefined) return false;
+      if (next === undefined) { return false; }
       records.set(id, next);
       return true;
     },
@@ -60,7 +60,7 @@ function createBundledGatewayHarness() {
   async function call(method: string, params: Record<string, unknown>) {
     const respond = vi.fn();
     const handler = handlers.get(method);
-    if (!handler) throw new Error(`missing bundled handler: ${method}`);
+    if (!handler) { throw new Error(`missing bundled handler: ${method}`); }
     await handler({ client: owner, params, respond });
     return respond.mock.calls[0];
   }

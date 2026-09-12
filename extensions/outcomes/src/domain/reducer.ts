@@ -253,9 +253,15 @@ export function reduceOutcomePatch(
   mutation: OutcomePatchMutation,
 ): OutcomeMutationResult {
   assertServerTime(mutation.serverTime);
-  if (current.phase === "cancelled") return { kind: "rejected", record: current };
-  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
-  if (hasInFlightOperation(current)) return { kind: "rejected", record: current };
+  if (current.phase === "cancelled") {
+    return { kind: "rejected", record: current };
+  }
+  if (mutation.expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current };
+  }
+  if (hasInFlightOperation(current)) {
+    return { kind: "rejected", record: current };
+  }
 
   const title = mutation.title ?? current.title;
   const objective = mutation.objective ?? current.objective;
@@ -263,7 +269,9 @@ export function reduceOutcomePatch(
   const contractChanged =
     objective !== current.objective ||
     stableStringify(criteria) !== stableStringify(current.criteria);
-  if (title === current.title && !contractChanged) return { kind: "noop", record: current };
+  if (title === current.title && !contractChanged) {
+    return { kind: "noop", record: current };
+  }
 
   if (!contractChanged) {
     return {
@@ -307,11 +315,16 @@ export function reduceOutcomeLink(
   mutation: OutcomeLinkMutation,
 ): OutcomeMutationResult {
   assertServerTime(mutation.serverTime);
-  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
-  if (current.phase === "cancelled" || hasInFlightOperation(current))
+  if (mutation.expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current };
+  }
+  if (current.phase === "cancelled" || hasInFlightOperation(current)) {
     return { kind: "rejected", record: current };
+  }
   const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
-  if (!criterion) return { kind: "rejected", record: current };
+  if (!criterion) {
+    return { kind: "rejected", record: current };
+  }
   const refIdentity = workRefIdentity(mutation.ref);
   if (criterion.workRefs.some((ref) => workRefIdentity(ref) === refIdentity)) {
     return { kind: "noop", record: current };
@@ -342,15 +355,22 @@ export function reduceOutcomeUnlink(
   mutation: OutcomeLinkMutation,
 ): OutcomeMutationResult {
   assertServerTime(mutation.serverTime);
-  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
-  if (current.phase === "cancelled" || hasInFlightOperation(current))
+  if (mutation.expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current };
+  }
+  if (current.phase === "cancelled" || hasInFlightOperation(current)) {
     return { kind: "rejected", record: current };
+  }
   const criterion = current.criteria.find((item) => item.id === mutation.criterionId);
-  if (!criterion) return { kind: "rejected", record: current };
+  if (!criterion) {
+    return { kind: "rejected", record: current };
+  }
   const workRefs = criterion.workRefs.filter(
     (ref) => workRefIdentity(ref) !== workRefIdentity(mutation.ref),
   );
-  if (workRefs.length === criterion.workRefs.length) return { kind: "noop", record: current };
+  if (workRefs.length === criterion.workRefs.length) {
+    return { kind: "noop", record: current };
+  }
   return reduceWorkboardRefContract(
     current,
     mutation,
@@ -371,8 +391,12 @@ export function reduceOutcomeRefresh(
   mutation: OutcomeRefreshMutation,
 ): OutcomeMutationResult {
   assertServerTime(mutation.serverTime);
-  if (mutation.expectedRevision !== current.revision) return { kind: "conflict", record: current };
-  if (current.phase === "cancelled") return { kind: "rejected", record: current };
+  if (mutation.expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current };
+  }
+  if (current.phase === "cancelled") {
+    return { kind: "rejected", record: current };
+  }
 
   const linkedRefs = current.criteria.flatMap((criterion) => criterion.workRefs);
   const linkedIdentities = new Set(linkedRefs.map(workRefIdentity));
@@ -403,12 +427,15 @@ export function reduceOutcomeRefresh(
   const existingEvidence = new Map(
     current.evidence.map((evidence) => [evidenceIdentity(evidence), evidence]),
   );
-  for (const evidence of mutation.evidence)
+  for (const evidence of mutation.evidence) {
     existingEvidence.set(evidenceIdentity(evidence), evidence);
+  }
   const evidence = Array.from(existingEvidence.values()).toSorted((left, right) =>
     left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
   );
-  if (evidence.length > 100) return { kind: "rejected", record: current };
+  if (evidence.length > 100) {
+    return { kind: "rejected", record: current };
+  }
   const previousProjections = new Map(
     current.projections.map((projection) => [workRefIdentity(projection.ref), projection]),
   );
@@ -431,10 +458,29 @@ export function reduceOutcomeRefresh(
                   sourceFingerprint: undefined,
                 };
           return {
-            ...cached,
-            ref: { ...cached.ref },
-            proofs: cached.proofs.map((proof) => ({ ...proof })),
-            artifacts: cached.artifacts.map((artifact) => ({ ...artifact })),
+            ref: {
+              owner: cached.ref.owner,
+              cardId: cached.ref.cardId,
+              cardCreatedAt: cached.ref.cardCreatedAt,
+              boardIdAtLink: cached.ref.boardIdAtLink,
+            },
+            availability: cached.availability,
+            observedAt: cached.observedAt,
+            proofs: cached.proofs.map((proof) => ({
+              sourceId: proof.sourceId,
+              digest: proof.digest,
+            })),
+            artifacts: cached.artifacts.map((artifact) => ({
+              sourceId: artifact.sourceId,
+              digest: artifact.digest,
+            })),
+            currentBoardId: cached.currentBoardId,
+            status: cached.status,
+            lastSuccessfulAt: cached.lastSuccessfulAt,
+            sourceUpdatedAt: cached.sourceUpdatedAt,
+            upstreamStale: cached.upstreamStale,
+            sourceFingerprint: cached.sourceFingerprint,
+            errorCode: cached.errorCode,
           };
         })
         .toSorted((left, right) => canonicalRefOrder(left.ref, right.ref)),

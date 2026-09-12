@@ -26,8 +26,8 @@ export function outcomeError(code: (typeof OutcomeErrorCodes)[keyof typeof Outco
 }
 
 export function outcomeStorageError(error: unknown, operation: "create" | "read" | "mutation") {
-  if (error instanceof OutcomeRepositoryNotFoundError) return OutcomeErrorCodes.NOT_FOUND;
-  if (error instanceof OutcomeRepositoryCapacityError) return OutcomeErrorCodes.CAPACITY_EXCEEDED;
+  if (error instanceof OutcomeRepositoryNotFoundError) { return OutcomeErrorCodes.NOT_FOUND; }
+  if (error instanceof OutcomeRepositoryCapacityError) { return OutcomeErrorCodes.CAPACITY_EXCEEDED; }
   if (operation === "create" && error instanceof OutcomeRepositoryConflictError) {
     return OutcomeErrorCodes.ID_UNAVAILABLE;
   }

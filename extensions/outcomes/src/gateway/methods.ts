@@ -1,13 +1,7 @@
 import type {
-  OutcomeCreateParams,
-  OutcomeCriterionInput,
   OutcomeRefreshStatus,
   OutcomeSourceIssueReason,
-  OutcomeWorkboardLinkParams,
-  OutcomeUpdateParams,
 } from "@openclaw/outcomes-contract";
-import type { GatewayRequestHandlerOptions } from "openclaw/plugin-sdk/gateway-runtime";
-import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { Value } from "typebox/value";
 import type { OpenClawPluginApi } from "../../api.js";
 import {
@@ -18,7 +12,6 @@ import { extractWorkboardEvidence } from "../assurance/evidence.js";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
 import { createRequestHash, workboardProjectionFingerprint } from "../domain/hash.js";
 import {
-  toOutcomeDetail,
   toOutcomeSummary,
   type AuthorizedOutcomeSource,
 } from "../domain/read-model.js";
@@ -30,21 +23,32 @@ import {
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
 import type {
-  Criterion,
   EvidenceRef,
   OutcomeRecord,
   WorkProjection,
   WorkboardRef,
 } from "../domain/types.js";
-import type { OutcomeCapacityWarning } from "../store/outcome-repository.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
+import {
+  normalizeCreate,
+  normalizePatch,
+  normalizeWorkboardLink,
+  normalizedUuid,
+  withRefs,
+} from "./input-normalizers.js";
 import {
   OutcomeErrorCodes,
   outcomeError,
   outcomeOwnerError,
   outcomeStorageError,
 } from "./errors.js";
+import {
+  authenticatedProfileId,
+  fail,
+  reportCapacityWarning,
+  respondMutation,
+} from "./method-helpers.js";
 import {
   outcomeCancelParamsSchema,
   outcomeActivateParamsSchema,
@@ -63,146 +67,6 @@ const OUTCOME_STORE = {
   maxEntries: OUTCOME_MAX_ENTRIES,
   overflowPolicy: OUTCOME_OVERFLOW_POLICY,
 };
-const MAX_REQUEST_BYTES = 64 * 1024;
-type PublicCriterion = OutcomeCriterionInput;
-type PublicCreate = OutcomeCreateParams;
-type PublicPatch = OutcomeUpdateParams["patch"];
-type PublicWorkboardLink = OutcomeWorkboardLinkParams;
-type GatewayRespond = GatewayRequestHandlerOptions["respond"];
-
-function fail(respond: GatewayRespond, code: keyof typeof OutcomeErrorCodes): void {
-  respond(false, undefined, outcomeError(OutcomeErrorCodes[code]));
-}
-
-function reportCapacityWarning(api: OpenClawPluginApi, warning: OutcomeCapacityWarning): void {
-  // Keep persistence/source identities out of diagnostics; this is an internal threshold signal.
-  api.logger.warn(
-    `outcomes: capacity warning kind=${warning.kind} observed=${warning.observed} threshold=${warning.threshold}`,
-  );
-}
-
-function authenticatedProfileId(
-  client: { authenticatedUserProfile?: { profileId: string } } | null,
-): string | undefined {
-  const id = client?.authenticatedUserProfile?.profileId?.trim();
-  return id || undefined;
-}
-function normalizedUuid(value: unknown): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const id = value.trim().toLowerCase();
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(id)
-    ? id
-    : undefined;
-}
-function normalizedText(value: unknown, min: number, max: number): string | undefined {
-  if (typeof value !== "string") return undefined;
-  const text = value.trim();
-  const length = Array.from(text).length;
-  return length >= min && length <= max ? text : undefined;
-}
-function positiveSafeInteger(value: unknown): value is number {
-  return typeof value === "number" && Number.isSafeInteger(value) && value >= 1;
-}
-function normalizeCriteria(value: unknown): PublicCriterion[] | undefined {
-  if (!Array.isArray(value) || value.length < 1 || value.length > 5) return undefined;
-  const criteria: PublicCriterion[] = [];
-  for (const item of value) {
-    if (!item || typeof item !== "object") return undefined;
-    const input = item as Record<string, unknown>; // SAFETY: item passed the object guard above.
-    const id = normalizedUuid(input.id);
-    const text = normalizedText(input.text, 1, 1000);
-    if (!id || !text || typeof input.required !== "boolean") return undefined;
-    criteria.push({ id, text, required: input.required });
-  }
-  return criteria.some((criterion) => criterion.required) &&
-    new Set(criteria.map((criterion) => criterion.id)).size === criteria.length
-    ? criteria
-    : undefined;
-}
-function withinBudget(value: unknown): boolean {
-  return Buffer.byteLength(stableStringify(value), "utf8") <= MAX_REQUEST_BYTES;
-}
-function normalizeCreate(params: unknown): PublicCreate | undefined {
-  if (!params || typeof params !== "object") return undefined;
-  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
-  const id = normalizedUuid(input.id);
-  const title = normalizedText(input.title, 1, 160);
-  const objective = normalizedText(input.objective, 1, 4000);
-  const criteria = normalizeCriteria(input.criteria);
-  const result =
-    id && title && objective && criteria ? { id, title, objective, criteria } : undefined;
-  return result && withinBudget(result) ? result : undefined;
-}
-function normalizePatch(
-  params: unknown,
-): { id: string; expectedRevision: number; patch: PublicPatch } | undefined {
-  if (!params || typeof params !== "object") return undefined;
-  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
-  const id = normalizedUuid(input.id);
-  const patchInput = input.patch;
-  if (
-    !id ||
-    !positiveSafeInteger(input.expectedRevision) ||
-    !patchInput ||
-    typeof patchInput !== "object"
-  )
-    return undefined;
-  const raw = patchInput as Record<string, unknown>; // SAFETY: patchInput passed the object guard above.
-  const patch: PublicPatch = {};
-  if (Object.hasOwn(raw, "title")) {
-    const title = normalizedText(raw.title, 1, 160);
-    if (!title) return undefined;
-    patch.title = title;
-  }
-  if (Object.hasOwn(raw, "objective")) {
-    const objective = normalizedText(raw.objective, 1, 4000);
-    if (!objective) return undefined;
-    patch.objective = objective;
-  }
-  if (Object.hasOwn(raw, "criteria")) {
-    const criteria = normalizeCriteria(raw.criteria);
-    if (!criteria) return undefined;
-    patch.criteria = criteria;
-  }
-  const result = { id, expectedRevision: input.expectedRevision, patch };
-  return Object.keys(patch).length > 0 && withinBudget(result) ? result : undefined;
-}
-function normalizeWorkboardLink(params: unknown): PublicWorkboardLink | undefined {
-  if (!params || typeof params !== "object") return undefined;
-  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
-  const id = normalizedUuid(input.id);
-  const criterionId = normalizedUuid(input.criterionId);
-  const cardId = typeof input.cardId === "string" ? input.cardId.trim() : "";
-  if (!id || !criterionId || !cardId || !positiveSafeInteger(input.expectedRevision)) {
-    return undefined;
-  }
-  const result = { id, expectedRevision: input.expectedRevision, criterionId, cardId };
-  return withinBudget(result) ? result : undefined;
-}
-function withRefs(criteria: PublicCriterion[], current: Criterion[]): Criterion[] {
-  return criteria.map((criterion) => ({
-    ...criterion,
-    workRefs: current.find((item) => item.id === criterion.id)?.workRefs ?? [],
-  }));
-}
-function respondMutation(
-  respond: GatewayRespond,
-  decision: { kind: "updated" | "noop" | "conflict" | "rejected"; record: OutcomeRecord },
-  now: number,
-): void {
-  if (decision.kind === "updated" || decision.kind === "noop")
-    return respond(true, { outcome: toOutcomeDetail(decision.record, now) });
-  respond(
-    false,
-    undefined,
-    outcomeError(
-      decision.kind === "conflict"
-        ? OutcomeErrorCodes.REVISION_CONFLICT
-        : OutcomeErrorCodes.INVALID_STATE,
-    ),
-  );
-}
-
 async function readAuthorizedWorkboardCard(api: OpenClawPluginApi, cardId: string) {
   const response = await api.runtime.gateway.request(
     "workboard.cards.list",
@@ -210,7 +74,9 @@ async function readAuthorizedWorkboardCard(api: OpenClawPluginApi, cardId: strin
     { scopes: ["operator.read"], requireAuthenticatedRequest: true, timeoutMs: 10_000 },
   );
   const matches = readWorkboardCards(response).filter((card) => card.id === cardId);
-  if (matches.length > 1) throw new WorkboardIdentityConflictError();
+  if (matches.length > 1) {
+    throw new WorkboardIdentityConflictError();
+  }
   return matches[0];
 }
 
@@ -230,7 +96,9 @@ async function readAuthorizedWorkboardCards(api: OpenClawPluginApi) {
   try {
     return readWorkboardCards(response);
   } catch (error) {
-    if (error instanceof WorkboardIdentityConflictError) throw error;
+    if (error instanceof WorkboardIdentityConflictError) {
+      throw error;
+    }
     throw new InvalidWorkboardResponseError();
   }
 }
@@ -258,7 +126,9 @@ function uniqueSourcePairs(items: Array<{ sourceId: string; digest: string }>) {
 }
 
 function publicSourceUrl(value: string | undefined): string | undefined {
-  if (value === undefined) return undefined;
+  if (value === undefined) {
+    return undefined;
+  }
   try {
     const url = new URL(value);
     return url.protocol === "http:" || url.protocol === "https:" ? url.href : undefined;
@@ -268,8 +138,12 @@ function publicSourceUrl(value: string | undefined): string | undefined {
 }
 
 function refreshReason(error: unknown): RefreshReason {
-  if (error instanceof WorkboardIdentityConflictError) return "identity-conflict";
-  if (error instanceof InvalidWorkboardResponseError) return "invalid-response";
+  if (error instanceof WorkboardIdentityConflictError) {
+    return "identity-conflict";
+  }
+  if (error instanceof InvalidWorkboardResponseError) {
+    return "invalid-response";
+  }
   switch (outcomeOwnerError(error)) {
     case OutcomeErrorCodes.OWNER_FORBIDDEN:
       return "forbidden";
@@ -315,7 +189,9 @@ function buildRefreshCandidate(
   observedAt: number,
 ): RefreshCandidate {
   const cardsById = new Map<string, typeof cards>();
-  for (const card of cards) cardsById.set(card.id, [...(cardsById.get(card.id) ?? []), card]);
+  for (const card of cards) {
+    cardsById.set(card.id, [...(cardsById.get(card.id) ?? []), card]);
+  }
   const refs = record.criteria
     .flatMap((criterion) => criterion.workRefs)
     .filter(
@@ -410,15 +286,23 @@ function buildRefreshCandidate(
     (projection) => projection.availability === "unavailable",
   );
   const authorizedSources: AuthorizedOutcomeSource[] = projections.flatMap((projection) => {
-    if (projection.availability !== "available") return [];
+    if (projection.availability !== "available") {
+      return [];
+    }
     const card = matchedCards.get(workRefIdentity(projection.ref));
-    if (card === undefined) return [];
+    if (card === undefined) {
+      return [];
+    }
     const evidenceViews: AuthorizedOutcomeSource["evidence"] = [];
     for (const item of evidence) {
-      if (workRefIdentity(item.workRef) !== workRefIdentity(projection.ref)) continue;
+      if (workRefIdentity(item.workRef) !== workRefIdentity(projection.ref)) {
+        continue;
+      }
       if (item.kind === "workboard-proof") {
         const proof = card.proofs.find((candidate) => candidate.id === item.sourceId);
-        if (proof === undefined) continue;
+        if (proof === undefined) {
+          continue;
+        }
         const url = publicSourceUrl(proof.url);
         evidenceViews.push({
           ...item,
@@ -430,7 +314,9 @@ function buildRefreshCandidate(
         continue;
       }
       const artifact = card.artifacts.find((candidate) => candidate.id === item.sourceId);
-      if (artifact === undefined) continue;
+      if (artifact === undefined) {
+        continue;
+      }
       const url = publicSourceUrl(artifact.url);
       evidenceViews.push({
         ...item,
@@ -472,10 +358,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.create",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeCreateParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+      if (!Value.Check(outcomeCreateParamsSchema, params)) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const request = normalizeCreate(params);
       const owner = authenticatedProfileId(client);
-      if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+      if (!request || !owner) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const now = Date.now();
       const criteria = request.criteria.map((criterion) => ({ ...criterion, workRefs: [] }));
       const record: OutcomeRecord = {
@@ -515,13 +405,19 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.get",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeIdParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+      if (!Value.Check(outcomeIdParamsSchema, params)) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const owner = authenticatedProfileId(client);
       const id = normalizedUuid(params.id);
-      if (!owner || !id) return fail(respond, "NOT_FOUND");
+      if (!owner || !id) {
+        return fail(respond, "NOT_FOUND");
+      }
       try {
         const record = await repository.getOwned(owner, id);
-        if (!record) return fail(respond, "NOT_FOUND");
+        if (!record) {
+          return fail(respond, "NOT_FOUND");
+        }
         const now = Date.now();
         if (record.criteria.every((criterion) => criterion.workRefs.length === 0)) {
           respond(true, { outcome: toOutcomeDetail(record, now) });
@@ -545,12 +441,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.list",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeListParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+      if (!Value.Check(outcomeListParamsSchema, params)) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const owner = authenticatedProfileId(client);
-      if (!owner) return fail(respond, "NOT_FOUND");
+      if (!owner) {
+        return fail(respond, "NOT_FOUND");
+      }
       const cursor =
         params.cursor === undefined ? undefined : decodeOutcomeCursor(owner, params.cursor);
-      if (params.cursor !== undefined && !cursor) return fail(respond, "INVALID_CURSOR");
+      if (params.cursor !== undefined && !cursor) {
+        return fail(respond, "INVALID_CURSOR");
+      }
       try {
         const eligible = (await repository.listOwned(owner)).filter(
           (record) =>
@@ -575,10 +477,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.update",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeUpdateParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+      if (!Value.Check(outcomeUpdateParamsSchema, params)) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const request = normalizePatch(params);
       const owner = authenticatedProfileId(client);
-      if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+      if (!request || !owner) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const now = Date.now();
       try {
         const decision = await repository.transactOwned(owner, request.id, (current) => {
@@ -608,11 +514,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.linkWorkboard",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeWorkboardLinkParamsSchema, params))
+      if (!Value.Check(outcomeWorkboardLinkParamsSchema, params)) {
         return fail(respond, "INVALID_REQUEST");
+      }
       const request = normalizeWorkboardLink(params);
       const owner = authenticatedProfileId(client);
-      if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+      if (!request || !owner) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       let record: OutcomeRecord | undefined;
       try {
         record = await repository.getOwned(owner, request.id);
@@ -620,9 +529,15 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
         return;
       }
-      if (!record) return fail(respond, "NOT_FOUND");
-      if (record.revision !== request.expectedRevision) return fail(respond, "REVISION_CONFLICT");
-      if (record.phase === "cancelled") return fail(respond, "INVALID_STATE");
+      if (!record) {
+        return fail(respond, "NOT_FOUND");
+      }
+      if (record.revision !== request.expectedRevision) {
+        return fail(respond, "REVISION_CONFLICT");
+      }
+      if (record.phase === "cancelled") {
+        return fail(respond, "INVALID_STATE");
+      }
       let card: Awaited<ReturnType<typeof readAuthorizedWorkboardCard>>;
       try {
         card = await readAuthorizedWorkboardCard(api, request.cardId);
@@ -630,7 +545,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond(false, undefined, outcomeError(outcomeOwnerError(error)));
         return;
       }
-      if (!card) return fail(respond, "OWNER_UNAVAILABLE");
+      if (!card) {
+        return fail(respond, "OWNER_UNAVAILABLE");
+      }
       try {
         const now = Date.now();
         const decision = await repository.transactOwned(owner, request.id, (current) => {
@@ -660,11 +577,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.unlinkWorkboard",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeWorkboardUnlinkParamsSchema, params))
+      if (!Value.Check(outcomeWorkboardUnlinkParamsSchema, params)) {
         return fail(respond, "INVALID_REQUEST");
+      }
       const request = normalizeWorkboardLink(params);
       const owner = authenticatedProfileId(client);
-      if (!request || !owner) return fail(respond, "INVALID_REQUEST");
+      if (!request || !owner) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       let record: OutcomeRecord | undefined;
       try {
         record = await repository.getOwned(owner, request.id);
@@ -672,9 +592,15 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
         return;
       }
-      if (!record) return fail(respond, "NOT_FOUND");
-      if (record.revision !== request.expectedRevision) return fail(respond, "REVISION_CONFLICT");
-      if (record.phase === "cancelled") return fail(respond, "INVALID_STATE");
+      if (!record) {
+        return fail(respond, "NOT_FOUND");
+      }
+      if (record.revision !== request.expectedRevision) {
+        return fail(respond, "REVISION_CONFLICT");
+      }
+      if (record.phase === "cancelled") {
+        return fail(respond, "INVALID_STATE");
+      }
       let card: Awaited<ReturnType<typeof readAuthorizedWorkboardCard>>;
       try {
         card = await readAuthorizedWorkboardCard(api, request.cardId);
@@ -682,7 +608,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond(false, undefined, outcomeError(outcomeOwnerError(error)));
         return;
       }
-      if (!card) return fail(respond, "OWNER_UNAVAILABLE");
+      if (!card) {
+        return fail(respond, "OWNER_UNAVAILABLE");
+      }
       try {
         const now = Date.now();
         const decision = await repository.transactOwned(owner, request.id, (current) => {
@@ -712,11 +640,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.activate",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeActivateParamsSchema, params))
+      if (!Value.Check(outcomeActivateParamsSchema, params)) {
         return fail(respond, "INVALID_REQUEST");
+      }
       const owner = authenticatedProfileId(client);
       const id = normalizedUuid(params.id);
-      if (!owner || !id) return fail(respond, "INVALID_REQUEST");
+      if (!owner || !id) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const now = Date.now();
       try {
         const decision = await repository.transactOwned(owner, id, (current) => {
@@ -736,10 +667,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.refresh",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeRefreshParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+      if (!Value.Check(outcomeRefreshParamsSchema, params)) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const owner = authenticatedProfileId(client);
       const id = normalizedUuid(params.id);
-      if (!owner || !id) return fail(respond, "INVALID_REQUEST");
+      if (!owner || !id) {
+        return fail(respond, "INVALID_REQUEST");
+      }
 
       let record: OutcomeRecord | undefined;
       try {
@@ -748,9 +683,15 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
         return;
       }
-      if (!record) return fail(respond, "NOT_FOUND");
-      if (params.expectedRevision !== record.revision) return fail(respond, "REVISION_CONFLICT");
-      if (record.phase === "cancelled") return fail(respond, "INVALID_STATE");
+      if (!record) {
+        return fail(respond, "NOT_FOUND");
+      }
+      if (params.expectedRevision !== record.revision) {
+        return fail(respond, "REVISION_CONFLICT");
+      }
+      if (record.phase === "cancelled") {
+        return fail(respond, "INVALID_STATE");
+      }
 
       const now = Date.now();
       let candidate: RefreshCandidate;
@@ -811,10 +752,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.cancel",
     async ({ client, params, respond }) => {
-      if (!Value.Check(outcomeCancelParamsSchema, params)) return fail(respond, "INVALID_REQUEST");
+      if (!Value.Check(outcomeCancelParamsSchema, params)) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const owner = authenticatedProfileId(client);
       const id = normalizedUuid(params.id);
-      if (!owner || !id) return fail(respond, "INVALID_REQUEST");
+      if (!owner || !id) {
+        return fail(respond, "INVALID_REQUEST");
+      }
       const now = Date.now();
       try {
         const decision = await repository.transactOwned(owner, id, (current) => {

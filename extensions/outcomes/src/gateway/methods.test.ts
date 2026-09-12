@@ -21,9 +21,9 @@ const outcomeIds = [
 function createHarness(
   options: {
     registerDelayMs?: number;
-    registerError?: unknown;
+    registerError?: Error;
     workboardCards?: unknown[];
-    workboardError?: unknown;
+    workboardError?: Error;
   } = {},
 ) {
   const records = new Map<string, OutcomeRecord>();
@@ -31,11 +31,17 @@ function createHarness(
   const handlers = new Map<string, RegisteredHandler>();
   const store = {
     registerIfAbsent: async (id: string, record: OutcomeRecord) => {
-      if (options.registerError !== undefined) throw options.registerError;
-      if (options.registerDelayMs !== undefined) {
-        await new Promise((resolve) => setTimeout(resolve, options.registerDelayMs));
+      if (options.registerError !== undefined) {
+        throw options.registerError;
       }
-      if (records.has(id)) return false;
+      if (options.registerDelayMs !== undefined) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, options.registerDelayMs);
+        });
+      }
+      if (records.has(id)) {
+        return false;
+      }
       records.set(id, record);
       writes += 1;
       return true;
@@ -47,7 +53,9 @@ function createHarness(
       decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined,
     ) => {
       const next = decide(records.get(id));
-      if (!next) return false;
+      if (!next) {
+        return false;
+      }
       records.set(id, next);
       writes += 1;
       return true;
@@ -55,7 +63,9 @@ function createHarness(
     deleteIf: async () => false,
   };
   const gatewayRequest = vi.fn(async () => {
-    if (options.workboardError !== undefined) throw options.workboardError;
+    if (options.workboardError !== undefined) {
+      throw options.workboardError;
+    }
     return {
       cards: options.workboardCards ?? [
         {
@@ -80,7 +90,9 @@ function createHarness(
   async function call(method: string, params: Record<string, unknown>, client = owner) {
     const respond = vi.fn();
     const handler = handlers.get(method);
-    if (!handler) throw new Error(`missing handler: ${method}`);
+    if (!handler) {
+      throw new Error(`missing handler: ${method}`);
+    }
     await handler({ client, params, respond });
     return respond.mock.calls[0]!;
   }
@@ -565,7 +577,7 @@ describe("P-02 Outcome handlers", () => {
 
   it("keeps Outcome content but never leaks cached source material after an owner-read failure", async () => {
     const harness = createHarness({
-      workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" },
+      workboardError: Object.assign(new Error("/private/path"), { code: "GATEWAY_TIMEOUT" }),
     });
     const id = outcomeIds[0]!;
     await harness.call("outcomes.create", createParams(id));
@@ -613,7 +625,7 @@ describe("P-02 Outcome handlers", () => {
 
   it("records a failed refresh as unavailable while retaining its display cache", async () => {
     const harness = createHarness({
-      workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" },
+      workboardError: Object.assign(new Error("/private/path"), { code: "GATEWAY_TIMEOUT" }),
     });
     const id = outcomeIds[0]!;
     await harness.call("outcomes.create", createParams(id));
@@ -836,7 +848,7 @@ describe("P-02 Outcome handlers", () => {
     ).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_UNAVAILABLE" }]);
 
     const timeout = createHarness({
-      workboardError: { code: "GATEWAY_TIMEOUT", message: "/private/path" },
+      workboardError: Object.assign(new Error("/private/path"), { code: "GATEWAY_TIMEOUT" }),
     });
     await timeout.call("outcomes.create", createParams(id));
     expect(
@@ -922,7 +934,9 @@ describe("P-02 Outcome handlers", () => {
 
   it("paginates the authenticated stable list without a write or repeated row", async () => {
     const harness = createHarness();
-    for (const id of outcomeIds) await harness.call("outcomes.create", createParams(id, id));
+    for (const id of outcomeIds) {
+      await harness.call("outcomes.create", createParams(id, id));
+    }
     const writes = harness.writes();
     const first = await harness.call("outcomes.list", { limit: 2 });
     const firstPayload = first?.[1] as { outcomes: Array<{ id: string }>; nextCursor?: string };
@@ -943,7 +957,9 @@ describe("P-02 Outcome handlers", () => {
 
   it("rejects a cursor bound to a different profile without a repository write", async () => {
     const harness = createHarness();
-    for (const id of outcomeIds) await harness.call("outcomes.create", createParams(id, id));
+    for (const id of outcomeIds) {
+      await harness.call("outcomes.create", createParams(id, id));
+    }
     const first = await harness.call("outcomes.list", { limit: 1 });
     const payload = first?.[1] as { nextCursor: string };
     const writes = harness.writes();

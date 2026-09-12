@@ -22,6 +22,8 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/src/gateway/cursor.ts",
   "extensions/outcomes/src/gateway/errors.ts",
   "extensions/outcomes/src/gateway/health.ts",
+  "extensions/outcomes/src/gateway/input-normalizers.ts",
+  "extensions/outcomes/src/gateway/method-helpers.ts",
   "src/gateway/outcomes-methods.dispatch.test.ts",
   "extensions/outcomes/src/gateway/workboard.integration.test.ts",
   "extensions/outcomes/src/gateway/methods.test.ts",
