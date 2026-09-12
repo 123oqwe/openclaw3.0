@@ -368,9 +368,8 @@ suite.define(() => {
         const refresh = detail.locator('[data-outcome-action="refresh"]');
         await refresh.focus();
         await page.keyboard.press("Enter");
-        await expect
-          .poll(() => detail.locator('[data-outcome-action="refresh"]').isEnabled())
-          .toBe(true);
+        await expect(refresh).toHaveText("Refreshing");
+        await expect(refresh).toHaveText("Refresh");
         const evidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
         await evidence.waitFor({ state: "visible" });
         await expect
@@ -390,7 +389,12 @@ suite.define(() => {
           });
         }
 
+        const freshnessClockBeforeExpiry = await page.evaluate(() => performance.now());
         await page.clock.fastForward(twentyFourHoursMs + 1);
+        const freshnessClockAfterExpiry = await page.evaluate(() => performance.now());
+        expect(freshnessClockAfterExpiry - freshnessClockBeforeExpiry).toBeGreaterThanOrEqual(
+          twentyFourHoursMs,
+        );
         await detail.locator('[data-outcome-readiness="stale"]').waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,

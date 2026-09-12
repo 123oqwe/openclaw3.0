@@ -568,19 +568,16 @@ class OutcomesPage extends OpenClawLightDomElement {
     }
     this.detailFreshnessTimer = globalThis.setTimeout(
       () => {
-        // The delay was calculated from the monotonic request-start deadline.
-        // Once that timer fires, keep the expiration even when a browser test
-        // virtualizes timers without advancing performance.now().
-        this.detailExpired = true;
+        if (!isOutcomeDetailFresh(this.detailFreshnessDeadline, performance.now())) {
+          this.detailExpired = true;
+        }
       },
       Math.max(0, deadline - performance.now()),
     );
   }
 
   private isDetailExpired(): boolean {
-    return (
-      this.detailExpired || !isOutcomeDetailFresh(this.detailFreshnessDeadline, performance.now())
-    );
+    return !isOutcomeDetailFresh(this.detailFreshnessDeadline, performance.now());
   }
 
   private revalidateAfterPageResume() {
