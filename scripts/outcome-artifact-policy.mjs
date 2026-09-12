@@ -62,6 +62,7 @@ const ALLOWED_PATHS = new Set([
   "test/scripts/ci-workflow-guards.test.ts",
   "test/scripts/outcome-artifact-policy.test.ts",
   "ui/src/e2e/browser-bootstrap.e2e.test.ts",
+  "ui/src/i18n/locales/en.ts",
   "ui/src/pages/outcomes/client.ts",
   "ui/src/pages/outcomes/outcomes-page.test.ts",
   "ui/src/pages/outcomes/outcomes-page.ts",
