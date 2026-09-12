@@ -1,5 +1,9 @@
 import { consume } from "@lit/context";
-import type { OutcomeDetail, OutcomeSummary } from "@openclaw/outcomes-contract";
+import type {
+  OutcomeCreateParams,
+  OutcomeDetail,
+  OutcomeSummary,
+} from "@openclaw/outcomes-contract";
 import { html } from "lit";
 import { state } from "lit/decorators.js";
 import { titleForRoute, subtitleForRoute } from "../../app-navigation.ts";
@@ -55,11 +59,13 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private createError: string | null = null;
   @state() private createTitle = "";
   @state() private createObjective = "";
-  @state() private createCriterion = "";
+  @state() private createCriteria: readonly string[] = [""];
 
   private requestGeneration = 0;
   private detailRequestSequence = 0;
   private mutationSequence = 0;
+  private createRequestSequence = 0;
+  private createRequest: OutcomeCreateParams | null = null;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
 
   private readonly gateway = new GatewayPageController(this, {
@@ -148,7 +154,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.createError = null;
     this.createTitle = "";
     this.createObjective = "";
-    this.createCriterion = "";
+    this.createCriteria = [""];
+    this.createRequest = null;
+    this.createRequestSequence += 1;
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
@@ -307,14 +315,51 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.createError = null;
   }
 
-  private updateCreateField(field: "title" | "objective" | "criterion", value: string) {
-    if (field === "title") {
-      this.createTitle = value;
-    } else if (field === "objective") {
-      this.createObjective = value;
-    } else {
-      this.createCriterion = value;
+  private invalidateCreateRequest() {
+    this.createRequest = null;
+  }
+
+  private updateCreateField(field: "title" | "objective", value: string) {
+    if (this.creating) {
+      return;
     }
+    if (field === "title") {
+      if (this.createTitle !== value) {
+        this.invalidateCreateRequest();
+      }
+      this.createTitle = value;
+    } else {
+      if (this.createObjective !== value) {
+        this.invalidateCreateRequest();
+      }
+      this.createObjective = value;
+    }
+  }
+
+  private updateCreateCriterion(index: number, value: string) {
+    if (this.creating || this.createCriteria[index] === value) {
+      return;
+    }
+    this.invalidateCreateRequest();
+    this.createCriteria = this.createCriteria.map((criterion, criterionIndex) =>
+      criterionIndex === index ? value : criterion,
+    );
+  }
+
+  private addCreateCriterion() {
+    if (this.creating || this.createCriteria.length >= 5) {
+      return;
+    }
+    this.invalidateCreateRequest();
+    this.createCriteria = [...this.createCriteria, ""];
+  }
+
+  private removeCreateCriterion(index: number) {
+    if (this.creating || this.createCriteria.length <= 1) {
+      return;
+    }
+    this.invalidateCreateRequest();
+    this.createCriteria = this.createCriteria.filter((_, criterionIndex) => criterionIndex !== index);
   }
 
   private async submitCreateOutcome(event: SubmitEvent) {
@@ -324,12 +369,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     const scope = this.gateway.capture();
     const title = this.createTitle.trim();
     const objective = this.createObjective.trim();
-    const criterion = this.createCriterion.trim();
+    const criteria = this.createCriteria.map((criterion) => criterion.trim());
     if (
       this.creating ||
       !title ||
       !objective ||
-      !criterion ||
+      criteria.length < 1 ||
+      criteria.length > 5 ||
+      criteria.some((criterion) => !criterion) ||
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
@@ -337,29 +384,34 @@ class OutcomesPage extends OpenClawLightDomElement {
     ) {
       return;
     }
-    const sequence = ++this.mutationSequence;
-    this.createError = null;
-    this.creating = true;
-    try {
-      const created = await createOutcome(client, {
-        criteria: [{ id: crypto.randomUUID(), required: true, text: criterion }],
+    const request =
+      this.createRequest ??
+      ({
+        criteria: criteria.map((text) => ({ id: crypto.randomUUID(), required: true, text })),
         id: crypto.randomUUID(),
         objective,
         title,
-      });
-      if (sequence === this.mutationSequence && this.gateway.isCurrent(scope)) {
+      } satisfies OutcomeCreateParams);
+    this.createRequest = request;
+    const sequence = ++this.createRequestSequence;
+    this.createError = null;
+    this.creating = true;
+    try {
+      const created = await createOutcome(client, request);
+      if (sequence === this.createRequestSequence && this.gateway.isCurrent(scope)) {
         this.replaceOutcomeSummary(created);
         this.createDialogOpen = false;
         this.createTitle = "";
         this.createObjective = "";
-        this.createCriterion = "";
+        this.createCriteria = [""];
+        this.createRequest = null;
       }
     } catch (error) {
-      if (sequence === this.mutationSequence && this.gateway.isCurrent(scope)) {
+      if (sequence === this.createRequestSequence && this.gateway.isCurrent(scope)) {
         this.createError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
-      if (sequence === this.mutationSequence && this.gateway.isCurrent(scope)) {
+      if (sequence === this.createRequestSequence && this.gateway.isCurrent(scope)) {
         this.creating = false;
       }
     }
@@ -612,12 +664,15 @@ class OutcomesPage extends OpenClawLightDomElement {
         selectedOutcomeId: this.selectedOutcomeId,
       })}
       ${renderCreateOutcomeDialog({
-        criterion: this.createCriterion,
+        criteria: this.createCriteria,
         creating: this.creating,
         error: this.createError,
         objective: this.createObjective,
+        onAddCriterion: () => this.addCreateCriterion(),
         onDismiss: (event) => this.dismissCreateDialog(event),
         onInput: (field, value) => this.updateCreateField(field, value),
+        onRemoveCriterion: (index) => this.removeCreateCriterion(index),
+        onCriterionInput: (index, value) => this.updateCreateCriterion(index, value),
         onSubmit: (event) => void this.submitCreateOutcome(event),
         open: this.createDialogOpen,
         title: this.createTitle,

@@ -29,12 +29,15 @@ export type OutcomesListViewData = {
 };
 
 export type CreateOutcomeDialogViewData = {
-  criterion: string;
+  criteria: readonly string[];
   creating: boolean;
   error: string | null;
   objective: string;
+  onAddCriterion: () => void;
+  onCriterionInput: (index: number, value: string) => void;
   onDismiss: (event: Event) => void;
-  onInput: (field: "title" | "objective" | "criterion", value: string) => void;
+  onInput: (field: "title" | "objective", value: string) => void;
+  onRemoveCriterion: (index: number) => void;
   onSubmit: (event: SubmitEvent) => void;
   open: boolean;
   title: string;
@@ -228,6 +231,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
     @modal-cancel=${data.onDismiss}
   >
     <form
+      class="outcome-create-dialog"
       data-outcome-create-form
       aria-busy=${data.creating ? "true" : "false"}
       @submit=${data.onSubmit}
@@ -239,6 +243,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
         <input
           name="title"
           required
+          ?disabled=${data.creating}
           .value=${data.title}
           @input=${(event: InputEvent) =>
             data.onInput("title", (event.target as HTMLInputElement).value)}
@@ -249,21 +254,52 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
         <textarea
           name="objective"
           required
+          ?disabled=${data.creating}
           .value=${data.objective}
           @input=${(event: InputEvent) =>
             data.onInput("objective", (event.target as HTMLTextAreaElement).value)}
         ></textarea>
       </label>
-      <label>
-        ${t("outcomesPage.criterion")}
-        <input
-          name="criterion"
-          required
-          .value=${data.criterion}
-          @input=${(event: InputEvent) =>
-            data.onInput("criterion", (event.target as HTMLInputElement).value)}
-        />
-      </label>
+      <fieldset class="outcome-create-dialog__criteria">
+        <legend>${t("outcomesPage.criteria")}</legend>
+        ${data.criteria.map(
+          (criterion, index) => html`
+            <div class="outcome-create-dialog__criterion">
+              <label>
+                ${t("outcomesPage.criterionNumber", { number: index + 1 })}
+                <input
+                  name="criterion"
+                  required
+                  ?disabled=${data.creating}
+                  .value=${criterion}
+                  @input=${(event: InputEvent) =>
+                    data.onCriterionInput(index, (event.target as HTMLInputElement).value)}
+                />
+              </label>
+              ${data.criteria.length > 1
+                ? html`<button
+                    data-outcome-remove-criterion=${index}
+                    type="button"
+                    ?disabled=${data.creating}
+                    @click=${() => data.onRemoveCriterion(index)}
+                  >
+                    ${t("outcomesPage.removeCriterion")}
+                  </button>`
+                : nothing}
+            </div>
+          `,
+        )}
+        ${data.criteria.length < 5
+          ? html`<button
+              data-outcome-add-criterion
+              type="button"
+              ?disabled=${data.creating}
+              @click=${data.onAddCriterion}
+            >
+              ${t("outcomesPage.addCriterion")}
+            </button>`
+          : nothing}
+      </fieldset>
       ${data.error
         ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.error}</p>`
         : nothing}

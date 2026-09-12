@@ -121,3 +121,73 @@
   color: var(--muted);
   font-size: 0.875rem;
 }
+
+.outcome-create-dialog {
+  padding: var(--space-4);
+}
+
+.outcome-create-dialog h2,
+.outcome-create-dialog p {
+  margin: 0;
+}
+
+.outcome-create-dialog > label,
+.outcome-create-dialog__criterion > label {
+  display: grid;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  color: var(--text-strong);
+}
+
+.outcome-create-dialog input,
+.outcome-create-dialog textarea {
+  box-sizing: border-box;
+  width: 100%;
+}
+
+.outcome-create-dialog textarea {
+  min-height: 88px;
+  resize: vertical;
+}
+
+.outcome-create-dialog__criteria {
+  display: grid;
+  gap: var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.outcome-create-dialog__criteria legend {
+  padding: 0 var(--space-1);
+  color: var(--text-strong);
+}
+
+.outcome-create-dialog__criterion {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: end;
+}
+
+.outcome-create-dialog__criterion > label {
+  flex: 1 1 16rem;
+  margin-top: 0;
+}
+
+.outcome-create-dialog__criteria > button,
+.outcome-create-dialog__criterion > button,
+.outcome-create-dialog .outcome-cancel-dialog__actions button {
+  min-height: 44px;
+}
+
+@media (max-width: 560px) {
+  .outcome-create-dialog {
+    padding: var(--space-3);
+  }
+
+  .outcome-create-dialog__criterion > button {
+    width: 100%;
+  }
+}
