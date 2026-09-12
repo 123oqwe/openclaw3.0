@@ -297,7 +297,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
           (criterion, index) => html`
             <div class="outcome-create-dialog__criterion">
               <label>
-                ${t("outcomesPage.criterionNumber", { number: index + 1 })}
+                ${t("outcomesPage.criterionNumber", { number: String(index + 1) })}
                 <input
                   name="criterion"
                   required
@@ -587,7 +587,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 (criterion, index) => html`
                   <div class="outcome-create-dialog__criterion">
                     <label>
-                      ${t("outcomesPage.criterionNumber", { number: index + 1 })}
+                      ${t("outcomesPage.criterionNumber", { number: String(index + 1) })}
                       <input
                         name="criterion"
                         required
