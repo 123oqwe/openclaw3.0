@@ -4,6 +4,7 @@
 // its normal reconnect/hello lifecycle under the next identity.
 import { randomUUID } from "node:crypto";
 import { createServer, type IncomingMessage } from "node:http";
+import { asOptionalRecord } from "@openclaw/normalization-core/record-coerce";
 import { expect, it } from "vitest";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { HelloOk } from "../../../packages/gateway-protocol/src/index.js";
@@ -77,12 +78,6 @@ const realGatewayPluginEnv = {
 let instance: OpenClawTestInstance | undefined;
 let proxy: IdentityProxy | undefined;
 
-function asRecord(value: unknown): JsonRecord | undefined {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? (value as JsonRecord)
-    : undefined;
-}
-
 function stringValue(value: unknown): string | null {
   return typeof value === "string" ? value : null;
 }
@@ -94,21 +89,21 @@ function parseFrame(data: RawData): JsonRecord | undefined {
       : data instanceof ArrayBuffer
         ? Buffer.from(data).toString("utf8")
         : data.toString("utf8");
-    return asRecord(JSON.parse(text));
+    return asOptionalRecord(JSON.parse(text));
   } catch {
     return undefined;
   }
 }
 
 function helloSelfUserId(payload: JsonRecord, instanceId: string | null): string | null {
-  const snapshot = asRecord(payload.snapshot);
+  const snapshot = asOptionalRecord(payload.snapshot);
   const presence = Array.isArray(snapshot?.presence) ? snapshot.presence : [];
   for (const entry of presence) {
-    const candidate = asRecord(entry);
+    const candidate = asOptionalRecord(entry);
     if (candidate?.instanceId !== instanceId || candidate.reason === "disconnect") {
       continue;
     }
-    const user = asRecord(candidate.user);
+    const user = asOptionalRecord(candidate.user);
     const id = stringValue(user?.id);
     if (id) {
       return id;
@@ -155,8 +150,8 @@ function startProxyConnection(
     const frame = parseFrame(data);
     if (frame?.type === "req" && frame.method === "connect") {
       connectRequestId = stringValue(frame.id);
-      const params = asRecord(frame.params);
-      browserInstanceId = stringValue(asRecord(params?.client)?.instanceId);
+      const params = asOptionalRecord(frame.params);
+      browserInstanceId = stringValue(asOptionalRecord(params?.client)?.instanceId);
     }
     if (upstream.readyState === WebSocket.OPEN) {
       upstream.send(data, { binary: isBinary });
@@ -175,10 +170,10 @@ function startProxyConnection(
       frame?.type === "res" &&
       frame.id === connectRequestId &&
       frame.ok === true &&
-      asRecord(frame.payload)?.type === "hello-ok"
+      asOptionalRecord(frame.payload)?.type === "hello-ok"
     ) {
       evidence.push({
-        helloSelfUserId: helloSelfUserId(asRecord(frame.payload)!, browserInstanceId),
+        helloSelfUserId: helloSelfUserId(asOptionalRecord(frame.payload)!, browserInstanceId),
         principal,
         route,
       });
@@ -361,7 +356,7 @@ async function proxyGatewayCall(
         return;
       }
       if (frame.id === connectId) {
-        if (frame.ok !== true || !asRecord(frame.payload)) {
+        if (frame.ok !== true || !asOptionalRecord(frame.payload)) {
           finish({ error: new Error("trusted-proxy probe was not admitted") });
           return;
         }
@@ -372,10 +367,10 @@ async function proxyGatewayCall(
       if (frame.id === requestId && hello) {
         finish({
           value: {
-            ...(asRecord(frame.error) ? { error: asRecord(frame.error) } : {}),
+            ...(asOptionalRecord(frame.error) ? { error: asOptionalRecord(frame.error) } : {}),
             hello,
             ok: frame.ok === true,
-            ...(asRecord(frame.payload) ? { payload: asRecord(frame.payload) } : {}),
+            ...(asOptionalRecord(frame.payload) ? { payload: asOptionalRecord(frame.payload) } : {}),
             selfUserId: helloSelfUserId(hello as unknown as JsonRecord, probeInstanceId),
           },
         });
@@ -391,7 +386,7 @@ async function proxyGatewayCall(
 }
 
 function requireObject(payload: JsonRecord | undefined, field: string): JsonRecord {
-  const value = asRecord(payload?.[field]);
+  const value = asOptionalRecord(payload?.[field]);
   if (!value) {
     throw new Error(`Gateway response omitted ${field}`);
   }
@@ -410,7 +405,7 @@ function requireProofId(payload: JsonRecord | undefined): string {
   const card = requireObject(payload, "card");
   const metadata = requireObject(card, "metadata");
   const proofs = metadata.proof;
-  const proof = Array.isArray(proofs) ? asRecord(proofs.at(-1)) : undefined;
+  const proof = Array.isArray(proofs) ? asOptionalRecord(proofs.at(-1)) : undefined;
   if (!proof) {
     throw new Error("Gateway response omitted Workboard proof metadata");
   }
