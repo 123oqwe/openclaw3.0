@@ -118,4 +118,42 @@ describe("renderOutcomesList", () => {
     expect(summary?.textContent).toContain("Draft");
     expect(summary?.textContent).toContain("Incomplete");
   });
+
+  it("gives each Outcome selection control an accessible title", () => {
+    const container = document.createElement("div");
+
+    render(
+      renderOutcomesList({
+        canCreate: false,
+        disconnected: false,
+        error: null,
+        hasMore: false,
+        loaded: true,
+        loading: false,
+        loadingMore: false,
+        loadMoreError: null,
+        onLoadMore: () => undefined,
+        onRequestCreate: () => undefined,
+        onSelect: () => undefined,
+        outcomes: [
+          {
+            acceptanceValidity: "none",
+            id: "outcome-a",
+            phase: "draft",
+            readiness: "incomplete",
+            revision: 1,
+            title: "Ship the release",
+            updatedAt: 1,
+          },
+        ],
+        selectedOutcomeId: null,
+        unauthorized: false,
+      }),
+      container,
+    );
+
+    expect(
+      container.querySelector('[data-outcome-select="outcome-a"]')?.getAttribute("aria-label"),
+    ).toBe("View Ship the release");
+  });
 });

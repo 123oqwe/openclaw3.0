@@ -284,6 +284,7 @@ export function renderOutcomesList(data: OutcomesListViewData) {
               data-outcome-select=${outcome.id}
               type="button"
               aria-current=${data.selectedOutcomeId === outcome.id ? "true" : "false"}
+              aria-label=${t("outcomesPage.viewOutcomeNamed", { title: outcome.title })}
               @click=${() => data.onSelect(outcome.id)}
             >
               ${t("outcomesPage.viewOutcome")}

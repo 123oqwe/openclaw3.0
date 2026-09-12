@@ -48,6 +48,7 @@ const enOutcomes = {
     disconnected: "Outcome connection unavailable",
     unauthorized: "Outcome access unavailable",
     viewOutcome: "View",
+    viewOutcomeNamed: "View {title}",
     criteria: "Criteria",
     requiredCriterion: "Required",
     optionalCriterion: "Optional",
