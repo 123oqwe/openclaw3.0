@@ -67,13 +67,13 @@ class OutcomesPage extends OpenClawLightDomElement {
     const identityChanged = previous && !this.sameGatewayIdentity(previous, identity);
     const preserveSelection = Boolean(
       identityChanged &&
-        previous &&
-        previous.gateway === identity.gateway &&
-        previous.client === identity.client &&
-        previous.selfUserId === identity.selfUserId &&
-        previous.authorizationKey === identity.authorizationKey &&
-        previous.canRead &&
-        identity.canRead,
+      previous &&
+      previous.gateway === identity.gateway &&
+      previous.client === identity.client &&
+      previous.selfUserId === identity.selfUserId &&
+      previous.authorizationKey === identity.authorizationKey &&
+      previous.canRead &&
+      identity.canRead,
     );
     if (identityChanged) {
       this.resetGatewayState(preserveSelection);

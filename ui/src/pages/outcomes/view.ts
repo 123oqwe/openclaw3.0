@@ -213,7 +213,9 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
       ? html`<section class="outcome-detail__section" role="alert">
           <h3>${t("outcomesPage.sourceIssues")}</h3>
           <ul>
-            ${data.detail.sourceIssues.map((issue) => html`<li>${sourceIssueLabel(issue.reason)}</li>`)}
+            ${data.detail.sourceIssues.map(
+              (issue) => html`<li>${sourceIssueLabel(issue.reason)}</li>`,
+            )}
           </ul>
         </section>`
       : nothing}
