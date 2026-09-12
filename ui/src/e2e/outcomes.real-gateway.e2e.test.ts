@@ -2,12 +2,12 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
-import { loadOrCreateDeviceIdentity } from "../../../src/infra/device-identity.js";
-import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import {
   connectGatewayClient,
   disconnectGatewayClient,
 } from "../../../src/gateway/test-helpers.e2e.js";
+import { loadOrCreateDeviceIdentity } from "../../../src/infra/device-identity.js";
+import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
@@ -346,7 +346,19 @@ suite.define(() => {
         const confirmLink = linkForm.locator("[data-outcome-confirm-link]");
         await confirmLink.focus();
         await page.keyboard.press("Enter");
-        await detail.getByText(`Card ${cardId}`, { exact: true }).waitFor({ state: "visible" });
+        const linked = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
+        expect(linked).toMatchObject({
+          criteria: [
+            {
+              workRefs: [{ cardId }],
+            },
+          ],
+          work: [{ ref: { cardId } }],
+        });
+        await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
+        await detail
+          .locator(`[data-outcome-unlink-card="${cardId}"]`)
+          .waitFor({ state: "visible" });
 
         await callGateway("workboard.cards.proof", {
           id: cardId,

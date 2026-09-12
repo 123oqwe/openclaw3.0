@@ -307,7 +307,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         return fail(respond, "INVALID_STATE");
       }
       let cards: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>> | undefined;
-      let card: (Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>)[number] | undefined;
+      let card: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>[number] | undefined;
       try {
         cards = await readAuthorizedWorkboardCards(api);
         card = findAuthorizedWorkboardCard(cards, request.cardId);
@@ -337,7 +337,12 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        respondMutation(respond, decision, now, await mutationPresentation(api, decision, now, cards));
+        respondMutation(
+          respond,
+          decision,
+          now,
+          await mutationPresentation(api, decision, now, cards),
+        );
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
