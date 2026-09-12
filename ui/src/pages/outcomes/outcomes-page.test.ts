@@ -559,6 +559,72 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("activates a selected Outcome only after the Gateway confirms the mutation", async () => {
+    let resolveActivation: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: { ...outcomeDetail("outcome-a", "Outcome A"), nextActions: ["activate"] },
+        });
+      }
+      if (method === "outcomes.activate") {
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveActivation = resolve;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.activate"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.activate", {
+        expectedRevision: 1,
+        id: "outcome-a",
+      });
+    });
+    expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]')?.disabled).toBe(
+      true,
+    );
+    expect(page.textContent).not.toContain("Active");
+
+    resolveActivation?.({
+      outcome: {
+        ...outcomeDetail("outcome-a", "Outcome A"),
+        nextActions: ["refresh", "cancel"],
+        phase: "active",
+        planGeneration: 1,
+        planHash: "plan-hash",
+        revision: 2,
+      },
+    });
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("Active");
+    });
+  });
+
   it("requires confirmation before cancelling a selected Outcome", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {
