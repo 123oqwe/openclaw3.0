@@ -244,6 +244,23 @@ function requireCardId(payload: GatewayCallResult): string {
   return id;
 }
 
+function requireProofId(payload: GatewayCallResult): string {
+  const card = payload.card;
+  if (!isGatewayCallResult(card) || !isGatewayCallResult(card.metadata)) {
+    throw new Error("Workboard proof response omitted card metadata");
+  }
+  const proofs = card.metadata.proof;
+  const proof = Array.isArray(proofs) ? proofs.at(-1) : undefined;
+  if (!isGatewayCallResult(proof)) {
+    throw new Error("Workboard proof response omitted its persisted proof");
+  }
+  const proofId = proof.id;
+  if (typeof proofId !== "string") {
+    throw new Error("Workboard proof response omitted its proof ID");
+  }
+  return proofId;
+}
+
 function outcomeGatewayConfig(owner: OpenClawTestInstance, workboardEnabled: boolean) {
   return {
     gateway: {
@@ -335,11 +352,13 @@ suite.define(() => {
           .locator(`[data-outcome-unlink-card="${cardId}"]`)
           .waitFor({ state: "visible" });
 
-        await callGateway("workboard.cards.proof", {
-          id: cardId,
-          label: "Outcome E2E verification",
-          status: "passed",
-        });
+        const proofId = requireProofId(
+          await callGateway("workboard.cards.proof", {
+            id: cardId,
+            label: "Outcome E2E verification",
+            status: "passed",
+          }),
+        );
         const activate = detail.locator('[data-outcome-action="activate"]');
         await activate.focus();
         await page.keyboard.press("Enter");
@@ -352,9 +371,10 @@ suite.define(() => {
         await expect
           .poll(() => detail.locator('[data-outcome-action="refresh"]').isEnabled())
           .toBe(true);
-        await detail
-          .getByText("Proof: Outcome E2E verification", { exact: true })
-          .waitFor({ state: "visible" });
+        const evidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
+        await evidence.waitFor({ state: "visible" });
+        await expect(evidence).toContainText("Proof: Outcome E2E verification");
+        await expect(evidence).toContainText("Passed");
         if (captureUiProofEnabled) {
           await writeFile(
             path.join(suite.artifactDir, "outcomes-desktop-accessibility.yml"),
@@ -439,14 +459,16 @@ suite.define(() => {
         await restoredDetail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({
           state: "visible",
         });
-        await restoredDetail
-          .getByText("Proof: Outcome E2E verification", { exact: true })
-          .waitFor({ state: "visible" });
+        const restoredEvidence = restoredDetail.locator(`[data-outcome-evidence="${proofId}"]`);
+        await restoredEvidence.waitFor({ state: "visible" });
+        await expect(restoredEvidence).toContainText("Proof: Outcome E2E verification");
+        await expect(restoredEvidence).toContainText("Passed");
         const cancel = restoredDetail.locator('[data-outcome-action="cancel"]');
         await cancel.focus();
         await page.keyboard.press("Enter");
         const cancelDialog = page.locator(".outcome-cancel-dialog");
         await cancelDialog.waitFor({ state: "visible" });
+        await restoredDetail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
         const confirmCancel = cancelDialog.locator("[data-outcome-confirm-cancel]");
         await confirmCancel.focus();
         await page.keyboard.press("Enter");
