@@ -215,6 +215,38 @@ describe("Outcome create schema and canonical hash", () => {
     );
   });
 
+  it("preserves Unicode boundary acceptance without allocating for short BMP text", () => {
+    const request = {
+      id: "o-unicode-boundary",
+      title: "x".repeat(160),
+      objective: "Objective",
+      criteria: [{ id: "criterion", text: "Complete", required: true, workRefs: [] }],
+    };
+    expect(createRequestSchema.safeParse(request).success).toBe(true);
+    expect(createRequestSchema.safeParse({ ...request, title: "x".repeat(161) }).success).toBe(
+      false,
+    );
+    expect(createRequestSchema.safeParse({ ...request, title: "🙂".repeat(160) }).success).toBe(
+      true,
+    );
+    expect(createRequestSchema.safeParse({ ...request, title: "🙂".repeat(161) }).success).toBe(
+      false,
+    );
+    expect(
+      createRequestSchema.safeParse({ ...request, title: `${"x".repeat(159)}🙂` }).success,
+    ).toBe(true);
+    expect(
+      createRequestSchema.safeParse({ ...request, title: `${"x".repeat(159)}🙂x` }).success,
+    ).toBe(false);
+    expect(createRequestSchema.safeParse({ ...request, title: "\ud800".repeat(160) }).success).toBe(
+      true,
+    );
+    expect(createRequestSchema.safeParse({ ...request, title: "\ud800".repeat(161) }).success).toBe(
+      false,
+    );
+    expect(createRequestSchema.safeParse({ ...request, title: "" }).success).toBe(false);
+  });
+
   it("bounds canonical historical plan references by card identity", () => {
     const ref = (index: number) => ({
       owner: "workboard" as const,

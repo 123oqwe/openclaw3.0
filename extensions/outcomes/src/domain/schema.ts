@@ -9,12 +9,19 @@ import {
 } from "./constants.js";
 import type { Criterion, PersistedOutcomeRecord, WorkProjection } from "./types.js";
 
+function hasAtMostCodePoints(value: string, max: number): boolean {
+  // UTF-16 length cannot be smaller than the number of code points, so this
+  // preserves the existing result without allocating an array for ordinary
+  // short BMP strings. Astral and boundary cases retain the exact fallback.
+  return value.length <= max || Array.from(value).length <= max;
+}
+
 function codePointText(max: number) {
   return z
     .string()
     .min(1)
     .max(max * 2)
-    .refine((value) => Array.from(value).length <= max, {
+    .refine((value) => hasAtMostCodePoints(value, max), {
       message: `must contain at most ${max} Unicode code points`,
     });
 }
@@ -23,7 +30,7 @@ function codePointString(max: number) {
   return z
     .string()
     .max(max * 2)
-    .refine((value) => Array.from(value).length <= max, {
+    .refine((value) => hasAtMostCodePoints(value, max), {
       message: `must contain at most ${max} Unicode code points`,
     });
 }
