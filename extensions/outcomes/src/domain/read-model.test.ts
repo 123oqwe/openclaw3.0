@@ -286,31 +286,14 @@ describe("Outcome P-01 read model", () => {
   });
 
   it("keeps refresh available for a fresh linked Outcome", () => {
-    const input = record();
-    input.phase = "active";
-    const criterion = first(input.criteria);
-    const ref = {
-      owner: "workboard" as const,
-      cardId: "current-card",
-      cardCreatedAt: 4,
-      boardIdAtLink: "board",
-    };
-    criterion.workRefs = [ref];
-    input.projections = [
-      {
-        ref,
-        availability: "available",
-        currentBoardId: "board",
-        status: "done",
-        observedAt: 5,
-        proofs: [{ id: "proof-current", status: "passed", createdAt: 5 }],
-        artifacts: [],
-      },
-    ];
+    const input = withCurrentVerifiedEvidence(record());
+    input.decisions = [];
 
     const detail = toOutcomeDetail(valid(input), 10);
 
-    expect(detail.nextActions).toEqual(["refresh", "unlink-work", "cancel"]);
+    expect(detail.attention).toEqual([{ code: "verification-required", criterionId: "c-1" }]);
+    expect(detail.nextActions).toEqual(expect.arrayContaining(["refresh", "unlink-work", "cancel"]));
+    expect(detail.nextActions).not.toContain("accept");
   });
 
   it.each([
