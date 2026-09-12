@@ -601,6 +601,39 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("lets a failed detail request return to its selected Outcome", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.reject(new Error("Outcome source unavailable"));
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("Couldn't load outcome details");
+    });
+    page.querySelector<HTMLButtonElement>(".outcome-detail__back")?.click();
+
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      );
+    });
+  });
+
   it("marks an expired observation stale and withholds tracking until it is refreshed", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {

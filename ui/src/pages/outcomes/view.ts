@@ -428,13 +428,18 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
   if (!data.selectedOutcomeId) {
     return nothing;
   }
+  const back = html`<button class="outcome-detail__back" type="button" @click=${data.onBack}>
+    ${t("common.back")}
+  </button>`;
   if (data.loading) {
     return html`<section class="outcomes-state" role="status" aria-live="polite">
+      ${back}
       ${data.revalidating ? t("outcomesPage.revalidatingDetail") : t("outcomesPage.loadingDetail")}
     </section>`;
   }
   if (data.error) {
     return html`<section class="outcomes-state outcomes-state--error" role="alert">
+      ${back}
       ${data.error}
     </section>`;
   }
@@ -448,9 +453,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
   const readiness =
     data.detailExpired && data.detail.readiness !== "unavailable" ? "stale" : data.detail.readiness;
   return html`<article class="outcome-detail" data-outcome-detail-id=${data.detail.id}>
-    <button class="outcome-detail__back" type="button" @click=${data.onBack}>
-      ${t("common.back")}
-    </button>
+    ${back}
     <h2 class="outcome-detail__title">${data.detail.title}</h2>
     <p class="outcome-detail__objective">${data.detail.objective}</p>
     <p class="outcome-detail__phase" data-outcome-phase=${data.detail.phase}>
