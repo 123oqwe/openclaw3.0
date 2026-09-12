@@ -41,8 +41,12 @@ type ProxiedGatewayResponse = {
 
 type TransportPair = {
   browser: WebSocket;
+  browserClosed: boolean;
   route: ProxyRoute;
+  settled: Promise<void>;
+  settle: () => void;
   upstream: WebSocket;
+  upstreamClosed: boolean;
 };
 
 type IdentityProxy = {
@@ -130,7 +134,18 @@ function startProxyConnection(
     },
     origin: request.headers.origin,
   });
-  const pair = { browser, route, upstream };
+  let settlePair!: () => void;
+  const pair: TransportPair = {
+    browser,
+    browserClosed: false,
+    route,
+    settled: new Promise<void>((resolve) => {
+      settlePair = resolve;
+    }),
+    settle: () => settlePair(),
+    upstream,
+    upstreamClosed: false,
+  };
   pairs.add(pair);
   const pendingBrowserFrames: Array<{ data: RawData; isBinary: boolean }> = [];
   let connectRequestId: string | null = null;
@@ -172,19 +187,54 @@ function startProxyConnection(
       browser.send(data, { binary: isBinary });
     }
   });
-  const closePair = () => {
+  const releasePairWhenBothClosed = () => {
+    if (!pair.browserClosed || !pair.upstreamClosed) {
+      return;
+    }
     pairs.delete(pair);
+    pair.settle();
+  };
+  const closeBrowser = () => {
     if (browser.readyState === WebSocket.OPEN || browser.readyState === WebSocket.CONNECTING) {
       browser.close();
     }
+  };
+  const closeUpstream = () => {
     if (upstream.readyState === WebSocket.OPEN || upstream.readyState === WebSocket.CONNECTING) {
       upstream.close();
     }
   };
-  upstream.on("close", closePair);
-  upstream.on("error", closePair);
-  browser.on("close", closePair);
-  browser.on("error", closePair);
+  upstream.on("close", () => {
+    pair.upstreamClosed = true;
+    closeBrowser();
+    releasePairWhenBothClosed();
+  });
+  upstream.on("error", closeBrowser);
+  browser.on("close", () => {
+    pair.browserClosed = true;
+    closeUpstream();
+    releasePairWhenBothClosed();
+  });
+  browser.on("error", closeUpstream);
+}
+
+async function waitForTransportPairsToClose(pairs: readonly TransportPair[]): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      Promise.all(pairs.map((pair) => pair.settled)),
+      new Promise<void>((_resolve, reject) => {
+        timeout = setTimeout(
+          () => reject(new Error("Outcome identity proxy did not close all transports")),
+          5_000,
+        );
+      }),
+    ]);
+  } finally {
+    if (timeout !== undefined) {
+      clearTimeout(timeout);
+    }
+  }
 }
 
 async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
@@ -224,11 +274,12 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
   return {
     browserUrl: `${baseUrl}/browser`,
     close: async () => {
-      for (const pair of pairs) {
+      const activePairs = [...pairs];
+      for (const pair of activePairs) {
         pair.browser.terminate();
         pair.upstream.terminate();
       }
-      pairs.clear();
+      await waitForTransportPairsToClose(activePairs);
       await new Promise<void>((resolve, reject) => {
         websocketServer.close(() => server.close((error) => (error ? reject(error) : resolve())));
       });
@@ -355,6 +406,35 @@ function requireString(payload: JsonRecord | undefined, field: string): string {
   return value;
 }
 
+function requireProofId(payload: JsonRecord | undefined): string {
+  const card = requireObject(payload, "card");
+  const metadata = requireObject(card, "metadata");
+  const proofs = metadata.proof;
+  const proof = Array.isArray(proofs) ? asRecord(proofs.at(-1)) : undefined;
+  if (!proof) {
+    throw new Error("Gateway response omitted Workboard proof metadata");
+  }
+  return requireString(proof, "id");
+}
+
+async function waitForNewBrowserHello(
+  identityProxy: IdentityProxy,
+  evidenceStart: number,
+  principal: ProxyPrincipal,
+  profileId: string,
+): Promise<void> {
+  await expect
+    .poll(() =>
+      identityProxy.connections.slice(evidenceStart).some(
+        (connection) =>
+          connection.route === "browser" &&
+          connection.principal === principal &&
+          connection.helloSelfUserId === profileId,
+      ),
+    )
+    .toBe(true);
+}
+
 async function connectPageToIdentityGateway(baseUrl: string) {
   if (!proxy) {
     throw new Error("Outcome identity proxy was not started");
@@ -461,11 +541,18 @@ identitySuite.define(() => {
     await identitySuite.withPage(
       { locale: "en-US", serviceWorkers: "block", viewport: { height: 900, width: 1280 } },
       async ({ page }) => {
+        const aliceInitialEvidenceStart = identityProxy.connections.length;
         await page.goto(await connectPageToIdentityGateway(`http://127.0.0.1:${owner.port}/`));
         const confirmation = page.locator("openclaw-gateway-url-confirmation");
         await confirmation.waitFor();
         await confirmation.getByRole("button", { name: "Confirm", exact: true }).click();
         await waitForControlUiGatewayReady(page);
+        await waitForNewBrowserHello(
+          identityProxy,
+          aliceInitialEvidenceStart,
+          aliceIdentity,
+          aliceProfileId,
+        );
         await page.goto(new URL("outcomes", `http://127.0.0.1:${owner.port}/`).toString());
         await waitForControlUiGatewayReady(page);
         await page.locator('[data-outcome-action="create"]').click();
@@ -499,8 +586,12 @@ identitySuite.define(() => {
           status: "passed",
         });
         expect(proof.ok).toBe(true);
+        const proofId = requireProofId(proof.payload);
         await detail.locator('[data-outcome-action="refresh"]').click();
-        await detail.getByText("Proof: Alice identity proof", { exact: true }).waitFor({ state: "visible" });
+        const aliceEvidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
+        await aliceEvidence.waitFor({ state: "visible" });
+        await expect(aliceEvidence).toContainText("Proof: Alice identity proof");
+        await expect(aliceEvidence).toContainText("Proof status: passed");
         if (captureUiProofEnabled) {
           await page.screenshot({
             fullPage: true,
@@ -508,18 +599,10 @@ identitySuite.define(() => {
           });
         }
 
+        const bobEvidenceStart = identityProxy.connections.length;
         identityProxy.setBrowserPrincipal(bobIdentity);
         identityProxy.disconnectBrowserConnections();
-        await expect
-          .poll(() =>
-            identityProxy.connections.some(
-              (connection) =>
-                connection.route === "browser" &&
-                connection.principal === bobIdentity &&
-                connection.helloSelfUserId === bobProfileId,
-            ),
-          )
-          .toBe(true);
+        await waitForNewBrowserHello(identityProxy, bobEvidenceStart, bobIdentity, bobProfileId);
         await waitForControlUiGatewayReady(page);
         await expect.poll(() => page.locator(".outcome-summary").count()).toBe(0);
         await expect.poll(() => detail.count()).toBe(0);
@@ -527,8 +610,14 @@ identitySuite.define(() => {
         await expect
           .poll(() => page.getByText("Must not leak after B reauth", { exact: true }).count())
           .toBe(0);
+        await expect
+          .poll(() => page.getByText("Alice card proof remains private", { exact: true }).count())
+          .toBe(0);
         await expect.poll(() => page.locator(`[data-outcome-work-card="${cardId}"]`).count()).toBe(0);
-        await expect.poll(() => page.getByText("Proof: Alice identity proof", { exact: true }).count()).toBe(0);
+        await expect.poll(() => page.locator(`[data-outcome-evidence="${proofId}"]`).count()).toBe(0);
+        await expect
+          .poll(async () => (await page.locator("body").textContent())?.includes("Alice identity proof"))
+          .toBe(false);
         if (captureUiProofEnabled) {
           await page.screenshot({
             fullPage: true,
@@ -543,18 +632,15 @@ identitySuite.define(() => {
         expect(bobGet.ok).toBe(false);
         expect(stringValue(bobGet.error?.code)).toBe("OUTCOME_NOT_FOUND");
 
+        const aliceReturnEvidenceStart = identityProxy.connections.length;
         identityProxy.setBrowserPrincipal(aliceIdentity);
         identityProxy.disconnectBrowserConnections();
-        await expect
-          .poll(() =>
-            identityProxy.connections.some(
-              (connection) =>
-                connection.route === "browser" &&
-                connection.principal === aliceIdentity &&
-                connection.helloSelfUserId === aliceProfileId,
-            ),
-          )
-          .toBe(true);
+        await waitForNewBrowserHello(
+          identityProxy,
+          aliceReturnEvidenceStart,
+          aliceIdentity,
+          aliceProfileId,
+        );
         await waitForControlUiGatewayReady(page);
         await page.locator(".outcome-summary", { hasText: "Alice private Outcome" }).waitFor({
           state: "visible",
@@ -562,7 +648,10 @@ identitySuite.define(() => {
         await page.locator(".outcome-summary", { hasText: "Alice private Outcome" }).locator("[data-outcome-select]").click();
         await page.locator(`[data-outcome-detail-id="${outcomeId}"]`).waitFor({ state: "visible" });
         await page.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
-        await page.getByText("Proof: Alice identity proof", { exact: true }).waitFor({ state: "visible" });
+        const restoredEvidence = page.locator(`[data-outcome-evidence="${proofId}"]`);
+        await restoredEvidence.waitFor({ state: "visible" });
+        await expect(restoredEvidence).toContainText("Proof: Alice identity proof");
+        await expect(restoredEvidence).toContainText("Proof status: passed");
       },
     );
   });

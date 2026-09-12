@@ -117,14 +117,18 @@ afterEach(() => {
 });
 
 describe("OutcomesPage", () => {
-  it("latches expiry when a scheduled freshness timer fires without a monotonic clock advance", () => {
+  it("renders a timer-expired observation stale and clears the latch on a fresh observation", async () => {
     vi.useFakeTimers();
     vi.spyOn(performance, "now").mockReturnValue(100);
+    const client = { request: vi.fn(async () => ({ outcomes: [] })) } as unknown as GatewayBrowserClient;
     const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
     const internalPage = page as unknown as {
-      isDetailExpired(): boolean;
       replaceOutcome(detail: OutcomeDetail, requestStartedAt: number): void;
+      selectedOutcomeId: string | null;
     };
+    internalPage.selectedOutcomeId = "outcome-a";
 
     internalPage.replaceOutcome(
       {
@@ -135,9 +139,24 @@ describe("OutcomesPage", () => {
       100,
     );
 
-    expect(internalPage.isDetailExpired()).toBe(false);
+    await page.updateComplete;
+    expect(page.querySelector('[data-outcome-readiness="incomplete"]')).not.toBeNull();
     vi.advanceTimersByTime(100);
-    expect(internalPage.isDetailExpired()).toBe(true);
+    await page.updateComplete;
+    expect(page.querySelector('[data-outcome-readiness="stale"]')).not.toBeNull();
+
+    internalPage.replaceOutcome(
+      {
+        ...outcomeDetail("outcome-a", "Outcome A"),
+        observedAt: 2_000,
+        recheckAfter: 2_100,
+      },
+      100,
+    );
+
+    await page.updateComplete;
+    expect(page.querySelector('[data-outcome-readiness="stale"]')).toBeNull();
+    expect(page.querySelector('[data-outcome-readiness="incomplete"]')).not.toBeNull();
   });
 
   it("does not treat a connected transport without an authenticated self user as Outcome access", async () => {
