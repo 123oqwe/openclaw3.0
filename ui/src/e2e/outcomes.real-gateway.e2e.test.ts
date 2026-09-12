@@ -290,6 +290,20 @@ suite.define(() => {
         await expect
           .poll(() => page.locator('[data-outcome-detail-id]').getAttribute("data-outcome-detail-id"))
           .toBe(outcomeId);
+        const restoredDetail = page.locator('[data-outcome-detail-id]');
+        const cancel = restoredDetail.locator('[data-outcome-action="cancel"]');
+        await cancel.focus();
+        await page.keyboard.press("Enter");
+        const cancelDialog = page.locator(".outcome-cancel-dialog");
+        await cancelDialog.waitFor({ state: "visible" });
+        const beforeConfirmation = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
+        expect(beforeConfirmation.phase).toBe("active");
+        const confirmCancel = cancelDialog.locator("[data-outcome-confirm-cancel]");
+        await confirmCancel.focus();
+        await page.keyboard.press("Enter");
+        await restoredDetail.locator('[data-outcome-phase="cancelled"]').waitFor({ state: "visible" });
+        const cancelled = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
+        expect(cancelled.phase).toBe("cancelled");
       },
     );
   });
