@@ -1,6 +1,5 @@
 import { spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import {
   createPluginStateKeyedStoreForTests,
   resetPluginStateStoreForTests,
@@ -13,11 +12,7 @@ import {
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
-import {
-  createRequestHash,
-  planHash,
-  workboardProjectionFingerprint,
-} from "../domain/schema.js";
+import { createRequestHash, planHash, workboardProjectionFingerprint } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
@@ -55,10 +50,6 @@ function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
   };
 }
 
-function serializedBytes(record: OutcomeRecord): number {
-  return Buffer.byteLength(stableStringify(record), "utf8");
-}
-
 function oversizedAvailableProjection(digest: string): OutcomeRecord["projections"][number] {
   const ref = {
     owner: "workboard" as const,
@@ -87,7 +78,6 @@ function oversizedAvailableProjection(digest: string): OutcomeRecord["projection
     }),
   };
 }
-
 
 afterEach(() => resetPluginStateStoreForTests());
 
@@ -545,5 +535,4 @@ describe("Outcome repository host adapter", () => {
       },
     );
   });
-
 });

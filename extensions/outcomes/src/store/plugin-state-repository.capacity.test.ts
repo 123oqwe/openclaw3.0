@@ -125,8 +125,8 @@ function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
 type OutcomePerformanceScenarioReport = {
   actualRecordBytes: number;
   eventLoop: { deltaMs: number };
-  list: { count: number; p95: number | null };
-  mutation: { count: number; p95: number | null };
+  list: { count: number; p95?: number };
+  mutation: { count: number; p95?: number };
   recordCount: number;
   requestedRecordBytes: number;
   samples: number;
@@ -146,7 +146,10 @@ type OutcomeIsolatedBenchmarkReport = {
   reports: readonly OutcomePerformanceScenarioReport[];
 };
 
-function assertFiniteNonNegativeBenchmarkNumber(value: unknown, label: string): asserts value is number {
+function assertFiniteNonNegativeBenchmarkNumber(
+  value: unknown,
+  label: string,
+): asserts value is number {
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new Error(`${label} must be a finite non-negative number`);
   }
@@ -212,12 +215,16 @@ function assertIsolatedOutcomeBenchmarkBaseline(report: OutcomeIsolatedBenchmark
       scenario.withinTargets.listP95 !== withinTargets.listP95 ||
       scenario.withinTargets.mutationP95 !== withinTargets.mutationP95
     ) {
-      throw new Error(`isolated Outcome benchmark scenario ${key} exceeds or misreports its target`);
+      throw new Error(
+        `isolated Outcome benchmark scenario ${key} exceeds or misreports its target`,
+      );
     }
   }
 }
 
-function assertOutcomeBenchmarkForConfiguredExecution(report: OutcomeIsolatedBenchmarkReport): void {
+function assertOutcomeBenchmarkForConfiguredExecution(
+  report: OutcomeIsolatedBenchmarkReport,
+): void {
   if (report.execution.mode === "isolated-control") {
     assertIsolatedOutcomeBenchmarkBaseline(report);
   }
@@ -475,17 +482,77 @@ describe("Outcome repository host adapter", () => {
   });
 
   it.each([
-    ["an incomplete report", (report: OutcomeIsolatedBenchmarkReport) => ({ ...report, complete: false }), "must be complete"],
-    ["a missing scenario", (report: OutcomeIsolatedBenchmarkReport) => ({ ...report, reports: report.reports.slice(1) }), "must contain every P-01 scenario"],
-    ["an invalid execution", (report: OutcomeIsolatedBenchmarkReport) => ({ ...report, execution: { ...report.execution, maxWorkers: "2" } }), "required serial control"],
-    ["a duplicate scenario", (report: OutcomeIsolatedBenchmarkReport) => withFirstOutcomeBenchmarkScenario(report, (scenario) => ({ ...scenario, actualRecordBytes: 96 * 1024, requestedRecordBytes: 96 * 1024 })), "contains duplicate scenario"],
-    ["an unexpected record size", (report: OutcomeIsolatedBenchmarkReport) => withFirstOutcomeBenchmarkScenario(report, (scenario) => ({ ...scenario, actualRecordBytes: scenario.actualRecordBytes - 1 })), "unexpected record size"],
-    ["an unexpected sample count", (report: OutcomeIsolatedBenchmarkReport) => withFirstOutcomeBenchmarkScenario(report, (scenario) => ({ ...scenario, samples: OUTCOME_PERFORMANCE_SAMPLES - 1 })), "unexpected sample count"],
-    ["an over-target p95", (report: OutcomeIsolatedBenchmarkReport) => withFirstOutcomeBenchmarkScenario(report, (scenario) => ({ ...scenario, list: { ...scenario.list, p95: OUTCOME_PERFORMANCE_TARGETS_MS.listP95 + 1 } })), "exceeds or misreports its target"],
-    ["a non-finite timing", (report: OutcomeIsolatedBenchmarkReport) => withFirstOutcomeBenchmarkScenario(report, (scenario) => ({ ...scenario, mutation: { ...scenario.mutation, p95: Number.NaN } })), "must be a finite non-negative number"],
+    [
+      "an incomplete report",
+      (report: OutcomeIsolatedBenchmarkReport) => ({ ...report, complete: false }),
+      "must be complete",
+    ],
+    [
+      "a missing scenario",
+      (report: OutcomeIsolatedBenchmarkReport) => ({ ...report, reports: report.reports.slice(1) }),
+      "must contain every P-01 scenario",
+    ],
+    [
+      "an invalid execution",
+      (report: OutcomeIsolatedBenchmarkReport) => ({
+        ...report,
+        execution: { ...report.execution, maxWorkers: "2" },
+      }),
+      "required serial control",
+    ],
+    [
+      "a duplicate scenario",
+      (report: OutcomeIsolatedBenchmarkReport) =>
+        withFirstOutcomeBenchmarkScenario(report, (scenario) => ({
+          ...scenario,
+          actualRecordBytes: 96 * 1024,
+          requestedRecordBytes: 96 * 1024,
+        })),
+      "contains duplicate scenario",
+    ],
+    [
+      "an unexpected record size",
+      (report: OutcomeIsolatedBenchmarkReport) =>
+        withFirstOutcomeBenchmarkScenario(report, (scenario) => ({
+          ...scenario,
+          actualRecordBytes: scenario.actualRecordBytes - 1,
+        })),
+      "unexpected record size",
+    ],
+    [
+      "an unexpected sample count",
+      (report: OutcomeIsolatedBenchmarkReport) =>
+        withFirstOutcomeBenchmarkScenario(report, (scenario) => ({
+          ...scenario,
+          samples: OUTCOME_PERFORMANCE_SAMPLES - 1,
+        })),
+      "unexpected sample count",
+    ],
+    [
+      "an over-target p95",
+      (report: OutcomeIsolatedBenchmarkReport) =>
+        withFirstOutcomeBenchmarkScenario(report, (scenario) => ({
+          ...scenario,
+          list: { ...scenario.list, p95: OUTCOME_PERFORMANCE_TARGETS_MS.listP95 + 1 },
+        })),
+      "exceeds or misreports its target",
+    ],
+    [
+      "a non-finite timing",
+      (report: OutcomeIsolatedBenchmarkReport) =>
+        withFirstOutcomeBenchmarkScenario(report, (scenario) => ({
+          ...scenario,
+          mutation: { ...scenario.mutation, p95: Number.NaN },
+        })),
+      "must be a finite non-negative number",
+    ],
   ])("fails closed for %s", (_label, mutate, error) => {
-    expect(() => assertIsolatedOutcomeBenchmarkBaseline(completeIsolatedOutcomeBenchmarkReport())).not.toThrow();
-    expect(() => assertIsolatedOutcomeBenchmarkBaseline(mutate(completeIsolatedOutcomeBenchmarkReport()))).toThrow(error);
+    expect(() =>
+      assertIsolatedOutcomeBenchmarkBaseline(completeIsolatedOutcomeBenchmarkReport()),
+    ).not.toThrow();
+    expect(() =>
+      assertIsolatedOutcomeBenchmarkBaseline(mutate(completeIsolatedOutcomeBenchmarkReport())),
+    ).toThrow(error);
   });
 
   it("measures bounded host-adapter list and mutation behavior across the P-01 matrix", async () => {
