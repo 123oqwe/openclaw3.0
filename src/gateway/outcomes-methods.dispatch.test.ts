@@ -1,18 +1,18 @@
 import { createTestPluginApi } from "openclaw/plugin-sdk/plugin-test-api";
 import { describe, expect, it, vi } from "vitest";
-import { GATEWAY_CLIENT_IDS, GATEWAY_CLIENT_MODES } from "../../packages/gateway-protocol/src/client-info.js";
+import { registerOutcomeGatewayMethods } from "../../extensions/outcomes/runtime-api.js";
+import {
+  GATEWAY_CLIENT_IDS,
+  GATEWAY_CLIENT_MODES,
+} from "../../packages/gateway-protocol/src/client-info.js";
 import { PROTOCOL_VERSION } from "../../packages/gateway-protocol/src/version.js";
+import { withPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
 import { createGatewayMethodRegistry } from "./methods/registry.js";
-import type {
-  GatewayRequestContext,
-  GatewayRequestOptions,
-} from "./server-methods/types.js";
+import type { GatewayRequestContext, GatewayRequestOptions } from "./server-methods/types.js";
 import {
   dispatchGatewayMethodInProcess,
   withOperatorToolGatewayAuthority,
 } from "./server-plugin-in-process-dispatch.js";
-import { withPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
-import { registerOutcomeGatewayMethods } from "../../extensions/outcomes/runtime-api.js";
 
 const outcomeId = "123e4567-e89b-42d3-a456-426614174000";
 
