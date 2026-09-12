@@ -1,6 +1,7 @@
 /* @vitest-environment jsdom */
 
 import { afterEach, describe, expect, it, vi } from "vitest";
+import type { OutcomeListResult } from "@openclaw/outcomes-contract";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 import type { ApplicationContext, ApplicationGatewaySnapshot } from "../../app/context.ts";
 import { gatewayHelloForMethods } from "../../test-helpers/gateway-methods.ts";
@@ -9,6 +10,12 @@ import "./outcomes-page.ts";
 type OutcomesPageTestElement = HTMLElement & {
   context: ApplicationContext;
   updateComplete: Promise<boolean>;
+};
+
+type MutableGateway = {
+  connectionRevision: number;
+  snapshot: ApplicationGatewaySnapshot;
+  subscribe: ApplicationContext["gateway"]["subscribe"];
 };
 
 function createGateway(client: GatewayBrowserClient): ApplicationContext["gateway"] {
@@ -29,6 +36,22 @@ function createGateway(client: GatewayBrowserClient): ApplicationContext["gatewa
     connection: { gatewayUrl: "", token: "", password: "" },
     subscribe: () => () => undefined,
   } as unknown as ApplicationContext["gateway"];
+}
+
+function createGatewayWithSnapshotListener(client: GatewayBrowserClient) {
+  const gateway = createGateway(client);
+  const mutableGateway = gateway as unknown as MutableGateway;
+  let receiveSnapshot: ((snapshot: ApplicationGatewaySnapshot) => void) | undefined;
+  mutableGateway.connectionRevision = 1;
+  mutableGateway.subscribe = (listener) => {
+    receiveSnapshot = listener;
+    return () => undefined;
+  };
+  const updateSnapshot = (patch: Partial<ApplicationGatewaySnapshot>) => {
+    mutableGateway.snapshot = { ...mutableGateway.snapshot, ...patch };
+    receiveSnapshot?.(mutableGateway.snapshot);
+  };
+  return { gateway, mutableGateway, updateSnapshot };
 }
 
 afterEach(() => {
@@ -172,5 +195,110 @@ describe("OutcomesPage", () => {
     resolveList?.({ outcomes: [] });
     await page.updateComplete;
     expect(page.textContent).not.toContain("No outcomes yet");
+  });
+
+  it("drops an old list response and reloads after a same-client connection revision change", async () => {
+    let resolveFirstList: ((result: OutcomeListResult) => void) | undefined;
+    let calls = 0;
+    const request = vi.fn(() => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<OutcomeListResult>((resolve) => {
+          resolveFirstList = resolve;
+        });
+      }
+      return Promise.resolve({ outcomes: [] });
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const { gateway, mutableGateway, updateSnapshot } = createGatewayWithSnapshotListener(client);
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+    mutableGateway.connectionRevision = 2;
+    updateSnapshot({});
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(2);
+    });
+    resolveFirstList?.({
+      outcomes: [
+        {
+          id: "outcome-before-reconnect",
+          title: "Must not leak",
+          phase: "draft",
+          revision: 1,
+          updatedAt: 1,
+          readiness: "incomplete",
+          acceptanceValidity: "none",
+        },
+      ],
+    });
+    await page.updateComplete;
+
+    expect(page.querySelector('[data-outcome-id="outcome-before-reconnect"]')).toBeNull();
+  });
+
+  it("drops an old list response and reloads after the authenticated identity changes", async () => {
+    let resolveFirstList: ((result: OutcomeListResult) => void) | undefined;
+    let calls = 0;
+    const request = vi.fn(() => {
+      calls += 1;
+      if (calls === 1) {
+        return new Promise<OutcomeListResult>((resolve) => {
+          resolveFirstList = resolve;
+        });
+      }
+      return Promise.resolve({ outcomes: [] });
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const { gateway, updateSnapshot } = createGatewayWithSnapshotListener(client);
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+    updateSnapshot({ selfUser: { id: "profile-b" } });
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(2);
+    });
+    resolveFirstList?.({
+      outcomes: [
+        {
+          id: "outcome-from-profile-a",
+          title: "Must not leak",
+          phase: "draft",
+          revision: 1,
+          updatedAt: 1,
+          readiness: "incomplete",
+          acceptanceValidity: "none",
+        },
+      ],
+    });
+    await page.updateComplete;
+
+    expect(page.querySelector('[data-outcome-id="outcome-from-profile-a"]')).toBeNull();
+  });
+
+  it("clears the list and does not reload after operator.read is revoked", async () => {
+    const request = vi.fn(() => Promise.resolve({ outcomes: [] }));
+    const client = { request } as unknown as GatewayBrowserClient;
+    const { gateway, updateSnapshot } = createGatewayWithSnapshotListener(client);
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+    updateSnapshot({ hello: gatewayHelloForMethods(["outcomes.list"], []) });
+    await page.updateComplete;
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(page.textContent).toContain("Outcome access is unavailable");
   });
 });
