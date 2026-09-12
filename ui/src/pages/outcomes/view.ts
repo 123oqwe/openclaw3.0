@@ -205,7 +205,8 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               ${criterion.workRefs.length > 0
                 ? html`<ul aria-label=${t("outcomesPage.linkedCards")}>
                     ${criterion.workRefs.map(
-                      (ref) => html`<li>${t("outcomesPage.linkedCard", { cardId: ref.cardId })}</li>`,
+                      (ref) =>
+                        html`<li>${t("outcomesPage.linkedCard", { cardId: ref.cardId })}</li>`,
                     )}
                   </ul>`
                 : nothing}
