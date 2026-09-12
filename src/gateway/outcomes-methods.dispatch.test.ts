@@ -168,7 +168,7 @@ function activeBenchmarkRecord(
     createdAt: 100,
     updatedAt: 100,
   };
-  for (let index = 1; index <= 100 && outcomeRecordBytes(record) < targetBytes; index += 1) {
+  for (let index = 1; index <= 100; index += 1) {
     const decision = {
       id: randomUUID(),
       criterionId: criteria[0]!.id,
@@ -189,7 +189,24 @@ function activeBenchmarkRecord(
       record.decisions.pop();
       break;
     }
-    decision.note = "x".repeat(Math.min(2_000, targetBytes - bytesBeforeNote));
+    if (targetBytes - bytesBeforeNote <= 2_000 * record.decisions.length) {
+      break;
+    }
+  }
+  let remainingNoteBytes = targetBytes - outcomeRecordBytes(record);
+  if (remainingNoteBytes < 0) {
+    throw new Error(`Outcome benchmark skeleton exceeds ${targetBytes} bytes`);
+  }
+  for (const decision of record.decisions) {
+    if (remainingNoteBytes === 0) {
+      break;
+    }
+    const noteLength = Math.min(2_000, remainingNoteBytes);
+    decision.note = "x".repeat(noteLength);
+    remainingNoteBytes -= noteLength;
+  }
+  if (remainingNoteBytes !== 0) {
+    throw new Error(`unable to fill ${targetBytes}-byte Outcome benchmark record`);
   }
   if (outcomeRecordBytes(record) < targetBytes * 0.9 || outcomeRecordBytes(record) > targetBytes) {
     throw new Error(`unable to construct ${targetBytes}-byte Outcome benchmark record`);
