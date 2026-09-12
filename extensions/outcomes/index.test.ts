@@ -176,4 +176,34 @@ describe("Outcome plugin shell", () => {
       workboard: { available: false },
     });
   });
+
+  it("rejects health parameters outside the public empty-object contract before probing", async () => {
+    const registerGatewayMethod = vi.fn();
+    const openKeyedStore = vi.fn();
+
+    plugin.register(
+      createTestPluginApi({
+        id: "outcomes",
+        name: "Outcomes",
+        runtime: {
+          state: { openKeyedStore },
+          gateway: { isAvailable: async () => true, request: vi.fn() },
+        } as never,
+        registerGatewayMethod,
+      }),
+    );
+
+    const healthRegistration = registerGatewayMethod.mock.calls.find(
+      ([method]) => method === "outcomes.health",
+    );
+    const [, handler] = healthRegistration ?? [];
+    const respond = vi.fn();
+    await handler({ params: { unexpected: true }, respond } as never);
+
+    expect(respond).toHaveBeenCalledWith(false, undefined, {
+      code: "OUTCOME_INVALID_REQUEST",
+      message: "Outcome request could not be completed",
+    });
+    expect(openKeyedStore).not.toHaveBeenCalled();
+  });
 });

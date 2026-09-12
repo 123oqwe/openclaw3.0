@@ -77,6 +77,14 @@ export type OutcomeProofStatus = (typeof OUTCOME_PROOF_STATUSES)[number];
 export type OutcomeRefreshStatus = (typeof OUTCOME_REFRESH_STATUSES)[number];
 export type OutcomeErrorCode = (typeof OUTCOME_ERROR_CODES)[keyof typeof OUTCOME_ERROR_CODES];
 export type OutcomeError = { code: OutcomeErrorCode; message: string };
+export type OutcomeHealthParams = Record<string, never>;
+export type OutcomeHealthResult = {
+  plugin: "outcomes";
+  schemaVersion: 1;
+  state: { available: boolean; atomicUpdate: boolean; atomicDelete: boolean };
+  gateway: { available: boolean; requestScoped: boolean };
+  workboard: { available: boolean };
+};
 export type OutcomeAcceptanceReason =
   | "contract-changed"
   | "evidence-changed"

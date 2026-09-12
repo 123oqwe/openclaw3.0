@@ -6,6 +6,8 @@ import {
   OUTCOME_MAX_LIST_LIMIT,
   OUTCOME_PHASES,
   OUTCOME_REFRESH_STATUSES,
+  type OutcomeHealthParams,
+  type OutcomeHealthResult,
   type OutcomeDetail,
 } from "./index.js";
 
@@ -40,6 +42,20 @@ describe("outcomes public contract", () => {
       OWNER_UNAVAILABLE: "OUTCOME_OWNER_UNAVAILABLE",
       REVISION_CONFLICT: "OUTCOME_REVISION_CONFLICT",
     });
+  });
+
+  it("defines the public health request and result contract", () => {
+    const params: OutcomeHealthParams = {};
+    const result: OutcomeHealthResult = {
+      plugin: "outcomes",
+      schemaVersion: 1,
+      state: { available: true, atomicUpdate: true, atomicDelete: true },
+      gateway: { available: true, requestScoped: true },
+      workboard: { available: true },
+    };
+
+    expect(params).toEqual({});
+    expect(result.plugin).toBe("outcomes");
   });
 
   it("keeps core detail views free of persistence identity and internal history", () => {

@@ -19,6 +19,8 @@ const criterion = Type.Object(
   { additionalProperties: false },
 );
 
+export const outcomeHealthParamsSchema = Type.Object({}, { additionalProperties: false });
+
 /** Public P-02 inputs deliberately omit server-owned state, refs, and timestamps. */
 export const outcomeCreateParamsSchema = Type.Object(
   {
