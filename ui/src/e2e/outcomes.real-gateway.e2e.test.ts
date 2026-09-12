@@ -1,4 +1,5 @@
 // Real Gateway proof for the Outcome Center's persisted public workflow.
+import path from "node:path";
 import { expect, it } from "vitest";
 import {
   createOpenClawTestInstance,
@@ -202,6 +203,52 @@ suite.define(() => {
         await expect
           .poll(() => page.locator('[data-outcome-detail-id]').getAttribute("data-outcome-detail-id"))
           .toBe(outcomeId);
+      },
+    );
+  });
+
+  it("keeps the keyboard create flow usable without horizontal overflow on a narrow screen", async () => {
+    await suite.withPage(
+      {
+        locale: "en-US",
+        serviceWorkers: "block",
+        viewport: { height: 852, width: 393 },
+      },
+      async ({ page }) => {
+        await page.goto(await outcomesUrl());
+        await waitForControlUiGatewayReady(page);
+
+        const create = page.locator('[data-outcome-action="create"]');
+        await create.focus();
+        await page.keyboard.press("Enter");
+        const form = page.locator("[data-outcome-create-form]");
+        await form.waitFor({ state: "visible" });
+        const title = form.locator('input[name="title"]');
+        await title.focus();
+        await page.keyboard.type("Mobile keyboard Outcome");
+        const objective = form.locator('textarea[name="objective"]');
+        await objective.focus();
+        await page.keyboard.type("Prove the narrow-screen keyboard flow");
+        const criterion = form.locator('input[name="criterion"]');
+        await criterion.focus();
+        await page.keyboard.type("A required criterion is recorded");
+        const confirm = form.locator("[data-outcome-confirm-create]");
+        await confirm.focus();
+        await page.keyboard.press("Enter");
+
+        await page
+          .locator(".outcome-summary", { hasText: "Mobile keyboard Outcome" })
+          .waitFor({ state: "visible" });
+        await expect
+          .poll(() => create.evaluate((element) => element === document.activeElement))
+          .toBe(true);
+        expect(
+          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
+        ).toBe(true);
+        await page.screenshot({
+          fullPage: true,
+          path: path.join(suite.artifactDir, "outcomes-mobile-keyboard-create.png"),
+        });
       },
     );
   });
