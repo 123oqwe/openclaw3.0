@@ -10,7 +10,10 @@ import type {
 import { html, nothing } from "lit";
 import "../../components/modal-dialog.ts";
 import { t } from "../../i18n/index.ts";
+import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
 import "../../styles/outcomes.css";
+
+registerOutcomesEnglish();
 
 export type OutcomesListViewData = {
   canCreate: boolean;
