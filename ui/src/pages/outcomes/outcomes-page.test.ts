@@ -170,12 +170,12 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => {
       expect(request).toHaveBeenCalledWith("outcomes.list", {});
     });
-    expect(page.textContent).toContain("Loading outcomes");
-    expect(page.textContent).not.toContain("No outcomes yet");
+    expect(page.textContent).toContain("Loading");
+    expect(page.textContent).not.toContain("No outcomes");
 
     resolveList?.({ outcomes: [] });
     await vi.waitFor(() => {
-      expect(page.textContent).toContain("No outcomes yet");
+      expect(page.textContent).toContain("No outcomes");
     });
   });
 
@@ -217,9 +217,9 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => {
       const alert = page.querySelector('[role="alert"]');
       expect(alert).not.toBeNull();
-      expect(alert?.textContent).toContain("Could not load outcomes");
+      expect(alert?.textContent).toContain("Couldn't load outcomes");
     });
-    expect(page.textContent).not.toContain("No outcomes yet");
+    expect(page.textContent).not.toContain("No outcomes");
   });
 
   it("clears an in-flight authenticated list and shows a disconnected state when the Gateway stops", async () => {
@@ -250,7 +250,7 @@ describe("OutcomesPage", () => {
     expect(page.textContent).toContain("Outcome connection unavailable");
     resolveList?.({ outcomes: [] });
     await page.updateComplete;
-    expect(page.textContent).not.toContain("No outcomes yet");
+    expect(page.textContent).not.toContain("No outcomes");
   });
 
   it("drops an old list response and reloads after a same-client connection revision change", async () => {
@@ -382,7 +382,7 @@ describe("OutcomesPage", () => {
 
     expect(request).toHaveBeenCalledTimes(1);
     expect(page.querySelector('[data-outcome-id="outcome-visible-before-revocation"]')).toBeNull();
-    expect(page.textContent).toContain("Outcome access is unavailable");
+    expect(page.textContent).toContain("Outcome access unavailable");
   });
 
   it("does not reveal an in-flight list after operator.read is revoked", async () => {
@@ -420,7 +420,7 @@ describe("OutcomesPage", () => {
     await page.updateComplete;
 
     expect(page.querySelector('[data-outcome-id="outcome-after-revocation"]')).toBeNull();
-    expect(page.textContent).toContain("Outcome access is unavailable");
+    expect(page.textContent).toContain("Outcome access unavailable");
   });
 
   it("loads the selected Outcome detail through the authenticated Gateway", async () => {
