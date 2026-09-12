@@ -10,7 +10,7 @@ type GatewayCall = {
 };
 type RegisteredHandler = (call: GatewayCall) => Promise<void>;
 
-export const owner = { authenticatedUserProfile: { profileId: "manager-a" } };
+const owner = { authenticatedUserProfile: { profileId: "manager-a" } };
 export const criterionId = "123e4567-e89b-42d3-a456-426614174001";
 export const secondaryCriterionId = "123e4567-e89b-42d3-a456-426614174002";
 export const outcomeIds = [
