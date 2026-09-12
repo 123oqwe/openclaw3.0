@@ -8,6 +8,7 @@ import {
 import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
+import { OUTCOME_DETAIL_MAX_FRESHNESS_MS } from "../pages/outcomes/freshness.ts";
 
 const suite = createControlUiE2eSuite({
   name: "Control UI Outcomes with a real Gateway",
@@ -188,6 +189,7 @@ suite.define(() => {
         viewport: { height: 900, width: 1280 },
       },
       async ({ page }) => {
+        await page.clock.install();
         await page.goto(await outcomesUrl());
         await waitForControlUiGatewayReady(page);
 
@@ -240,6 +242,13 @@ suite.define(() => {
             expect.objectContaining({ label: "Outcome E2E verification", proofStatus: "passed" }),
           ]),
         );
+
+        await page.clock.fastForward(OUTCOME_DETAIL_MAX_FRESHNESS_MS + 1);
+        await detail.locator('[data-outcome-readiness="stale"]').waitFor({ state: "visible" });
+        await page.screenshot({
+          fullPage: true,
+          path: path.join(suite.artifactDir, "outcomes-stale-observation.png"),
+        });
 
         await callGateway("workboard.cards.claim", { id: cardId, ownerId: "outcome-e2e" });
         await callGateway("workboard.cards.block", {
