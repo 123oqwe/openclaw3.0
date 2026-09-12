@@ -101,7 +101,14 @@ function createHarness(
     await handler({ client, params, respond });
     return respond.mock.calls[0]!;
   }
-  return { call, entryReads: () => entryReads, gatewayRequest, logger, records, writes: () => writes };
+  return {
+    call,
+    entryReads: () => entryReads,
+    gatewayRequest,
+    logger,
+    records,
+    writes: () => writes,
+  };
 }
 
 function createParams(id: string, title = "Outcome title") {
