@@ -33,7 +33,10 @@ describe("Workboard adapter", () => {
             ...cardWithWorkspaceAccess,
             metadata: {
               ...cardWithWorkspaceAccess.metadata,
-              automation: { ...cardWithWorkspaceAccess.metadata.automation, boardId: "owner-board" },
+              automation: {
+                ...cardWithWorkspaceAccess.metadata.automation,
+                boardId: "owner-board",
+              },
             },
           },
         ],

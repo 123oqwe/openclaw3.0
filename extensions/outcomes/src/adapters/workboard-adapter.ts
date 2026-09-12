@@ -51,7 +51,10 @@ const cardSchema = z
     updatedAt: z.number().finite(),
     metadata: z
       .object({
-        automation: z.object({ boardId: z.string().min(1).optional() }).passthrough().optional(),
+        automation: z
+          .object({ boardId: z.string().min(1).optional() })
+          .passthrough()
+          .optional(),
         proof: z.array(proofSchema).optional(),
         artifacts: z.array(artifactSchema).optional(),
         stale: staleSchema.optional(),
