@@ -2483,7 +2483,6 @@ export const en: TranslationMap & {
     optionalCriterion: "Optional",
     linkedCards: "Linked cards",
     linkedCard: "Workboard card {cardId}",
-    sourceIssues: "Source issues",
     sourceIssue: {
       workboardDisabled: "Workboard is disabled",
       unavailable: "A linked source is unavailable",
