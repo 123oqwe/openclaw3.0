@@ -11,26 +11,83 @@ import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import { renderOutcomesList } from "./view.ts";
 
+type OutcomeGatewayIdentity = {
+  authorizationKey: string;
+  canRead: boolean;
+  client: ApplicationContext["gateway"]["snapshot"]["client"];
+  connectionRevision: number;
+  gateway: ApplicationContext["gateway"] | undefined;
+  phase: ApplicationContext["gateway"]["snapshot"]["phase"];
+  selfUserId: string | null;
+};
+
 class OutcomesPage extends OpenClawLightDomElement {
   @consume({ context: applicationContext, subscribe: true })
   private context!: ApplicationContext;
 
   @state() private outcomes: OutcomeSummary[] = [];
   @state() private disconnected = false;
+  @state() private unauthorized = false;
   @state() private loading = false;
   @state() private loaded = false;
   @state() private error: string | null = null;
 
   private requestGeneration = 0;
+  private gatewayIdentity: OutcomeGatewayIdentity | null = null;
 
   private readonly gateway = new GatewayPageController(this, {
     getGateway: () => this.context?.gateway,
     invalidateRequests: () => this.resetGatewayState(),
     ensureInitialData: () => this.loadOutcomes(),
-    onSnapshot: (change) => {
-      this.disconnected = change.snapshot.phase !== "connected";
-    },
+    onSnapshot: (change) => this.observeGatewaySnapshot(change.snapshot),
   });
+
+  private observeGatewaySnapshot(snapshot: ApplicationContext["gateway"]["snapshot"]) {
+    const gateway = this.context?.gateway;
+    const identity: OutcomeGatewayIdentity = {
+      authorizationKey: this.authorizationKey(snapshot),
+      canRead: Boolean(
+        snapshot.selfUser?.id &&
+          canCallGatewayMethod(snapshot, "outcomes.list", "operator.read"),
+      ),
+      client: snapshot.client,
+      connectionRevision: gateway?.connectionRevision ?? -1,
+      gateway,
+      phase: snapshot.phase,
+      selfUserId: snapshot.selfUser?.id ?? null,
+    };
+    const previous = this.gatewayIdentity;
+    this.gatewayIdentity = identity;
+    if (previous && !this.sameGatewayIdentity(previous, identity)) {
+      this.resetGatewayState();
+    }
+    this.disconnected = snapshot.phase !== "connected";
+    this.unauthorized = snapshot.phase === "connected" && !identity.canRead;
+    if (previous && !this.sameGatewayIdentity(previous, identity) && identity.canRead) {
+      void this.loadOutcomes();
+    }
+  }
+
+  private authorizationKey(snapshot: ApplicationContext["gateway"]["snapshot"]): string {
+    const auth = snapshot.hello?.auth;
+    const scopes = auth?.scopes?.toSorted().join("\u0000") ?? "";
+    const methods = snapshot.hello?.features.methods?.toSorted().join("\u0000") ?? "";
+    return `${auth?.role ?? ""}\u0001${scopes}\u0001${methods}`;
+  }
+
+  private sameGatewayIdentity(
+    left: OutcomeGatewayIdentity,
+    right: OutcomeGatewayIdentity,
+  ): boolean {
+    return (
+      left.gateway === right.gateway &&
+      left.client === right.client &&
+      left.connectionRevision === right.connectionRevision &&
+      left.phase === right.phase &&
+      left.selfUserId === right.selfUserId &&
+      left.authorizationKey === right.authorizationKey
+    );
+  }
 
   private resetGatewayState() {
     this.requestGeneration += 1;
@@ -45,9 +102,11 @@ class OutcomesPage extends OpenClawLightDomElement {
     const client = this.gateway.client;
     const scope = this.gateway.capture();
     if (
+      this.loading ||
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
+      !this.gatewayIdentity?.canRead ||
       !canCallGatewayMethod(snapshot, "outcomes.list", "operator.read")
     ) {
       return;
@@ -84,6 +143,7 @@ class OutcomesPage extends OpenClawLightDomElement {
       ${renderOutcomesList({
         outcomes: this.outcomes,
         disconnected: this.disconnected,
+        unauthorized: this.unauthorized,
         loading: this.loading,
         loaded: this.loaded,
         error: this.error,

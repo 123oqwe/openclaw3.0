@@ -236,6 +236,7 @@ describe("OutcomesPage", () => {
         },
       ],
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await page.updateComplete;
 
     expect(page.querySelector('[data-outcome-id="outcome-before-reconnect"]')).toBeNull();
@@ -279,13 +280,61 @@ describe("OutcomesPage", () => {
         },
       ],
     });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await page.updateComplete;
 
     expect(page.querySelector('[data-outcome-id="outcome-from-profile-a"]')).toBeNull();
   });
 
   it("clears the list and does not reload after operator.read is revoked", async () => {
-    const request = vi.fn(() => Promise.resolve({ outcomes: [] }));
+    let resolveFirstList: ((result: OutcomeListResult) => void) | undefined;
+    const request = vi.fn(
+      () =>
+        new Promise<OutcomeListResult>((resolve) => {
+          resolveFirstList = resolve;
+        }),
+    );
+    const client = { request } as unknown as GatewayBrowserClient;
+    const { gateway, updateSnapshot } = createGatewayWithSnapshotListener(client);
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledTimes(1);
+    });
+    resolveFirstList?.({
+      outcomes: [
+        {
+          id: "outcome-visible-before-revocation",
+          title: "Visible before revocation",
+          phase: "draft",
+          revision: 1,
+          updatedAt: 1,
+          readiness: "incomplete",
+          acceptanceValidity: "none",
+        },
+      ],
+    });
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-id="outcome-visible-before-revocation"]')).not.toBeNull();
+    });
+    updateSnapshot({ hello: gatewayHelloForMethods(["outcomes.list"], []) });
+    await page.updateComplete;
+
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(page.querySelector('[data-outcome-id="outcome-visible-before-revocation"]')).toBeNull();
+    expect(page.textContent).toContain("Outcome access is unavailable");
+  });
+
+  it("does not reveal an in-flight list after operator.read is revoked", async () => {
+    let resolveList: ((result: OutcomeListResult) => void) | undefined;
+    const request = vi.fn(
+      () =>
+        new Promise<OutcomeListResult>((resolve) => {
+          resolveList = resolve;
+        }),
+    );
     const client = { request } as unknown as GatewayBrowserClient;
     const { gateway, updateSnapshot } = createGatewayWithSnapshotListener(client);
     const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
@@ -296,9 +345,23 @@ describe("OutcomesPage", () => {
       expect(request).toHaveBeenCalledTimes(1);
     });
     updateSnapshot({ hello: gatewayHelloForMethods(["outcomes.list"], []) });
+    resolveList?.({
+      outcomes: [
+        {
+          id: "outcome-after-revocation",
+          title: "Must not leak",
+          phase: "draft",
+          revision: 1,
+          updatedAt: 1,
+          readiness: "incomplete",
+          acceptanceValidity: "none",
+        },
+      ],
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
     await page.updateComplete;
 
-    expect(request).toHaveBeenCalledTimes(1);
+    expect(page.querySelector('[data-outcome-id="outcome-after-revocation"]')).toBeNull();
     expect(page.textContent).toContain("Outcome access is unavailable");
   });
 });

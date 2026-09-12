@@ -9,12 +9,18 @@ export type OutcomesListViewData = {
   loaded: boolean;
   loading: boolean;
   outcomes: readonly OutcomeSummary[];
+  unauthorized: boolean;
 };
 
 export function renderOutcomesList(data: OutcomesListViewData) {
   if (data.disconnected) {
     return html`<section class="outcomes-state" role="status">
       ${t("outcomesPage.disconnected")}
+    </section>`;
+  }
+  if (data.unauthorized) {
+    return html`<section class="outcomes-state" role="alert">
+      ${t("outcomesPage.unauthorized")}
     </section>`;
   }
   if (data.loading && !data.loaded) {
