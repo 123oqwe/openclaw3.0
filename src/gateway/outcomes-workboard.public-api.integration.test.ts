@@ -221,206 +221,217 @@ function createHarness(state: { env: NodeJS.ProcessEnv }) {
 
 describe("Outcome public Workboard Gateway integration", () => {
   it("reads a public Workboard card, proof, and artifact through both bundled runtime APIs", async () => {
-    await withOpenClawTestState({ label: "outcome-public-workboard", scenario: "minimal" }, async (state) => {
-      const harness = createHarness(state);
-      const owner = createOperatorClient("manager-a", ["operator.write"]);
-      const cardResult = (await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "workboard.cards.create",
-        request: { title: "Public integration source", priority: "normal" },
-      })) as { card: { id: string } };
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "workboard.cards.proof",
-        request: { id: cardResult.card.id, status: "passed", label: "Hosted proof" },
-      });
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "workboard.cards.artifact",
-        request: { id: cardResult.card.id, label: "Hosted artifact", path: "/tmp/result.json" },
-      });
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "outcomes.create",
-        request: {
-          id: outcomeId,
-          title: "Public integration",
-          objective: "Read the public Workboard source",
-          criteria: [{ id: criterionId, text: "Public evidence", required: true }],
-        },
-      });
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "outcomes.linkWorkboard",
-        request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: cardResult.card.id },
-      });
-      const writesBeforeGet = { ...harness.outcomeWrites };
-      const listRequestsBeforeGet = harness.getWorkboardListRequests();
-      const detail = await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "outcomes.get",
-        request: { id: outcomeId },
-      });
-      expect(detail).toMatchObject({
-        outcome: {
-          id: outcomeId,
-          work: [{ ref: { cardId: cardResult.card.id } }],
-          evidence: [
-            { label: "Hosted artifact", sourceId: expect.any(String) },
-            { label: "Hosted proof", sourceId: expect.any(String) },
-          ],
-        },
-      });
-      expect(harness.outcomeWrites).toEqual(writesBeforeGet);
-      expect(harness.getWorkboardListRequests()).toBe(listRequestsBeforeGet + 1);
-      await expect(
-        dispatch({
+    await withOpenClawTestState(
+      { label: "outcome-public-workboard", scenario: "minimal" },
+      async (state) => {
+        const harness = createHarness(state);
+        const owner = createOperatorClient("manager-a", ["operator.write"]);
+        const cardResult = (await dispatch({
           client: owner,
           context: harness.context,
-          method: "outcomes.refresh",
-          request: { id: outcomeId, expectedRevision: 2 },
-        }),
-      ).resolves.toMatchObject({
-        refresh: { status: "available" },
-        outcome: { id: outcomeId, revision: 3 },
-      });
-      await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toMatchObject({
-        revision: 3,
-        projections: [
-          {
-            availability: "available",
-            ref: { cardId: cardResult.card.id },
-            proofs: [expect.objectContaining({ sourceId: expect.any(String) })],
-            artifacts: [expect.objectContaining({ sourceId: expect.any(String) })],
+          method: "workboard.cards.create",
+          request: { title: "Public integration source", priority: "normal" },
+        })) as { card: { id: string } };
+        await dispatch({
+          client: owner,
+          context: harness.context,
+          method: "workboard.cards.proof",
+          request: { id: cardResult.card.id, status: "passed", label: "Hosted proof" },
+        });
+        await dispatch({
+          client: owner,
+          context: harness.context,
+          method: "workboard.cards.artifact",
+          request: { id: cardResult.card.id, label: "Hosted artifact", path: "/tmp/result.json" },
+        });
+        await dispatch({
+          client: owner,
+          context: harness.context,
+          method: "outcomes.create",
+          request: {
+            id: outcomeId,
+            title: "Public integration",
+            objective: "Read the public Workboard source",
+            criteria: [{ id: criterionId, text: "Public evidence", required: true }],
           },
-        ],
-      });
-    });
+        });
+        await dispatch({
+          client: owner,
+          context: harness.context,
+          method: "outcomes.linkWorkboard",
+          request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: cardResult.card.id },
+        });
+        const writesBeforeGet = { ...harness.outcomeWrites };
+        const listRequestsBeforeGet = harness.getWorkboardListRequests();
+        const detail = await dispatch({
+          client: owner,
+          context: harness.context,
+          method: "outcomes.get",
+          request: { id: outcomeId },
+        });
+        expect(detail).toMatchObject({
+          outcome: {
+            id: outcomeId,
+            work: [{ ref: { cardId: cardResult.card.id } }],
+            evidence: [
+              { label: "Hosted artifact", sourceId: expect.any(String) },
+              { label: "Hosted proof", sourceId: expect.any(String) },
+            ],
+          },
+        });
+        expect(harness.outcomeWrites).toEqual(writesBeforeGet);
+        expect(harness.getWorkboardListRequests()).toBe(listRequestsBeforeGet + 1);
+        await expect(
+          dispatch({
+            client: owner,
+            context: harness.context,
+            method: "outcomes.refresh",
+            request: { id: outcomeId, expectedRevision: 2 },
+          }),
+        ).resolves.toMatchObject({
+          refresh: { status: "available" },
+          outcome: { id: outcomeId, revision: 3 },
+        });
+        await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toMatchObject({
+          revision: 3,
+          projections: [
+            {
+              availability: "available",
+              ref: { cardId: cardResult.card.id },
+              proofs: [expect.objectContaining({ sourceId: expect.any(String) })],
+              artifacts: [expect.objectContaining({ sourceId: expect.any(String) })],
+            },
+          ],
+        });
+      },
+    );
   });
 
   it("does not expose an Outcome or write through a foreign or revoked public Gateway request", async () => {
-    await withOpenClawTestState({ label: "outcome-public-workboard-authority", scenario: "minimal" }, async (state) => {
-      const harness = createHarness(state);
-      const owner = createOperatorClient("manager-a", ["operator.write"]);
-      const foreign = createOperatorClient("manager-b", ["operator.read"]);
-      const card = (await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "workboard.cards.create",
-        request: { title: "Owner-only Workboard source", priority: "normal" },
-      })) as { card: { id: string } };
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "outcomes.create",
-        request: {
-          id: outcomeId,
-          title: "Private integration",
-          objective: "Do not disclose ownership",
-          criteria: [{ id: criterionId, text: "Private evidence", required: true }],
-        },
-      });
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "outcomes.linkWorkboard",
-        request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: card.card.id },
-      });
-      await expect(
-        dispatch({
+    await withOpenClawTestState(
+      { label: "outcome-public-workboard-authority", scenario: "minimal" },
+      async (state) => {
+        const harness = createHarness(state);
+        const owner = createOperatorClient("manager-a", ["operator.write"]);
+        const foreign = createOperatorClient("manager-b", ["operator.read"]);
+        const card = (await dispatch({
           client: owner,
           context: harness.context,
-          method: "outcomes.get",
-          request: { id: outcomeId },
-        }),
-      ).resolves.toMatchObject({ outcome: { id: outcomeId } });
-      const writesBefore = { ...harness.outcomeWrites };
-      const listRequestsBefore = harness.getWorkboardListRequests();
-      await expect(
-        dispatch({
-          client: foreign,
-          context: harness.context,
-          method: "outcomes.get",
-          request: { id: outcomeId },
-        }),
-      ).rejects.toMatchObject({ code: "OUTCOME_NOT_FOUND" });
-      await expect(
-        dispatch({
+          method: "workboard.cards.create",
+          request: { title: "Owner-only Workboard source", priority: "normal" },
+        })) as { card: { id: string } };
+        await dispatch({
           client: owner,
           context: harness.context,
-          method: "outcomes.get",
-          request: { id: outcomeId },
-          revoked: true,
-        }),
-      ).rejects.toThrow("authenticated request authority expired");
-      expect(harness.outcomeWrites).toEqual(writesBefore);
-      expect(harness.getWorkboardListRequests()).toBe(listRequestsBefore);
-    });
+          method: "outcomes.create",
+          request: {
+            id: outcomeId,
+            title: "Private integration",
+            objective: "Do not disclose ownership",
+            criteria: [{ id: criterionId, text: "Private evidence", required: true }],
+          },
+        });
+        await dispatch({
+          client: owner,
+          context: harness.context,
+          method: "outcomes.linkWorkboard",
+          request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: card.card.id },
+        });
+        await expect(
+          dispatch({
+            client: owner,
+            context: harness.context,
+            method: "outcomes.get",
+            request: { id: outcomeId },
+          }),
+        ).resolves.toMatchObject({ outcome: { id: outcomeId } });
+        const writesBefore = { ...harness.outcomeWrites };
+        const listRequestsBefore = harness.getWorkboardListRequests();
+        await expect(
+          dispatch({
+            client: foreign,
+            context: harness.context,
+            method: "outcomes.get",
+            request: { id: outcomeId },
+          }),
+        ).rejects.toMatchObject({ code: "OUTCOME_NOT_FOUND" });
+        await expect(
+          dispatch({
+            client: owner,
+            context: harness.context,
+            method: "outcomes.get",
+            request: { id: outcomeId },
+            revoked: true,
+          }),
+        ).rejects.toThrow("authenticated request authority expired");
+        expect(harness.outcomeWrites).toEqual(writesBefore);
+        expect(harness.getWorkboardListRequests()).toBe(listRequestsBefore);
+      },
+    );
   });
 
   it("keeps get read-only and persists an unavailable refresh after the real Workboard registration disappears", async () => {
-    await withOpenClawTestState({ label: "outcome-public-workboard-disabled", scenario: "minimal" }, async (state) => {
-      const harness = createHarness(state);
-      const owner = createOperatorClient("manager-a", ["operator.write"]);
-      const card = (await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "workboard.cards.create",
-        request: { title: "Disable after link", priority: "normal" },
-      })) as { card: { id: string } };
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "outcomes.create",
-        request: {
-          id: outcomeId,
-          title: "Disabled owner",
-          objective: "Retain only unavailable state",
-          criteria: [{ id: criterionId, text: "Owner source", required: true }],
-        },
-      });
-      await dispatch({
-        client: owner,
-        context: harness.context,
-        method: "outcomes.linkWorkboard",
-        request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: card.card.id },
-      });
-      harness.setWorkboardAvailable(false);
-      const writesBeforeGet = { ...harness.outcomeWrites };
-      await expect(
-        dispatch({
+    await withOpenClawTestState(
+      { label: "outcome-public-workboard-disabled", scenario: "minimal" },
+      async (state) => {
+        const harness = createHarness(state);
+        const owner = createOperatorClient("manager-a", ["operator.write"]);
+        const card = (await dispatch({
           client: owner,
           context: harness.context,
-          method: "outcomes.get",
-          request: { id: outcomeId },
-        }),
-      ).resolves.toMatchObject({ outcome: { sourceIssues: [{ reason: "workboard-disabled" }] } });
-      expect(harness.outcomeWrites).toEqual(writesBeforeGet);
-      await expect(
-        dispatch({
+          method: "workboard.cards.create",
+          request: { title: "Disable after link", priority: "normal" },
+        })) as { card: { id: string } };
+        await dispatch({
           client: owner,
           context: harness.context,
-          method: "outcomes.refresh",
-          request: { id: outcomeId, expectedRevision: 2 },
-        }),
-      ).resolves.toMatchObject({ refresh: { status: "unavailable", reason: "workboard-disabled" } });
-      expect(harness.outcomeWrites.update).toBe(writesBeforeGet.update + 1);
-      await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toMatchObject({
-        revision: 3,
-        projections: [
-          {
-            availability: "unavailable",
-            errorCode: "workboard-disabled",
-            ref: { cardId: card.card.id },
+          method: "outcomes.create",
+          request: {
+            id: outcomeId,
+            title: "Disabled owner",
+            objective: "Retain only unavailable state",
+            criteria: [{ id: criterionId, text: "Owner source", required: true }],
           },
-        ],
-      });
-    });
+        });
+        await dispatch({
+          client: owner,
+          context: harness.context,
+          method: "outcomes.linkWorkboard",
+          request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: card.card.id },
+        });
+        harness.setWorkboardAvailable(false);
+        const writesBeforeGet = { ...harness.outcomeWrites };
+        await expect(
+          dispatch({
+            client: owner,
+            context: harness.context,
+            method: "outcomes.get",
+            request: { id: outcomeId },
+          }),
+        ).resolves.toMatchObject({ outcome: { sourceIssues: [{ reason: "workboard-disabled" }] } });
+        expect(harness.outcomeWrites).toEqual(writesBeforeGet);
+        await expect(
+          dispatch({
+            client: owner,
+            context: harness.context,
+            method: "outcomes.refresh",
+            request: { id: outcomeId, expectedRevision: 2 },
+          }),
+        ).resolves.toMatchObject({
+          refresh: { status: "unavailable", reason: "workboard-disabled" },
+        });
+        expect(harness.outcomeWrites.update).toBe(writesBeforeGet.update + 1);
+        await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toMatchObject({
+          revision: 3,
+          projections: [
+            {
+              availability: "unavailable",
+              errorCode: "workboard-disabled",
+              ref: { cardId: card.card.id },
+            },
+          ],
+        });
+      },
+    );
   });
 });
