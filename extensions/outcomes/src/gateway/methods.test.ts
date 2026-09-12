@@ -935,7 +935,8 @@ describe("P-02 Outcome handlers", () => {
     const secondPayload = second?.[1] as { outcomes: Array<{ id: string }> };
     expect(secondPayload.outcomes).toHaveLength(1);
     expect(
-      new Set([...firstPayload.outcomes, ...secondPayload.outcomes].map((outcome) => outcome.id)).size,
+      new Set([...firstPayload.outcomes, ...secondPayload.outcomes].map((outcome) => outcome.id))
+        .size,
     ).toBe(3);
     expect(harness.writes()).toBe(writes);
   });

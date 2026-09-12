@@ -6,8 +6,8 @@ import type {
   OutcomeWorkboardLinkParams,
   OutcomeUpdateParams,
 } from "@openclaw/outcomes-contract";
-import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import type { GatewayRequestHandlerOptions } from "openclaw/plugin-sdk/gateway-runtime";
+import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
 import { Value } from "typebox/value";
 import type { OpenClawPluginApi } from "../../api.js";
 import {
@@ -16,6 +16,7 @@ import {
 } from "../adapters/workboard-adapter.js";
 import { extractWorkboardEvidence } from "../assurance/evidence.js";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
+import { createRequestHash, workboardProjectionFingerprint } from "../domain/hash.js";
 import {
   toOutcomeDetail,
   toOutcomeSummary,
@@ -28,7 +29,6 @@ import {
   reduceOutcomeRefresh,
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
-import { createRequestHash, workboardProjectionFingerprint } from "../domain/hash.js";
 import type {
   Criterion,
   EvidenceRef,
@@ -39,7 +39,6 @@ import type {
 import type { OutcomeCapacityWarning } from "../store/outcome-repository.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
-import { reduceGatewayOutcomePatch } from "./update-reducer.js";
 import {
   OutcomeErrorCodes,
   outcomeError,
@@ -57,6 +56,7 @@ import {
   outcomeWorkboardLinkParamsSchema,
   outcomeWorkboardUnlinkParamsSchema,
 } from "./schemas.js";
+import { reduceGatewayOutcomePatch } from "./update-reducer.js";
 
 const OUTCOME_STORE = {
   namespace: "outcomes-v1",
@@ -70,10 +70,7 @@ type PublicPatch = OutcomeUpdateParams["patch"];
 type PublicWorkboardLink = OutcomeWorkboardLinkParams;
 type GatewayRespond = GatewayRequestHandlerOptions["respond"];
 
-function fail(
-  respond: GatewayRespond,
-  code: keyof typeof OutcomeErrorCodes,
-): void {
+function fail(respond: GatewayRespond, code: keyof typeof OutcomeErrorCodes): void {
   respond(false, undefined, outcomeError(OutcomeErrorCodes[code]));
 }
 
@@ -176,12 +173,7 @@ function normalizeWorkboardLink(params: unknown): PublicWorkboardLink | undefine
   const id = normalizedUuid(input.id);
   const criterionId = normalizedUuid(input.criterionId);
   const cardId = typeof input.cardId === "string" ? input.cardId.trim() : "";
-  if (
-    !id ||
-    !criterionId ||
-    !cardId ||
-    !positiveSafeInteger(input.expectedRevision)
-  ) {
+  if (!id || !criterionId || !cardId || !positiveSafeInteger(input.expectedRevision)) {
     return undefined;
   }
   const result = { id, expectedRevision: input.expectedRevision, criterionId, cardId };
