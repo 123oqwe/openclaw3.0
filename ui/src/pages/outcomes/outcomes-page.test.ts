@@ -120,7 +120,9 @@ describe("OutcomesPage", () => {
   it("renders a timer-expired observation stale and clears the latch on a fresh observation", async () => {
     vi.useFakeTimers();
     vi.spyOn(performance, "now").mockReturnValue(100);
-    const client = { request: vi.fn(async () => ({ outcomes: [] })) } as unknown as GatewayBrowserClient;
+    const client = {
+      request: vi.fn(async () => ({ outcomes: [] })),
+    } as unknown as GatewayBrowserClient;
     const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
     page.context = { gateway: createGateway(client) } as ApplicationContext;
     document.body.append(page);

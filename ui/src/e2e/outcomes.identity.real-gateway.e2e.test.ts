@@ -240,7 +240,8 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
   const server = createServer((_request, response) => response.writeHead(404).end());
   server.on("upgrade", (request, socket, head) => {
     const url = new URL(request.url ?? "/", "http://localhost");
-    const route = url.pathname === "/browser" ? "browser" : url.pathname === "/probe" ? "probe" : null;
+    const route =
+      url.pathname === "/browser" ? "browser" : url.pathname === "/probe" ? "probe" : null;
     const principal =
       route === "browser"
         ? browserPrincipal
@@ -370,7 +371,9 @@ async function proxyGatewayCall(
             ...(asOptionalRecord(frame.error) ? { error: asOptionalRecord(frame.error) } : {}),
             hello,
             ok: frame.ok === true,
-            ...(asOptionalRecord(frame.payload) ? { payload: asOptionalRecord(frame.payload) } : {}),
+            ...(asOptionalRecord(frame.payload)
+              ? { payload: asOptionalRecord(frame.payload) }
+              : {}),
             selfUserId: helloSelfUserId(hello as unknown as JsonRecord, probeInstanceId),
           },
         });
@@ -420,12 +423,14 @@ async function waitForNewBrowserHello(
 ): Promise<void> {
   await expect
     .poll(() =>
-      identityProxy.connections.slice(evidenceStart).some(
-        (connection) =>
-          connection.route === "browser" &&
-          connection.principal === principal &&
-          connection.helloSelfUserId === profileId,
-      ),
+      identityProxy.connections
+        .slice(evidenceStart)
+        .some(
+          (connection) =>
+            connection.route === "browser" &&
+            connection.principal === principal &&
+            connection.helloSelfUserId === profileId,
+        ),
     )
     .toBe(true);
 }
@@ -517,13 +522,21 @@ identitySuite.define(() => {
     }
     const owner = instance;
     const identityProxy = proxy;
-    const aliceCard = await proxyGatewayCall(identityProxy.probeUrl(aliceIdentity), "workboard.cards.create", {
-      priority: "normal",
-      title: "Identity-isolated Outcome card",
-    });
+    const aliceCard = await proxyGatewayCall(
+      identityProxy.probeUrl(aliceIdentity),
+      "workboard.cards.create",
+      {
+        priority: "normal",
+        title: "Identity-isolated Outcome card",
+      },
+    );
     expect(aliceCard.ok).toBe(true);
     const cardId = requireString(requireObject(aliceCard.payload, "card"), "id");
-    const aliceSelf = await proxyGatewayCall(identityProxy.probeUrl(aliceIdentity), "users.self", {});
+    const aliceSelf = await proxyGatewayCall(
+      identityProxy.probeUrl(aliceIdentity),
+      "users.self",
+      {},
+    );
     expect(aliceSelf.ok).toBe(true);
     const aliceProfileId = requireString(requireObject(aliceSelf.payload, "profile"), "id");
     const bobSelf = await proxyGatewayCall(identityProxy.probeUrl(bobIdentity), "users.self", {});
@@ -575,18 +588,26 @@ identitySuite.define(() => {
         await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
         await detail.locator('[data-outcome-action="activate"]').click();
         await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
-        const proof = await proxyGatewayCall(identityProxy.probeUrl(aliceIdentity), "workboard.cards.proof", {
-          id: cardId,
-          label: "Alice identity proof",
-          status: "passed",
-        });
+        const proof = await proxyGatewayCall(
+          identityProxy.probeUrl(aliceIdentity),
+          "workboard.cards.proof",
+          {
+            id: cardId,
+            label: "Alice identity proof",
+            status: "passed",
+          },
+        );
         expect(proof.ok).toBe(true);
         const proofId = requireProofId(proof.payload);
         await detail.locator('[data-outcome-action="refresh"]').click();
         const aliceEvidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
         await aliceEvidence.waitFor({ state: "visible" });
-        await expect.poll(async () => aliceEvidence.textContent()).toContain("Proof: Alice identity proof");
-        await expect.poll(async () => aliceEvidence.textContent()).toContain("Proof status: passed");
+        await expect
+          .poll(async () => aliceEvidence.textContent())
+          .toContain("Proof: Alice identity proof");
+        await expect
+          .poll(async () => aliceEvidence.textContent())
+          .toContain("Proof status: passed");
         if (captureUiProofEnabled) {
           await page.screenshot({
             fullPage: true,
@@ -601,17 +622,25 @@ identitySuite.define(() => {
         await waitForControlUiGatewayReady(page);
         await expect.poll(() => page.locator(".outcome-summary").count()).toBe(0);
         await expect.poll(() => detail.count()).toBe(0);
-        await expect.poll(() => page.getByText("Alice private Outcome", { exact: true }).count()).toBe(0);
+        await expect
+          .poll(() => page.getByText("Alice private Outcome", { exact: true }).count())
+          .toBe(0);
         await expect
           .poll(() => page.getByText("Must not leak after B reauth", { exact: true }).count())
           .toBe(0);
         await expect
           .poll(() => page.getByText("Alice card proof remains private", { exact: true }).count())
           .toBe(0);
-        await expect.poll(() => page.locator(`[data-outcome-work-card="${cardId}"]`).count()).toBe(0);
-        await expect.poll(() => page.locator(`[data-outcome-evidence="${proofId}"]`).count()).toBe(0);
         await expect
-          .poll(async () => (await page.locator("body").textContent())?.includes("Alice identity proof"))
+          .poll(() => page.locator(`[data-outcome-work-card="${cardId}"]`).count())
+          .toBe(0);
+        await expect
+          .poll(() => page.locator(`[data-outcome-evidence="${proofId}"]`).count())
+          .toBe(0);
+        await expect
+          .poll(async () =>
+            (await page.locator("body").textContent())?.includes("Alice identity proof"),
+          )
           .toBe(false);
         if (captureUiProofEnabled) {
           await page.screenshot({
@@ -640,7 +669,10 @@ identitySuite.define(() => {
         await page.locator(".outcome-summary", { hasText: "Alice private Outcome" }).waitFor({
           state: "visible",
         });
-        await page.locator(".outcome-summary", { hasText: "Alice private Outcome" }).locator("[data-outcome-select]").click();
+        await page
+          .locator(".outcome-summary", { hasText: "Alice private Outcome" })
+          .locator("[data-outcome-select]")
+          .click();
         await page.locator(`[data-outcome-detail-id="${outcomeId}"]`).waitFor({ state: "visible" });
         await page.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
         const restoredEvidence = page.locator(`[data-outcome-evidence="${proofId}"]`);
@@ -648,7 +680,9 @@ identitySuite.define(() => {
         await expect
           .poll(async () => restoredEvidence.textContent())
           .toContain("Proof: Alice identity proof");
-        await expect.poll(async () => restoredEvidence.textContent()).toContain("Proof status: passed");
+        await expect
+          .poll(async () => restoredEvidence.textContent())
+          .toContain("Proof status: passed");
       },
     );
   });
