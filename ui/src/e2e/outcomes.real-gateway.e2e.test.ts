@@ -374,6 +374,12 @@ suite.define(() => {
         await instance.stopGateway();
         await page.getByText("Outcome connection unavailable", { exact: true }).waitFor({ state: "visible" });
         await expect.poll(() => detail.count()).toBe(0);
+        if (captureUiProofEnabled) {
+          await page.screenshot({
+            fullPage: true,
+            path: path.join(suite.artifactDir, "outcomes-disconnected.png"),
+          });
+        }
         await instance.state.writeConfig(outcomeGatewayConfig(instance, false));
         await instance.startGateway();
         await waitForControlUiGatewayReady(page);
