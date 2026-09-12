@@ -42,6 +42,7 @@ type OutcomeGatewayIdentity = {
 
 type OutcomeMutationLock = {
   id: string;
+  ownerId: string;
   sequence: number;
 };
 
@@ -261,7 +262,6 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.linkCardId = "";
     this.linkRequestSequence += 1;
     this.mutationSequence += 1;
-    this.mutationInFlightOutcomeLocks = [];
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
     this.pendingListFocusId = null;
@@ -492,11 +492,18 @@ class OutcomesPage extends OpenClawLightDomElement {
   }
 
   private outcomeMutationIsInFlight(id: string | null): boolean {
-    return id !== null && this.mutationInFlightOutcomeLocks.some((lock) => lock.id === id);
+    const ownerId = this.gatewayIdentity?.selfUserId;
+    return (
+      id !== null &&
+      ownerId !== null &&
+      this.mutationInFlightOutcomeLocks.some(
+        (lock) => lock.id === id && lock.ownerId === ownerId,
+      )
+    );
   }
 
-  private beginOutcomeMutation(id: string): OutcomeMutationLock {
-    const lock = { id, sequence: ++this.outcomeMutationLockSequence };
+  private beginOutcomeMutation(id: string, ownerId: string): OutcomeMutationLock {
+    const lock = { id, ownerId, sequence: ++this.outcomeMutationLockSequence };
     this.mutationInFlightOutcomeLocks = [...this.mutationInFlightOutcomeLocks, lock];
     return lock;
   }
@@ -505,6 +512,18 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.mutationInFlightOutcomeLocks = this.mutationInFlightOutcomeLocks.filter(
       (currentLock) => currentLock.sequence !== lock.sequence,
     );
+  }
+
+  private revalidateAfterSettledMutation(lock: OutcomeMutationLock) {
+    if (
+      !this.isConnected ||
+      this.selectedOutcomeId !== lock.id ||
+      this.gatewayIdentity?.selfUserId !== lock.ownerId ||
+      this.outcomeMutationIsInFlight(lock.id)
+    ) {
+      return;
+    }
+    void this.loadSelectedOutcome();
   }
 
   private replaceOutcome(detail: OutcomeDetail, requestStartedAt = performance.now()) {
@@ -798,13 +817,15 @@ class OutcomesPage extends OpenClawLightDomElement {
     ) {
       return;
     }
+    const ownerId = snapshot.selfUser.id;
     const expectedRevision = detail.revision;
     const sequence = ++this.editRequestSequence;
     this.editError = null;
     this.editing = true;
     this.detailRequestSequence += 1;
-    const mutationLock = this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
     try {
       const updated = await updateOutcome(client, id, expectedRevision, { criteria, objective, title });
       if (
@@ -813,6 +834,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         updated.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(updated, requestStartedAt);
         this.editDialogOpen = false;
@@ -823,10 +845,14 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.editError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
       if (
         sequence === this.editRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -936,13 +962,15 @@ class OutcomesPage extends OpenClawLightDomElement {
     ) {
       return;
     }
+    const ownerId = snapshot.selfUser.id;
     const expectedRevision = detail.revision;
     const sequence = ++this.linkRequestSequence;
     this.linkError = null;
     this.linking = true;
     this.detailRequestSequence += 1;
-    const mutationLock = this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
     try {
       const linked = await linkOutcomeWorkboard(client, { cardId, criterionId, expectedRevision, id });
       if (
@@ -951,6 +979,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         linked.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(linked, requestStartedAt);
         this.linkDialogOpen = false;
@@ -961,10 +990,14 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.linkError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
       if (
         sequence === this.linkRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -997,12 +1030,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     ) {
       return;
     }
+    const ownerId = snapshot.selfUser.id;
     const expectedRevision = detail.revision;
     const sequence = ++this.linkRequestSequence;
     this.mutationError = null;
     this.detailRequestSequence += 1;
-    const mutationLock = this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
     try {
       const unlinked = await unlinkOutcomeWorkboard(client, {
         cardId,
@@ -1016,6 +1051,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         unlinked.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(unlinked, requestStartedAt);
       }
@@ -1025,10 +1061,14 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
     }
   }
 
@@ -1072,12 +1112,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     ) {
       return;
     }
+    const ownerId = snapshot.selfUser.id;
     const sequence = ++this.mutationSequence;
     this.detailRequestSequence += 1;
     this.cancelError = null;
     this.cancelling = true;
-    const mutationLock = this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
     try {
       const cancelled = await cancelOutcome(client, id, detail.revision);
       if (
@@ -1086,6 +1128,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         cancelled.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(cancelled, requestStartedAt);
         this.cancelConfirmationOpen = false;
@@ -1096,10 +1139,14 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.cancelError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
       if (
         sequence === this.mutationSequence &&
         id === this.selectedOutcomeId &&
@@ -1129,12 +1176,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     ) {
       return;
     }
+    const ownerId = snapshot.selfUser.id;
     const sequence = ++this.mutationSequence;
     this.detailRequestSequence += 1;
     this.mutationError = null;
     this.refreshing = true;
-    const mutationLock = this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
     try {
       const refreshed = await refreshOutcome(client, id, detail.revision);
       if (
@@ -1143,6 +1192,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         refreshed.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(refreshed, requestStartedAt);
       }
@@ -1152,10 +1202,14 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
       if (
         sequence === this.mutationSequence &&
         id === this.selectedOutcomeId &&
@@ -1184,11 +1238,13 @@ class OutcomesPage extends OpenClawLightDomElement {
     ) {
       return;
     }
+    const ownerId = snapshot.selfUser.id;
     const sequence = ++this.mutationSequence;
     this.detailRequestSequence += 1;
     this.mutationError = null;
-    const mutationLock = this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
     try {
       const activated = await activateOutcome(client, id, detail.revision);
       if (
@@ -1197,6 +1253,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         activated.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(activated, requestStartedAt);
       }
@@ -1206,10 +1263,14 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
+        mutationResultWasCurrent = true;
         this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
     }
   }
 

@@ -1604,15 +1604,16 @@ describe("OutcomesPage", () => {
     });
   });
 
-  it("clears an interrupted mutation lock before revalidating the same Outcome", async () => {
+  it("keeps an unsettled mutation locked through reconnect until its result is revalidated", async () => {
     let refreshCalls = 0;
     let resolveInterruptedRefresh: ((result: { outcome: OutcomeDetail }) => void) | undefined;
-    let resolveReplacementRefresh: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    let detailReads = 0;
     const request = vi.fn((method: string, params: { id?: string }) => {
       if (method === "outcomes.list") {
         return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
       }
       if (method === "outcomes.get" && params.id === "outcome-a") {
+        detailReads += 1;
         return Promise.resolve({ outcome: outcomeDetail("outcome-a", "Outcome A") });
       }
       if (method === "outcomes.refresh") {
@@ -1622,8 +1623,8 @@ describe("OutcomesPage", () => {
             resolveInterruptedRefresh = resolve;
           });
         }
-        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
-          resolveReplacementRefresh = resolve;
+        return Promise.resolve({
+          outcome: { ...outcomeDetail("outcome-a", "Outcome A"), revision: 2 },
         });
       }
       throw new Error(`Unexpected request: ${method}`);
@@ -1657,22 +1658,21 @@ describe("OutcomesPage", () => {
 
     await vi.waitFor(() => {
       expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled).toBe(true);
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
+    expect(refreshCalls).toBe(1);
+
+    resolveInterruptedRefresh?.({
+      outcome: { ...outcomeDetail("outcome-a", "Outcome A (stale refresh)"), revision: 2 },
+    });
+    await vi.waitFor(() => {
+      expect(detailReads).toBe(3);
       expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled).toBe(false);
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     await vi.waitFor(() => {
       expect(refreshCalls).toBe(2);
-    });
-
-    resolveInterruptedRefresh?.({
-      outcome: { ...outcomeDetail("outcome-a", "Outcome A (stale refresh)"), revision: 2 },
-    });
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
-    expect(refreshCalls).toBe(2);
-
-    resolveReplacementRefresh?.({
-      outcome: { ...outcomeDetail("outcome-a", "Outcome A"), revision: 2 },
     });
   });
 
