@@ -1,4 +1,5 @@
 // Real Gateway proof for the Outcome Center's persisted public workflow.
+import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
 import {
@@ -9,6 +10,8 @@ import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 import { OUTCOME_DETAIL_MAX_FRESHNESS_MS } from "../pages/outcomes/freshness.ts";
+
+const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 
 const suite = createControlUiE2eSuite({
   name: "Control UI Outcomes with a real Gateway",
@@ -242,6 +245,12 @@ suite.define(() => {
             expect.objectContaining({ label: "Outcome E2E verification", proofStatus: "passed" }),
           ]),
         );
+        if (captureUiProofEnabled) {
+          await writeFile(
+            path.join(suite.artifactDir, "outcomes-desktop-accessibility.yml"),
+            await page.locator("body").ariaSnapshot(),
+          );
+        }
 
         await page.clock.fastForward(OUTCOME_DETAIL_MAX_FRESHNESS_MS + 1);
         await detail.locator('[data-outcome-readiness="stale"]').waitFor({ state: "visible" });
