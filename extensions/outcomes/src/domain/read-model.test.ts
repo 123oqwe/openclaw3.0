@@ -292,7 +292,9 @@ describe("Outcome P-01 read model", () => {
     const detail = toOutcomeDetail(valid(input), 10);
 
     expect(detail.attention).toEqual([{ code: "verification-required", criterionId: "c-1" }]);
-    expect(detail.nextActions).toEqual(expect.arrayContaining(["refresh", "unlink-work", "cancel"]));
+    expect(detail.nextActions).toEqual(
+      expect.arrayContaining(["refresh", "unlink-work", "cancel"]),
+    );
     expect(detail.nextActions).not.toContain("accept");
   });
 
