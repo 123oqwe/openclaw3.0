@@ -559,6 +559,65 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("requires confirmation before cancelling a selected Outcome", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: { ...outcomeDetail("outcome-a", "Outcome A"), nextActions: ["cancel"] },
+        });
+      }
+      if (method === "outcomes.cancel") {
+        return Promise.resolve({
+          outcome: {
+            ...outcomeDetail("outcome-a", "Outcome A"),
+            nextActions: [],
+            phase: "cancelled" as const,
+            revision: 2,
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.cancel"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')?.click();
+
+    expect(request).not.toHaveBeenCalledWith("outcomes.cancel", expect.anything());
+    await vi.waitFor(() => {
+      expect(page.querySelector('openclaw-modal-dialog[label="Cancel outcome"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-confirm-cancel]')?.click();
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.cancel", {
+        expectedRevision: 1,
+        id: "outcome-a",
+      });
+      expect(page.textContent).toContain("Cancelled");
+    });
+  });
+
   it("does not let an old selected Outcome detail overwrite a newer selection", async () => {
     let resolveFirstDetail: ((result: { outcome: OutcomeDetail }) => void) | undefined;
     const request = vi.fn((method: string, params: { id?: string }) => {
