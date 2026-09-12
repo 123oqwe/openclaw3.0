@@ -48,6 +48,7 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/index.ts",
         "extensions/outcomes/src/gateway/health.ts",
         "extensions/outcomes/src/gateway/p02-admission.contract.md",
+        "src/gateway/outcomes-workboard.public-api.integration.test.ts",
         "extensions/outcomes/src/adapters/workboard-adapter.test.ts",
         "extensions/outcomes/src/adapters/workboard-adapter.ts",
         "extensions/outcomes/src/adapters/fixtures/workboard-list.v1.json",
