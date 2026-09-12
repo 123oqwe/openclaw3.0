@@ -666,6 +666,12 @@ describe("Outcome repository host adapter", () => {
         samplesPerOperation: OUTCOME_PERFORMANCE_SAMPLES,
         scenarios: OUTCOME_PERFORMANCE_SCENARIOS,
       },
+      execution: {
+        fileParallelism: process.env.OPENCLAW_OUTCOME_BENCHMARK_FILE_PARALLELISM ?? null,
+        maxWorkers: process.env.OPENCLAW_VITEST_MAX_WORKERS ?? null,
+        mode: process.env.OPENCLAW_OUTCOME_BENCHMARK_MODE ?? "normal-shard",
+        testNamePattern: process.env.OPENCLAW_OUTCOME_BENCHMARK_TEST_NAME_PATTERN ?? null,
+      },
       runner: {
         arch: process.arch,
         image: process.env.ImageOS ?? process.env.RUNNER_IMAGE ?? null,

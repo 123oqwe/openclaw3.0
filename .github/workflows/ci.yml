@@ -3493,6 +3493,7 @@ jobs:
           OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA: ${{ github.workflow_sha }}
           OPENCLAW_OUTCOME_BENCHMARK_JOB_NAME: ${{ matrix.check_name || 'checks-node-core-test-nondist-shard' }}
           OPENCLAW_OUTCOME_BENCHMARK_SHARD: ${{ matrix.shard_name }}
+          OPENCLAW_OUTCOME_BENCHMARK_MODE: normal-shard
         shell: bash
         run: |
           set -euo pipefail
@@ -3502,6 +3503,33 @@ jobs:
             [[ -f "$runner" ]]
           fi
           node --import tsx "$runner"
+
+      # Preserve the regular shard measurement, then collect one serial control
+      # only from the exact shard that actually exercised the Outcome repository
+      # matrix. This does not select a shard by name or alter the normal gate.
+      - name: Run isolated Outcome plugin-state benchmark control
+        if: success() && hashFiles(format('.artifacts/outcomes-benchmark/{0}-{1}.json', github.job, matrix.shard_name)) != ''
+        env:
+          NODE_OPTIONS: --max-old-space-size=8192
+          OPENCLAW_TEST_PROJECTS_PARALLEL: "1"
+          OPENCLAW_VITEST_MAX_WORKERS: "1"
+          OPENCLAW_VITEST_SHARD_NAME: outcomes-plugin-state-isolated-control
+          OPENCLAW_OUTCOME_BENCHMARK_MODE: isolated-control
+          OPENCLAW_OUTCOME_BENCHMARK_FILE_PARALLELISM: "false"
+          OPENCLAW_OUTCOME_BENCHMARK_TEST_NAME_PATTERN: ^Outcome repository host adapter measures bounded host-adapter list and mutation behavior across the P-01 matrix$
+          OPENCLAW_OUTCOME_BENCHMARK_ARTIFACT_PATH: .artifacts/outcomes-benchmark/${{ github.job }}-isolated-control.json
+          OPENCLAW_OUTCOME_BENCHMARK_CHECKOUT_SHA: ${{ needs.preflight.outputs.checkout_revision }}
+          OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          OPENCLAW_OUTCOME_BENCHMARK_JOB_NAME: ${{ matrix.check_name || 'checks-node-core-test-nondist-shard' }}
+          OPENCLAW_OUTCOME_BENCHMARK_SHARD: outcomes-plugin-state-isolated-control
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/run-vitest.mjs run \
+            --maxWorkers=1 \
+            --no-file-parallelism \
+            --testNamePattern '^Outcome repository host adapter measures bounded host-adapter list and mutation behavior across the P-01 matrix$' \
+            extensions/outcomes/src/store/plugin-state-repository.test.ts
 
       - name: Upload Outcome plugin-state benchmark
         if: always() && hashFiles('.artifacts/outcomes-benchmark/*.json') != ''

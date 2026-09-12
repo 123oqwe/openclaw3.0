@@ -13771,6 +13771,45 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     ).toBe(false);
   });
 
+  it("runs a serial Outcome benchmark control only after the originating shard", () => {
+    const job = readCiWorkflow().jobs["checks-node-core-test-nondist-shard"];
+    const steps = job.steps as WorkflowStep[];
+    const control = expectDefined(
+      steps.find(({ name }) => name === "Run isolated Outcome plugin-state benchmark control"),
+      "isolated Outcome benchmark control",
+    );
+    const original = steps.findIndex(({ name }) => name === "Run Node test shard");
+    const controlIndex = steps.findIndex(
+      ({ name }) => name === "Run isolated Outcome plugin-state benchmark control",
+    );
+    const uploadIndex = steps.findIndex(({ name }) => name === "Upload Outcome plugin-state benchmark");
+    expect(control.if).toBe(
+      "success() && hashFiles(format('.artifacts/outcomes-benchmark/{0}-{1}.json', github.job, matrix.shard_name)) != ''",
+    );
+    expect(controlIndex).toBeGreaterThan(original);
+    expect(controlIndex).toBeLessThan(uploadIndex);
+    expect(control.env).toMatchObject({
+      OPENCLAW_TEST_PROJECTS_PARALLEL: "1",
+      OPENCLAW_VITEST_MAX_WORKERS: "1",
+      OPENCLAW_VITEST_SHARD_NAME: "outcomes-plugin-state-isolated-control",
+      OPENCLAW_OUTCOME_BENCHMARK_MODE: "isolated-control",
+      OPENCLAW_OUTCOME_BENCHMARK_FILE_PARALLELISM: "false",
+      OPENCLAW_OUTCOME_BENCHMARK_SHARD: "outcomes-plugin-state-isolated-control",
+    });
+    expect(control.run).toContain("node scripts/run-vitest.mjs run");
+    expect(control.run).toContain("--maxWorkers=1");
+    expect(control.run).toContain("--no-file-parallelism");
+    expect(control.run).toContain(
+      "--testNamePattern '^Outcome repository host adapter measures bounded host-adapter list and mutation behavior across the P-01 matrix$'",
+    );
+    expect(control.run).toContain("extensions/outcomes/src/store/plugin-state-repository.test.ts");
+    const originalStep = expectDefined(
+      steps.find(({ name }) => name === "Run Node test shard"),
+      "normal Outcome benchmark shard",
+    );
+    expect(originalStep.env).toMatchObject({ OPENCLAW_OUTCOME_BENCHMARK_MODE: "normal-shard" });
+  });
+
   it("does not admit the final gate for cancelled workflows or draft pull requests", () => {
     const gate = readCiWorkflow().jobs["ci-gate"];
     for (const eventName of ["pull_request", "push", "workflow_dispatch"] as const) {
