@@ -258,6 +258,7 @@ function registerHarness(
   options: { gatewayRequest?: (method: string, params: unknown) => unknown; store?: unknown } = {},
 ) {
   const records = new Map<string, unknown>();
+  const storeMutationCalls = { deletes: 0, registers: 0, updates: 0 };
   const registrations: Array<{
     method: string;
     handler: never;
@@ -265,6 +266,7 @@ function registerHarness(
   }> = [];
   const store = options.store ?? {
     registerIfAbsent: async (key: string, value: unknown) => {
+      storeMutationCalls.registers += 1;
       if (records.has(key)) return false;
       records.set(key, value);
       return true;
@@ -272,12 +274,14 @@ function registerHarness(
     lookup: async (key: string) => records.get(key),
     entries: async () => Array.from(records, ([key, value]) => ({ key, value })),
     update: async (key: string, decide: (current: unknown) => unknown) => {
+      storeMutationCalls.updates += 1;
       const next = decide(records.get(key));
       if (next === undefined) return false;
       records.set(key, next);
       return true;
     },
     deleteIf: async (key: string, predicate: (current: unknown) => boolean) => {
+      storeMutationCalls.deletes += 1;
       const current = records.get(key);
       if (current === undefined || !predicate(current)) return false;
       records.delete(key);
@@ -313,7 +317,7 @@ function registerHarness(
     })),
   );
   context.getGatewayMethodRegistry = () => registry;
-  return { context, records, registrations };
+  return { context, records, registrations, storeMutationCalls };
 }
 
 async function dispatch(params: {
@@ -547,6 +551,53 @@ describe("P-02 Outcome Gateway admission", () => {
         request,
       }),
     ).rejects.toThrow(/scope/i);
+  });
+
+  it("hides a foreign Outcome from real dispatcher reads without writing", async () => {
+    const { context, records, storeMutationCalls } = registerHarness();
+    const owner = createOperatorClient("manager-a", ["operator.write"]);
+    const foreignReader = createOperatorClient("manager-b", ["operator.read"]);
+    const request = {
+      id: outcomeId,
+      title: "Ship safely",
+      objective: "Ship the Outcome beta safely",
+      criteria: [
+        {
+          id: "123e4567-e89b-42d3-a456-426614174001",
+          text: "Hosted evidence is available",
+          required: true,
+        },
+      ],
+    };
+    await expect(
+      dispatch({
+        client: owner,
+        context,
+        method: "outcomes.create",
+        request,
+      }),
+    ).resolves.toMatchObject({ outcome: { id: outcomeId }, replayed: false });
+
+    const persistedBeforeForeignReads = structuredClone(Array.from(records.entries()));
+    const mutationsBeforeForeignReads = { ...storeMutationCalls };
+    await expect(
+      dispatch({
+        client: foreignReader,
+        context,
+        method: "outcomes.get",
+        request: { id: outcomeId },
+      }),
+    ).rejects.toMatchObject({ code: "OUTCOME_NOT_FOUND" });
+    await expect(
+      dispatch({
+        client: foreignReader,
+        context,
+        method: "outcomes.list",
+        request: {},
+      }),
+    ).resolves.toEqual({ outcomes: [] });
+    expect(storeMutationCalls).toEqual(mutationsBeforeForeignReads);
+    expect(Array.from(records.entries())).toEqual(persistedBeforeForeignReads);
   });
 
   it("records the six-scenario P-02 dispatcher and host-state cost matrix", async () => {
