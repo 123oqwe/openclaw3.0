@@ -28,6 +28,7 @@ function createHarness(
   } = {},
 ) {
   const records = new Map<string, OutcomeRecord>();
+  let entryReads = 0;
   let writes = 0;
   const handlers = new Map<string, RegisteredHandler>();
   const store = {
@@ -48,7 +49,10 @@ function createHarness(
       return true;
     },
     lookup: async (id: string) => records.get(id),
-    entries: async () => [...records].map(([key, value]) => ({ key, value, createdAt: 0 })),
+    entries: async () => {
+      entryReads += 1;
+      return [...records].map(([key, value]) => ({ key, value, createdAt: 0 }));
+    },
     update: async (
       id: string,
       decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined,
@@ -97,7 +101,7 @@ function createHarness(
     await handler({ client, params, respond });
     return respond.mock.calls[0]!;
   }
-  return { call, gatewayRequest, logger, records, writes: () => writes };
+  return { call, entryReads: () => entryReads, gatewayRequest, logger, records, writes: () => writes };
 }
 
 function createParams(id: string, title = "Outcome title") {
@@ -945,6 +949,54 @@ describe("P-02 Outcome handlers", () => {
       { code: "OUTCOME_INVALID_STATE" },
     ]);
     expect(harness.writes()).toBe(writes);
+  });
+
+  it("samples namespace capacity only during a single owner-isolated list scan", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.create", createParams(id));
+    expect(
+      await harness.call("outcomes.update", {
+        id,
+        expectedRevision: 1,
+        patch: { title: "Outcome title" },
+      }),
+    ).toMatchObject([true, { outcome: { revision: 1 } }]);
+    const template = harness.records.get(id)!;
+    for (let index = 1; index <= 398; index += 1) {
+      harness.records.set(`00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`, {
+        ...template,
+        id: `00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`,
+        managerProfileId: "manager-b",
+      });
+    }
+
+    expect(harness.entryReads()).toBe(0);
+    expect(harness.writes()).toBe(1);
+    expect(await harness.call("outcomes.list", { limit: 25 })).toMatchObject([
+      true,
+      { outcomes: [{ id }] },
+    ]);
+    expect(harness.entryReads()).toBe(1);
+    expect(harness.logger.warn).not.toHaveBeenCalled();
+
+    harness.records.set("00000000-0000-4000-8000-000000000399", {
+      ...template,
+      id: "00000000-0000-4000-8000-000000000399",
+      managerProfileId: "manager-b",
+    });
+    harness.logger.warn.mockImplementation(() => {
+      throw new Error("capacity observer unavailable");
+    });
+    expect(await harness.call("outcomes.list", { limit: 25 })).toMatchObject([
+      true,
+      { outcomes: [{ id }] },
+    ]);
+    expect(harness.entryReads()).toBe(2);
+    expect(harness.logger.warn).toHaveBeenCalledWith(
+      "outcomes: capacity warning kind=entry-count observed=400 threshold=400",
+    );
   });
 
   it("paginates the authenticated stable list without a write or repeated row", async () => {

@@ -74,10 +74,16 @@ function createLegacyOutcomeRepository(
     PluginStateKeyedStore<OutcomeRecord>,
     "registerIfAbsent" | "lookup" | "entries" | "update" | "deleteIf"
   >,
+  options: { onEntriesRead?: (entryCount: number) => void } = {},
 ): OutcomeRepository {
   if (typeof store.update !== "function") {
     throw new Error("Outcome repository requires atomic keyed-store update");
   }
+  const readEntries = async () => {
+    const entries = await store.entries();
+    options.onEntriesRead?.(entries.length);
+    return entries;
+  };
   return {
     create: async (record) => {
       assertOutcomeRecordSize(record);
@@ -107,7 +113,7 @@ function createLegacyOutcomeRepository(
     },
     get: (id) => store.lookup(id),
     list: async () =>
-      (await store.entries())
+      (await readEntries())
         .map((entry) => entry.value)
         .toSorted((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0)),
     inspectCapacity: async () => capacitySnapshot((await store.entries()).length),
@@ -139,7 +145,7 @@ function createLegacyOutcomeRepository(
     },
     listOwned: async (managerProfileId) => {
       assertManagerProfileId(managerProfileId);
-      return (await store.entries())
+      return (await readEntries())
         .map((entry) => entry.value)
         .filter((record) => record.managerProfileId === managerProfileId)
         .toSorted((a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
@@ -194,10 +200,12 @@ function createStrictOutcomeRepository(
     throw new Error("Outcome repository requires atomic keyed-store deleteIf");
   }
   const deleteIf = store.deleteIf;
-  const base = createLegacyOutcomeRepository(store);
   const strict = (value: OutcomeRecord | undefined) =>
     value === undefined ? undefined : parseOutcomeRecord(value);
   const diagnostics = createCapacityDiagnostics(options);
+  const base = createLegacyOutcomeRepository(store, {
+    onEntriesRead: (entryCount) => diagnostics.observeEntryCount(entryCount),
+  });
   return {
     ...base,
     create: async (record) => {
@@ -345,6 +353,15 @@ function createCapacityDiagnostics(options: OutcomeRepositoryOptions) {
 
   return {
     now,
+    observeEntryCount: (entryCount: number) => {
+      if (entryCount >= OUTCOME_CAPACITY_WARNING_ENTRIES) {
+        warn({
+          kind: "entry-count",
+          observed: entryCount,
+          threshold: OUTCOME_CAPACITY_WARNING_ENTRIES,
+        });
+      }
+    },
     observeCommitted: async (record: OutcomeRecord, writeDuration: number) => {
       if (!options.onCapacityWarning) {
         return;
