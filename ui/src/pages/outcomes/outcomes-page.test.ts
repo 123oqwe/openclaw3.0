@@ -1051,6 +1051,9 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => {
       expect(page.querySelector("[data-outcome-pending-create]")).not.toBeNull();
     });
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-create-form] [role="alert"]')).not.toBeNull();
+    });
 
     const pendingForm = page.querySelector<HTMLFormElement>("[data-outcome-create-form]");
     const pendingTitle = pendingForm?.querySelector<HTMLInputElement>('input[name="title"]');
@@ -1063,9 +1066,6 @@ describe("OutcomesPage", () => {
     pendingForm.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(createParams).toHaveLength(2));
     expect(createParams[1]).toEqual(createParams[0]);
-    await vi.waitFor(() => {
-      expect(page.querySelector('[data-outcome-create-form] [role="alert"]')).not.toBeNull();
-    });
 
     page
       .querySelector<HTMLButtonElement>("[data-outcome-abandon-pending-create]")
