@@ -128,6 +128,7 @@ async function callGateway(
     method,
     "--params",
     JSON.stringify(params),
+    "--json",
   ]);
   expect(result.code, `${method} failed: ${result.stderr}`).toBe(0);
   expect(result.signal).toBeNull();
