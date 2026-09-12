@@ -74,4 +74,29 @@ describe("OutcomesPage", () => {
       expect(request).toHaveBeenCalledWith("outcomes.list", {});
     });
   });
+
+  it("does not present an authenticated list as empty while its first read is loading", async () => {
+    let resolveList: ((result: { outcomes: [] }) => void) | undefined;
+    const request = vi.fn(
+      () =>
+        new Promise<{ outcomes: [] }>((resolve) => {
+          resolveList = resolve;
+        }),
+    );
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.list", {});
+    });
+    expect(page.textContent).toContain("Loading outcomes");
+    expect(page.textContent).not.toContain("No outcomes yet");
+
+    resolveList?.({ outcomes: [] });
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("No outcomes yet");
+    });
+  });
 });
