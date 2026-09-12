@@ -275,7 +275,9 @@ describe("Outcome public Workboard Gateway integration", () => {
             method: "workboard.cards.list",
             request: {},
           }),
-        ).resolves.toMatchObject({ cards: expect.arrayContaining([{ id: cardResult.card.id }]) });
+        ).resolves.toMatchObject({
+          cards: expect.arrayContaining([expect.objectContaining({ id: cardResult.card.id })]),
+        });
         await dispatch({
           client: owner,
           context: harness.context,

@@ -13,6 +13,59 @@ describe("Workboard adapter", () => {
       { id: "card-default-board", createdAt: 1700000200000, boardId: "default" },
     ]);
   });
+  it("accepts owner automation metadata without a board id while validating one when supplied", () => {
+    const cardWithWorkspaceAccess = {
+      ...fixture.cards[0],
+      metadata: {
+        ...fixture.cards[0].metadata,
+        automation: {
+          workspaceAccess: { roots: ["/tmp/outcomes"], unrestricted: false, writable: true },
+        },
+      },
+    };
+    expect(readWorkboardCards({ cards: [cardWithWorkspaceAccess] })).toMatchObject([
+      { id: fixture.cards[0].id, boardId: "default" },
+    ]);
+    expect(
+      readWorkboardCards({
+        cards: [
+          {
+            ...cardWithWorkspaceAccess,
+            metadata: {
+              ...cardWithWorkspaceAccess.metadata,
+              automation: { ...cardWithWorkspaceAccess.metadata.automation, boardId: "owner-board" },
+            },
+          },
+        ],
+      }),
+    ).toMatchObject([{ boardId: "owner-board" }]);
+    expect(() =>
+      readWorkboardCards({
+        cards: [
+          {
+            ...cardWithWorkspaceAccess,
+            metadata: {
+              ...cardWithWorkspaceAccess.metadata,
+              automation: { ...cardWithWorkspaceAccess.metadata.automation, boardId: "" },
+            },
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      readWorkboardCards({
+        cards: [
+          {
+            ...cardWithWorkspaceAccess,
+            metadata: {
+              ...cardWithWorkspaceAccess.metadata,
+              automation: { ...cardWithWorkspaceAccess.metadata.automation, boardId: 1 },
+            },
+          },
+        ],
+      }),
+    ).toThrow();
+  });
   it("treats a declared stale state as structured public source metadata", () => {
     const cards = readWorkboardCards({
       cards: [
