@@ -62,17 +62,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.create",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeCreateParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const request = normalizeCreate(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -115,17 +116,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.get",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "NOT_FOUND",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeIdParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "NOT_FOUND");
@@ -157,17 +159,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.list",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "NOT_FOUND",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeListParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const cursor =
         params.cursor === undefined ? undefined : decodeOutcomeCursor(owner, params.cursor);
       if (params.cursor !== undefined && !cursor) {
@@ -196,17 +199,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.update",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeUpdateParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const request = normalizePatch(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -239,17 +243,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.linkWorkboard",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeWorkboardLinkParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const request = normalizeWorkboardLink(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -308,17 +313,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.unlinkWorkboard",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeWorkboardUnlinkParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const request = normalizeWorkboardLink(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -346,17 +352,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.activate",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeActivateParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "INVALID_REQUEST");
@@ -379,17 +386,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.refresh",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeRefreshParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "INVALID_REQUEST");
@@ -470,17 +478,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   );
   api.registerGatewayMethod(
     "outcomes.cancel",
-    async ({ client, params, respond }) => {
-      const owner = admitOutcomeOwner({
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
-        request: params,
+        request: rawParams,
         respond,
         schema: outcomeCancelParamsSchema,
       });
-      if (!owner) {
+      if (!admission) {
         return;
       }
+      const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "INVALID_REQUEST");

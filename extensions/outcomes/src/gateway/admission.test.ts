@@ -51,7 +51,7 @@ describe("Outcome Gateway admission", () => {
         respond,
         schema,
       }),
-    ).toBe("manager-a");
+    ).toEqual({ owner: "manager-a", request: { id: "outcome" } });
     expect(respond).not.toHaveBeenCalled();
   });
 });
