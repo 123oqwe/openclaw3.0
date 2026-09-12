@@ -35,6 +35,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private detail: OutcomeDetail | null = null;
   @state() private detailError: string | null = null;
   @state() private detailLoading = false;
+  @state() private detailRevalidating = false;
   @state() private selectedOutcomeId: string | null = null;
 
   private requestGeneration = 0;
@@ -63,13 +64,27 @@ class OutcomesPage extends OpenClawLightDomElement {
     };
     const previous = this.gatewayIdentity;
     this.gatewayIdentity = identity;
-    if (previous && !this.sameGatewayIdentity(previous, identity)) {
-      this.resetGatewayState();
+    const identityChanged = previous && !this.sameGatewayIdentity(previous, identity);
+    const preserveSelection = Boolean(
+      identityChanged &&
+        previous &&
+        previous.gateway === identity.gateway &&
+        previous.client === identity.client &&
+        previous.selfUserId === identity.selfUserId &&
+        previous.authorizationKey === identity.authorizationKey &&
+        previous.canRead &&
+        identity.canRead,
+    );
+    if (identityChanged) {
+      this.resetGatewayState(preserveSelection);
     }
     this.disconnected = snapshot.phase !== "connected";
     this.unauthorized = snapshot.phase === "connected" && !identity.canRead;
-    if (previous && !this.sameGatewayIdentity(previous, identity) && identity.canRead) {
+    if (identityChanged && identity.canRead) {
       void this.loadOutcomes();
+      if (preserveSelection && this.selectedOutcomeId) {
+        void this.loadSelectedOutcome();
+      }
     }
   }
 
@@ -94,16 +109,20 @@ class OutcomesPage extends OpenClawLightDomElement {
     );
   }
 
-  private resetGatewayState() {
+  private resetGatewayState(preserveSelection = false) {
     this.requestGeneration += 1;
     this.outcomes = [];
     this.loading = false;
     this.loaded = false;
     this.error = null;
+    this.detailRequestSequence += 1;
     this.detail = null;
     this.detailError = null;
-    this.detailLoading = false;
-    this.selectedOutcomeId = null;
+    this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
+    this.detailRevalidating = this.detailLoading;
+    if (!preserveSelection) {
+      this.selectedOutcomeId = null;
+    }
   }
 
   private async loadOutcomes() {
@@ -145,6 +164,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.selectedOutcomeId = id;
     this.detail = null;
     this.detailError = null;
+    this.detailRevalidating = false;
     void this.loadSelectedOutcome();
   }
 
@@ -154,6 +174,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detail = null;
     this.detailError = null;
     this.detailLoading = false;
+    this.detailRevalidating = false;
   }
 
   private async loadSelectedOutcome() {
@@ -202,6 +223,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.gateway.isCurrent(scope)
       ) {
         this.detailLoading = false;
+        this.detailRevalidating = false;
       }
     }
   }
@@ -228,6 +250,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         detail: this.detail,
         error: this.detailError,
         loading: this.detailLoading,
+        revalidating: this.detailRevalidating,
         onBack: () => this.clearSelectedOutcome(),
         selectedOutcomeId: this.selectedOutcomeId,
       })}

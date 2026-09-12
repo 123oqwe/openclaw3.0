@@ -2470,6 +2470,7 @@ export const en: TranslationMap & {
     readinessLabel: "Readiness",
     loading: "Loading outcomes",
     loadingDetail: "Loading outcome details",
+    revalidatingDetail: "Revalidating outcome details",
     empty: "No outcomes yet",
     loadFailed: "Could not load outcomes: {error}",
     loadDetailFailed: "Could not load outcome details: {error}",
@@ -2482,6 +2483,15 @@ export const en: TranslationMap & {
     optionalCriterion: "Optional",
     linkedCards: "Linked cards",
     linkedCard: "Workboard card {cardId}",
+    sourceIssues: "Source issues",
+    sourceIssue: {
+      workboardDisabled: "Workboard is disabled",
+      notFound: "A linked source was not found",
+      forbidden: "A linked source is unavailable to this account",
+      timeout: "A linked source timed out",
+      invalidResponse: "A linked source returned an invalid response",
+      identityConflict: "A linked source belongs to a different identity",
+    },
     attentionLabel: "Attention",
     nextActionsLabel: "Next actions",
     attention: {

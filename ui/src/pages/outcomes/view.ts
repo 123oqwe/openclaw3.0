@@ -4,6 +4,7 @@ import type {
   OutcomeNextAction,
   OutcomePhase,
   OutcomeReadiness,
+  OutcomeSourceIssueReason,
   OutcomeSummary,
 } from "@openclaw/outcomes-contract";
 import { html, nothing } from "lit";
@@ -26,6 +27,7 @@ export type OutcomeDetailViewData = {
   error: string | null;
   loading: boolean;
   onBack: () => void;
+  revalidating: boolean;
   selectedOutcomeId: string | null;
 };
 
@@ -105,6 +107,23 @@ function nextActionLabel(action: OutcomeNextAction): string {
   }
 }
 
+function sourceIssueLabel(reason: OutcomeSourceIssueReason): string {
+  switch (reason) {
+    case "workboard-disabled":
+      return t("outcomesPage.sourceIssue.workboardDisabled");
+    case "not-found":
+      return t("outcomesPage.sourceIssue.notFound");
+    case "forbidden":
+      return t("outcomesPage.sourceIssue.forbidden");
+    case "timeout":
+      return t("outcomesPage.sourceIssue.timeout");
+    case "invalid-response":
+      return t("outcomesPage.sourceIssue.invalidResponse");
+    case "identity-conflict":
+      return t("outcomesPage.sourceIssue.identityConflict");
+  }
+}
+
 export function renderOutcomesList(data: OutcomesListViewData) {
   if (data.disconnected) {
     return html`<section class="outcomes-state" role="status">
@@ -170,7 +189,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
   }
   if (data.loading) {
     return html`<section class="outcomes-state" role="status" aria-live="polite">
-      ${t("outcomesPage.loadingDetail")}
+      ${data.revalidating ? t("outcomesPage.revalidatingDetail") : t("outcomesPage.loadingDetail")}
     </section>`;
   }
   if (data.error) {
@@ -190,6 +209,14 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     <p class="outcome-detail__readiness" data-outcome-readiness=${data.detail.readiness}>
       ${readinessLabel(data.detail.readiness)}
     </p>
+    ${data.detail.sourceIssues.length > 0
+      ? html`<section class="outcome-detail__section" role="alert">
+          <h3>${t("outcomesPage.sourceIssues")}</h3>
+          <ul>
+            ${data.detail.sourceIssues.map((issue) => html`<li>${sourceIssueLabel(issue.reason)}</li>`)}
+          </ul>
+        </section>`
+      : nothing}
     <section class="outcome-detail__section" aria-label=${t("outcomesPage.criteria")}>
       <h3>${t("outcomesPage.criteria")}</h3>
       <ul>

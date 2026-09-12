@@ -452,7 +452,7 @@ describe("OutcomesPage", () => {
     expect(page.textContent).toContain("Outcome A objective");
     expect(page.textContent).toContain("Verify the release evidence");
     expect(page.textContent).toContain("card-1");
-    expect(page.textContent).toContain("Blocked");
+    expect(page.textContent).toContain("A linked card is blocked");
     expect(page.textContent).toContain("Refresh");
   });
 
