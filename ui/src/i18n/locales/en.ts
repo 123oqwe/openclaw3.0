@@ -9,6 +9,8 @@ export const en: TranslationMap & {
   debug: TranslationMap & { overlay: TranslationMap };
   // Lazy en-devices.ts assigns into this namespace.
   devices: TranslationMap;
+  // Lazy en-outcomes.ts assigns into this namespace.
+  outcomesPage: TranslationMap;
   updates: TranslationMap;
 } = {
   capacityMeter: {
@@ -2464,72 +2466,8 @@ export const en: TranslationMap & {
     writeAccessRequiredBody: "This portal requires an operator with write access.",
     retry: "Retry",
   },
-  outcomesPage: {
-    listLabel: "Outcomes",
-    phaseLabel: "Phase",
-    readinessLabel: "Readiness",
-    loadingDetail: "Loading details",
-    revalidatingDetail: "Checking outcome details",
-    empty: "No outcomes",
-    loadFailed: "Couldn't load outcomes: {error}",
-    loadDetailFailed: "Couldn't load outcome details: {error}",
-    mutationFailed: "Request failed: {error}",
-    createOutcome: "Create outcome",
-    createHelp: "Start an Outcome with its first required criterion.",
-    title: "Title",
-    objective: "Objective",
-    criterion: "Criterion",
-    cancelOutcome: "Cancel outcome",
-    cancelHelp: "Stops tracking permanently.",
-    cancelling: "Cancelling",
-    disconnected: "Outcome connection unavailable",
-    unauthorized: "Outcome access unavailable",
-    viewOutcome: "View",
-    criteria: "Criteria",
-    requiredCriterion: "Required",
-    optionalCriterion: "Optional",
-    linkedCards: "Linked cards",
-    linkedCard: "Card {cardId}",
-    sourceIssue: {
-      workboardDisabled: "Workboard disabled",
-      unavailable: "Linked source unavailable",
-    },
-    attentionLabel: "Attention",
-    nextActionsLabel: "Next actions",
-    attention: {
-      ownerUnavailable: "Owner unavailable",
-      stale: "Information is stale",
-      blocked: "A linked card is blocked",
-      contractIncomplete: "The Outcome contract is incomplete",
-      evidenceMissing: "Evidence is missing",
-      verificationRequired: "Verification is required",
-      rejected: "A decision was rejected",
-      readyForAcceptance: "Ready for acceptance",
-      acceptanceNeedsReview: "Acceptance needs review",
-      unknownOperation: "An operation needs observation",
-    },
-    nextAction: {
-      editContract: "Edit contract",
-      linkWork: "Link work",
-      unlinkWork: "Unlink work",
-      activate: "Start tracking",
-      reviewEvidence: "Review evidence",
-      accept: "Accept",
-      observeOperation: "Observe operation",
-    },
-    phase: {
-      draft: "Draft",
-      accepted: "Accepted",
-      cancelled: "Cancelled",
-    },
-    readiness: {
-      incomplete: "Incomplete",
-      blocked: "Blocked",
-      ready: "Ready",
-      stale: "Stale",
-      unavailable: "Unavailable",
-    },
-  },
+  // Lazy: en-outcomes.ts registers this subtree when the Outcomes page renders.
+  outcomesPage: {},
   modelSetup: {
     missingAuth: "No provider credential is configured for this model. Set it up in Model Setup.",
     heading: "Connect a verified AI model",

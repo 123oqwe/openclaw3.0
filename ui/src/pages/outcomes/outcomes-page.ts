@@ -5,6 +5,7 @@ import { state } from "lit/decorators.js";
 import { titleForRoute, subtitleForRoute } from "../../app-navigation.ts";
 import { applicationContext, type ApplicationContext } from "../../app/context.ts";
 import { t } from "../../i18n/index.ts";
+import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
 import { formatUiError } from "../../lib/format-error.ts";
 import { canCallGatewayMethod } from "../../lib/gateway-methods.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
@@ -18,6 +19,8 @@ import {
   refreshOutcome,
 } from "./client.ts";
 import { renderCreateOutcomeDialog, renderOutcomeDetail, renderOutcomesList } from "./view.ts";
+
+registerOutcomesEnglish();
 
 type OutcomeGatewayIdentity = {
   authorizationKey: string;
