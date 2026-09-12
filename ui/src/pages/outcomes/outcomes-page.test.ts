@@ -142,4 +142,35 @@ describe("OutcomesPage", () => {
     });
     expect(page.textContent).not.toContain("No outcomes yet");
   });
+
+  it("clears an in-flight authenticated list and shows a disconnected state when the Gateway stops", async () => {
+    let resolveList: ((result: { outcomes: [] }) => void) | undefined;
+    const request = vi.fn(
+      () =>
+        new Promise<{ outcomes: [] }>((resolve) => {
+          resolveList = resolve;
+        }),
+    );
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    let receiveSnapshot: ((snapshot: ApplicationGatewaySnapshot) => void) | undefined;
+    gateway.subscribe = (listener) => {
+      receiveSnapshot = listener;
+      return () => undefined;
+    };
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.list", {});
+    });
+    receiveSnapshot?.({ ...gateway.snapshot, client: null, phase: "stopped", selfUser: null });
+    await page.updateComplete;
+
+    expect(page.textContent).toContain("Outcome connection is unavailable");
+    resolveList?.({ outcomes: [] });
+    await page.updateComplete;
+    expect(page.textContent).not.toContain("No outcomes yet");
+  });
 });
