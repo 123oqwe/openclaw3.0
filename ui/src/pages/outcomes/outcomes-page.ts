@@ -1,5 +1,5 @@
 import { consume } from "@lit/context";
-import type { OutcomeListResult, OutcomeSummary } from "@openclaw/outcomes-contract";
+import type { OutcomeDetail, OutcomeSummary } from "@openclaw/outcomes-contract";
 import { html } from "lit";
 import { state } from "lit/decorators.js";
 import { titleForRoute, subtitleForRoute } from "../../app-navigation.ts";
@@ -9,7 +9,8 @@ import { formatUiError } from "../../lib/format-error.ts";
 import { canCallGatewayMethod } from "../../lib/gateway-methods.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
-import { renderOutcomesList } from "./view.ts";
+import { getOutcome, listOutcomes } from "./client.ts";
+import { renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
 type OutcomeGatewayIdentity = {
   authorizationKey: string;
@@ -31,8 +32,13 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private loading = false;
   @state() private loaded = false;
   @state() private error: string | null = null;
+  @state() private detail: OutcomeDetail | null = null;
+  @state() private detailError: string | null = null;
+  @state() private detailLoading = false;
+  @state() private selectedOutcomeId: string | null = null;
 
   private requestGeneration = 0;
+  private detailRequestSequence = 0;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
 
   private readonly gateway = new GatewayPageController(this, {
@@ -94,6 +100,10 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.loading = false;
     this.loaded = false;
     this.error = null;
+    this.detail = null;
+    this.detailError = null;
+    this.detailLoading = false;
+    this.selectedOutcomeId = null;
   }
 
   private async loadOutcomes() {
@@ -114,7 +124,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.loading = true;
     this.error = null;
     try {
-      const result = await client.request<OutcomeListResult>("outcomes.list", {});
+      const result = await listOutcomes(client);
       if (generation === this.requestGeneration && this.gateway.isCurrent(scope)) {
         this.outcomes = result.outcomes;
         this.loaded = true;
@@ -127,6 +137,71 @@ class OutcomesPage extends OpenClawLightDomElement {
     } finally {
       if (generation === this.requestGeneration && this.gateway.isCurrent(scope)) {
         this.loading = false;
+      }
+    }
+  }
+
+  private selectOutcome(id: string) {
+    this.selectedOutcomeId = id;
+    this.detail = null;
+    this.detailError = null;
+    void this.loadSelectedOutcome();
+  }
+
+  private clearSelectedOutcome() {
+    this.detailRequestSequence += 1;
+    this.selectedOutcomeId = null;
+    this.detail = null;
+    this.detailError = null;
+    this.detailLoading = false;
+  }
+
+  private async loadSelectedOutcome() {
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    if (
+      !id ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.gatewayIdentity?.canRead ||
+      !canCallGatewayMethod(snapshot, "outcomes.get", "operator.read")
+    ) {
+      return;
+    }
+    const generation = this.requestGeneration;
+    const sequence = ++this.detailRequestSequence;
+    this.detailLoading = true;
+    this.detailError = null;
+    try {
+      const detail = await getOutcome(client, id);
+      if (
+        generation === this.requestGeneration &&
+        sequence === this.detailRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.detail = detail;
+      }
+    } catch (error) {
+      if (
+        generation === this.requestGeneration &&
+        sequence === this.detailRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.detailError = t("outcomesPage.loadDetailFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      if (
+        generation === this.requestGeneration &&
+        sequence === this.detailRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.detailLoading = false;
       }
     }
   }
@@ -146,6 +221,15 @@ class OutcomesPage extends OpenClawLightDomElement {
         loading: this.loading,
         loaded: this.loaded,
         error: this.error,
+        onSelect: (id) => this.selectOutcome(id),
+        selectedOutcomeId: this.selectedOutcomeId,
+      })}
+      ${renderOutcomeDetail({
+        detail: this.detail,
+        error: this.detailError,
+        loading: this.detailLoading,
+        onBack: () => this.clearSelectedOutcome(),
+        selectedOutcomeId: this.selectedOutcomeId,
       })}
     `;
   }

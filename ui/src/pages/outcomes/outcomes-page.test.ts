@@ -57,7 +57,7 @@ function createGateway(client: GatewayBrowserClient): ApplicationContext["gatewa
     phase: "connected",
     offlineStable: false,
     canvasPluginSurfaceUrl: null,
-    hello: gatewayHelloForMethods(["outcomes.list"], ["operator.read"]),
+    hello: gatewayHelloForMethods(["outcomes.list", "outcomes.get"], ["operator.read"]),
     assistantAgentId: null,
     sessionKey: "main",
     lastError: null,

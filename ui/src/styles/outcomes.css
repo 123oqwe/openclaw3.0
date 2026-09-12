@@ -37,3 +37,26 @@
 .outcome-summary__status dd {
   margin: 0;
 }
+
+.outcome-summary__select,
+.outcome-detail__back {
+  min-height: 44px;
+  margin-top: var(--space-3);
+}
+
+.outcome-detail {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.outcome-detail__title {
+  margin: var(--space-3) 0 0;
+  color: var(--text-strong);
+}
+
+.outcome-detail__objective {
+  margin: var(--space-2) 0 0;
+}

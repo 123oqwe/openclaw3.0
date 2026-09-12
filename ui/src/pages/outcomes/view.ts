@@ -1,4 +1,9 @@
-import type { OutcomePhase, OutcomeReadiness, OutcomeSummary } from "@openclaw/outcomes-contract";
+import type {
+  OutcomeDetail,
+  OutcomePhase,
+  OutcomeReadiness,
+  OutcomeSummary,
+} from "@openclaw/outcomes-contract";
 import { html, nothing } from "lit";
 import { t } from "../../i18n/index.ts";
 import "../../styles/outcomes.css";
@@ -8,8 +13,18 @@ export type OutcomesListViewData = {
   error: string | null;
   loaded: boolean;
   loading: boolean;
+  onSelect: (id: string) => void;
   outcomes: readonly OutcomeSummary[];
+  selectedOutcomeId: string | null;
   unauthorized: boolean;
+};
+
+export type OutcomeDetailViewData = {
+  detail: OutcomeDetail | null;
+  error: string | null;
+  loading: boolean;
+  onBack: () => void;
+  selectedOutcomeId: string | null;
 };
 
 function phaseLabel(phase: OutcomePhase): string {
@@ -84,8 +99,43 @@ export function renderOutcomesList(data: OutcomesListViewData) {
               </dd>
             </div>
           </dl>
+          <button
+            class="outcome-summary__select"
+            data-outcome-select=${outcome.id}
+            type="button"
+            aria-current=${data.selectedOutcomeId === outcome.id ? "true" : "false"}
+            @click=${() => data.onSelect(outcome.id)}
+          >
+            ${t("outcomesPage.viewOutcome")}
+          </button>
         </article>
       `,
     )}
   </section>`;
+}
+
+export function renderOutcomeDetail(data: OutcomeDetailViewData) {
+  if (!data.selectedOutcomeId) {
+    return nothing;
+  }
+  if (data.loading) {
+    return html`<section class="outcomes-state" role="status" aria-live="polite">
+      ${t("outcomesPage.loadingDetail")}
+    </section>`;
+  }
+  if (data.error) {
+    return html`<section class="outcomes-state outcomes-state--error" role="alert">
+      ${data.error}
+    </section>`;
+  }
+  if (!data.detail) {
+    return nothing;
+  }
+  return html`<article class="outcome-detail" data-outcome-detail-id=${data.detail.id}>
+    <button class="outcome-detail__back" type="button" @click=${data.onBack}>
+      ${t("outcomesPage.backToList")}
+    </button>
+    <h2 class="outcome-detail__title">${data.detail.title}</h2>
+    <p class="outcome-detail__objective">${data.detail.objective}</p>
+  </article>`;
 }
