@@ -282,7 +282,9 @@ suite.define(() => {
 
         const summary = page.locator(".outcome-summary", { hasText: "Release Outcome E2E" });
         await summary.waitFor({ state: "visible" });
-        await summary.locator("[data-outcome-select]").click();
+        const selectOutcome = summary.locator("[data-outcome-select]");
+        await selectOutcome.focus();
+        await page.keyboard.press("Enter");
 
         const detail = page.locator("[data-outcome-detail-id]");
         await detail.waitFor({ state: "visible" });
@@ -290,10 +292,17 @@ suite.define(() => {
         if (!outcomeId) {
           throw new Error("Outcome detail omitted its ID");
         }
-        await detail.locator('[data-outcome-action="link-work"]').click();
+        const linkWork = detail.locator('[data-outcome-action="link-work"]');
+        await linkWork.focus();
+        await page.keyboard.press("Enter");
         const linkForm = page.locator("[data-outcome-link-form]");
-        await linkForm.locator('select[name="card"]').selectOption(cardId);
-        await linkForm.locator("[data-outcome-confirm-link]").click();
+        const linkedCard = linkForm.locator('select[name="card"]');
+        await linkedCard.focus();
+        await page.keyboard.press("ArrowDown");
+        await expect.poll(() => linkedCard.inputValue()).toBe(cardId);
+        const confirmLink = linkForm.locator("[data-outcome-confirm-link]");
+        await confirmLink.focus();
+        await page.keyboard.press("Enter");
         await detail.getByText(`Card ${cardId}`, { exact: true }).waitFor({ state: "visible" });
 
         await callGateway("workboard.cards.proof", {
@@ -301,14 +310,18 @@ suite.define(() => {
           label: "Outcome E2E verification",
           status: "passed",
         });
-        await detail.locator('[data-outcome-action="activate"]').click();
+        const activate = detail.locator('[data-outcome-action="activate"]');
+        await activate.focus();
+        await page.keyboard.press("Enter");
         await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
         await expect.poll(() => detail.locator('[data-outcome-action="activate"]').count()).toBe(0);
         const activated = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
         expect(activated.phase).toBe("active");
         const activatedRevision = requireNumber(activated, "revision");
 
-        await detail.locator('[data-outcome-action="refresh"]').click();
+        const refresh = detail.locator('[data-outcome-action="refresh"]');
+        await refresh.focus();
+        await page.keyboard.press("Enter");
         await expect
           .poll(() => detail.locator('[data-outcome-action="refresh"]').isEnabled())
           .toBe(true);
@@ -341,7 +354,8 @@ suite.define(() => {
           id: cardId,
           reason: "Outcome E2E needs operator attention",
         });
-        await detail.locator('[data-outcome-action="refresh"]').click();
+        await refresh.focus();
+        await page.keyboard.press("Enter");
         await detail
           .getByText("A linked card is blocked", { exact: true })
           .waitFor({ state: "visible" });
