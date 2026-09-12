@@ -2082,6 +2082,7 @@ jobs:
             ui/src/pages/outcomes/outcomes-page.test.ts \
             ui/src/pages/outcomes/outcomes-page.ts \
             ui/src/pages/outcomes/view.ts \
+            ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts \
             ui/src/e2e/outcomes.real-gateway.e2e.test.ts \
             ui/src/styles/outcomes.css
           {

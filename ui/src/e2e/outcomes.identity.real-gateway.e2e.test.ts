@@ -585,8 +585,8 @@ identitySuite.define(() => {
         await detail.locator('[data-outcome-action="refresh"]').click();
         const aliceEvidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
         await aliceEvidence.waitFor({ state: "visible" });
-        await expect(aliceEvidence).toContainText("Proof: Alice identity proof");
-        await expect(aliceEvidence).toContainText("Proof status: passed");
+        await expect.poll(async () => aliceEvidence.textContent()).toContain("Proof: Alice identity proof");
+        await expect.poll(async () => aliceEvidence.textContent()).toContain("Proof status: passed");
         if (captureUiProofEnabled) {
           await page.screenshot({
             fullPage: true,
@@ -645,8 +645,10 @@ identitySuite.define(() => {
         await page.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
         const restoredEvidence = page.locator(`[data-outcome-evidence="${proofId}"]`);
         await restoredEvidence.waitFor({ state: "visible" });
-        await expect(restoredEvidence).toContainText("Proof: Alice identity proof");
-        await expect(restoredEvidence).toContainText("Proof status: passed");
+        await expect
+          .poll(async () => restoredEvidence.textContent())
+          .toContain("Proof: Alice identity proof");
+        await expect.poll(async () => restoredEvidence.textContent()).toContain("Proof status: passed");
       },
     );
   });
