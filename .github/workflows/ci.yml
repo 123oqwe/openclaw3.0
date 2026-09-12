@@ -2810,6 +2810,7 @@ jobs:
           ui/src/e2e/logs-lifecycle.e2e.test.ts
           ui/src/e2e/agent-file-lifecycle.real-gateway.e2e.test.ts
           ui/src/e2e/cron-duration-save.real-gateway.e2e.test.ts
+          ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts
           ui/src/e2e/outcomes.real-gateway.e2e.test.ts
           ui/src/e2e/session-progress-hovercard.real-gateway.e2e.test.ts
           extensions/qa-lab/src/control-ui-media-transcript.real-gateway.e2e.test.ts
