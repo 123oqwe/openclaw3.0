@@ -175,13 +175,26 @@ function createHarness(state: { env: NodeJS.ProcessEnv }) {
     if (method === "workboard.cards.list") {
       workboardListRequests += 1;
     }
-    return await dispatchGatewayMethodInProcess(method, params, {
-      forceSyntheticClient: true,
-      requireAuthenticatedRequest: options?.requireAuthenticatedRequest === true,
-      requireScopedClient: options?.requireAuthenticatedRequest === true,
-      ...(options?.scopes ? { syntheticScopes: [...options.scopes] } : {}),
-      ...(options?.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
-    });
+    try {
+      return await dispatchGatewayMethodInProcess(method, params, {
+        forceSyntheticClient: true,
+        requireAuthenticatedRequest: options?.requireAuthenticatedRequest === true,
+        requireScopedClient: options?.requireAuthenticatedRequest === true,
+        ...(options?.scopes ? { syntheticScopes: [...options.scopes] } : {}),
+        ...(options?.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
+      });
+    } catch (error) {
+      const details =
+        error !== null && typeof error === "object"
+          ? {
+              code: "code" in error ? error.code : undefined,
+              message: "message" in error ? error.message : undefined,
+              name: "name" in error ? error.name : undefined,
+            }
+          : { message: String(error) };
+      console.info("[outcome-workboard-public-diagnostic]", { method, ...details });
+      throw error;
+    }
   };
   const createApi = (pluginId: Registration["pluginId"], runtime: unknown) =>
     createTestPluginApi({
@@ -255,6 +268,14 @@ describe("Outcome public Workboard Gateway integration", () => {
             criteria: [{ id: criterionId, text: "Public evidence", required: true }],
           },
         });
+        await expect(
+          dispatch({
+            client: owner,
+            context: harness.context,
+            method: "workboard.cards.list",
+            request: {},
+          }),
+        ).resolves.toMatchObject({ cards: expect.arrayContaining([{ id: cardResult.card.id }]) });
         await dispatch({
           client: owner,
           context: harness.context,
