@@ -133,6 +133,7 @@ function evaluateWorkflowExpression(
     headRepository?: string;
     hostedRunnerProfileContract?: boolean;
     matrix?: Record<string, unknown>;
+    prepareOutcomeArtifacts?: boolean;
     preflightOutputs?: Record<string, string>;
     ref?: string;
     resolveTargetOutputs?: Record<string, string>;
@@ -197,6 +198,7 @@ function evaluateWorkflowExpression(
     },
     inputs: {
       dispatch_id: context.dispatchId ?? "",
+      prepare_outcome_artifacts: context.prepareOutcomeArtifacts ?? false,
       release_gate: context.releaseGate ?? false,
       release_scope: context.releaseScope ?? "full",
       target_context_ref: context.targetContextRef ?? "",
@@ -13730,7 +13732,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
         .toSorted(),
     );
     expect(gate.if).toBe(
-      "${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}",
+      "${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && !(github.repository == '123oqwe/openclaw3.0' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts) }}",
     );
     expect(gate.permissions).toEqual({ contents: "read" });
 
@@ -13786,6 +13788,51 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
           ).toBe(!cancelled && (eventName !== "pull_request" || !draft));
         }
       }
+    }
+  });
+
+  it("skips ci-gate only for the review-only Outcome artifact dispatch", () => {
+    const gate = readCiWorkflow().jobs["ci-gate"];
+    const cases = [
+      {
+        context: {
+          eventName: "workflow_dispatch" as const,
+          prepareOutcomeArtifacts: true,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: false,
+      },
+      {
+        context: {
+          eventName: "workflow_dispatch" as const,
+          prepareOutcomeArtifacts: false,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: true,
+      },
+      {
+        context: { eventName: "workflow_dispatch" as const, repository: "123oqwe/openclaw3.0" },
+        expected: true,
+      },
+      {
+        context: {
+          eventName: "pull_request" as const,
+          prepareOutcomeArtifacts: true,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: true,
+      },
+      {
+        context: {
+          eventName: "push" as const,
+          prepareOutcomeArtifacts: true,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: true,
+      },
+    ];
+    for (const { context, expected } of cases) {
+      expect(evaluateWorkflowExpression(gate.if, { ...context, runAttempt: 1 })).toBe(expected);
     }
   });
 
