@@ -454,6 +454,7 @@ describe("OutcomesPage", () => {
     expect(page.textContent).toContain("card-1");
     expect(page.textContent).toContain("A linked card is blocked");
     expect(page.textContent).toContain("Refresh");
+    expect(page.querySelector('[data-outcome-action="refresh"]')).toBeNull();
   });
 
   it("renders a Workboard-disabled source issue as an explicit unavailable state", async () => {

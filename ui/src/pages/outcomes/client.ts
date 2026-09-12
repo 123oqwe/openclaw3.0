@@ -1,4 +1,8 @@
-import type { OutcomeDetail, OutcomeListResult } from "@openclaw/outcomes-contract";
+import type {
+  OutcomeDetail,
+  OutcomeListResult,
+  OutcomeRefreshResult,
+} from "@openclaw/outcomes-contract";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 
 export async function listOutcomes(client: GatewayBrowserClient): Promise<OutcomeListResult> {
@@ -7,5 +11,17 @@ export async function listOutcomes(client: GatewayBrowserClient): Promise<Outcom
 
 export async function getOutcome(client: GatewayBrowserClient, id: string): Promise<OutcomeDetail> {
   const result = await client.request<{ outcome: OutcomeDetail }>("outcomes.get", { id });
+  return result.outcome;
+}
+
+export async function refreshOutcome(
+  client: GatewayBrowserClient,
+  id: string,
+  expectedRevision: number,
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeRefreshResult>("outcomes.refresh", {
+    expectedRevision,
+    id,
+  });
   return result.outcome;
 }

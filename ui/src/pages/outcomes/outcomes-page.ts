@@ -9,7 +9,7 @@ import { formatUiError } from "../../lib/format-error.ts";
 import { canCallGatewayMethod } from "../../lib/gateway-methods.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
-import { getOutcome, listOutcomes } from "./client.ts";
+import { getOutcome, listOutcomes, refreshOutcome } from "./client.ts";
 import { renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
 type OutcomeGatewayIdentity = {
@@ -36,10 +36,13 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private detailError: string | null = null;
   @state() private detailLoading = false;
   @state() private detailRevalidating = false;
+  @state() private refreshError: string | null = null;
+  @state() private refreshing = false;
   @state() private selectedOutcomeId: string | null = null;
 
   private requestGeneration = 0;
   private detailRequestSequence = 0;
+  private mutationSequence = 0;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
 
   private readonly gateway = new GatewayPageController(this, {
@@ -118,6 +121,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRequestSequence += 1;
     this.detail = null;
     this.detailError = null;
+    this.refreshError = null;
+    this.refreshing = false;
+    this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
     if (!preserveSelection) {
@@ -175,6 +181,82 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailError = null;
     this.detailLoading = false;
     this.detailRevalidating = false;
+    this.refreshError = null;
+    this.refreshing = false;
+    this.mutationSequence += 1;
+  }
+
+  private canRefreshOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+        this.detail.nextActions.includes("refresh") &&
+        this.gatewayIdentity?.canRead &&
+        canCallGatewayMethod(this.gateway.snapshot, "outcomes.refresh", "operator.write"),
+    );
+  }
+
+  private async refreshSelectedOutcome() {
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    if (
+      this.refreshing ||
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canRefreshOutcome()
+    ) {
+      return;
+    }
+    const sequence = ++this.mutationSequence;
+    this.detailRequestSequence += 1;
+    this.refreshError = null;
+    this.refreshing = true;
+    try {
+      const refreshed = await refreshOutcome(client, id, detail.revision);
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        refreshed.revision >= detail.revision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.detail = refreshed;
+        this.outcomes = this.outcomes.map((outcome) =>
+          outcome.id === refreshed.id
+            ? {
+                acceptanceValidity: refreshed.acceptanceValidity,
+                id: refreshed.id,
+                phase: refreshed.phase,
+                readiness: refreshed.readiness,
+                revision: refreshed.revision,
+                title: refreshed.title,
+                updatedAt: refreshed.updatedAt,
+              }
+            : outcome,
+        );
+      }
+    } catch (error) {
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.refreshError = t("outcomesPage.refreshFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.refreshing = false;
+      }
+    }
   }
 
   private async loadSelectedOutcome() {
@@ -250,7 +332,11 @@ class OutcomesPage extends OpenClawLightDomElement {
         detail: this.detail,
         error: this.detailError,
         loading: this.detailLoading,
+        canRefresh: this.canRefreshOutcome(),
+        mutationError: this.refreshError,
+        onRefresh: () => void this.refreshSelectedOutcome(),
         revalidating: this.detailRevalidating,
+        refreshing: this.refreshing,
         onBack: () => this.clearSelectedOutcome(),
         selectedOutcomeId: this.selectedOutcomeId,
       })}

@@ -82,6 +82,10 @@
   overflow-wrap: anywhere;
 }
 
+.outcome-detail__actions button {
+  min-height: 44px;
+}
+
 .outcome-detail__criterion-kind {
   display: block;
   margin-top: var(--space-1);

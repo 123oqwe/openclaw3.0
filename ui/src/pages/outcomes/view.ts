@@ -23,11 +23,15 @@ export type OutcomesListViewData = {
 };
 
 export type OutcomeDetailViewData = {
+  canRefresh: boolean;
   detail: OutcomeDetail | null;
   error: string | null;
   loading: boolean;
   onBack: () => void;
+  onRefresh: () => void;
+  mutationError: string | null;
   revalidating: boolean;
+  refreshing: boolean;
   selectedOutcomeId: string | null;
 };
 
@@ -251,6 +255,23 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           <ul>
             ${data.detail.nextActions.map((action) => html`<li>${nextActionLabel(action)}</li>`)}
           </ul>
+        </section>`
+      : nothing}
+    ${data.canRefresh && data.detail.nextActions.includes("refresh")
+      ? html`<section class="outcome-detail__section outcome-detail__actions" aria-live="polite">
+          <button
+            data-outcome-action="refresh"
+            type="button"
+            ?disabled=${data.refreshing}
+            @click=${data.onRefresh}
+          >
+            ${data.refreshing ? t("outcomesPage.refreshing") : t("outcomesPage.refresh")}
+          </button>
+          ${data.mutationError
+            ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                ${data.mutationError}
+              </p>`
+            : nothing}
         </section>`
       : nothing}
   </article>`;
