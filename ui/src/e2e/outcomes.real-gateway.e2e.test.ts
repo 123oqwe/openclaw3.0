@@ -13,6 +13,24 @@ import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts"
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+// The isolated-instance helper defaults to a minimal Gateway and therefore does
+// not load configured plugins. This proof must load the real Outcomes and
+// Workboard entries from the fixture config.
+const realGatewayPluginEnv = {
+  OPENCLAW_GATEWAY_TOKEN: undefined,
+  OPENCLAW_GATEWAY_PASSWORD: undefined,
+  OPENCLAW_TEST_MINIMAL_GATEWAY: undefined,
+  OPENCLAW_SKIP_CHANNELS: undefined,
+  OPENCLAW_SKIP_PROVIDERS: undefined,
+  VITEST: undefined,
+  VITEST_POOL_ID: undefined,
+  VITEST_WORKER_ID: undefined,
+  NODE_ENV: undefined,
+  CODEX_HOME: undefined,
+  OPENAI_API_KEY: undefined,
+  ANTHROPIC_API_KEY: undefined,
+  OPENCLAW_BUILD_PRIVATE_QA: "1",
+} as const;
 
 const suite = createControlUiE2eSuite({
   name: "Control UI Outcomes with a real Gateway",
@@ -20,6 +38,8 @@ const suite = createControlUiE2eSuite({
   async startServer() {
     const owner = await createOpenClawTestInstance({
       name: "control-ui-outcomes",
+      startTimeoutMs: 120_000,
+      env: realGatewayPluginEnv,
       config: {
         gateway: { controlUi: { enabled: true } },
         plugins: {
@@ -56,6 +76,8 @@ const unavailableSuite = createControlUiE2eSuite({
   async startServer() {
     const owner = await createOpenClawTestInstance({
       name: "control-ui-outcomes-unavailable",
+      startTimeoutMs: 120_000,
+      env: realGatewayPluginEnv,
       config: {
         gateway: { controlUi: { enabled: true } },
         plugins: {
