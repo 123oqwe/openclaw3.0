@@ -10,9 +10,9 @@ import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts
 import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
-import { OUTCOME_DETAIL_MAX_FRESHNESS_MS } from "../pages/outcomes/freshness.ts";
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
+const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
 const suite = createControlUiE2eSuite({
   name: "Control UI Outcomes with a real Gateway",
@@ -342,7 +342,7 @@ suite.define(() => {
           );
         }
 
-        await page.clock.fastForward(OUTCOME_DETAIL_MAX_FRESHNESS_MS + 1);
+        await page.clock.fastForward(twentyFourHoursMs + 1);
         await detail.locator('[data-outcome-readiness="stale"]').waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,

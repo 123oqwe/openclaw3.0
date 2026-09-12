@@ -1,9 +1,7 @@
 import { describe, expect, it } from "vitest";
-import {
-  isOutcomeDetailFresh,
-  outcomeDetailFreshnessDeadline,
-  OUTCOME_DETAIL_MAX_FRESHNESS_MS,
-} from "./freshness.ts";
+import { isOutcomeDetailFresh, outcomeDetailFreshnessDeadline } from "./freshness.ts";
+
+const twentyFourHoursMs = 24 * 60 * 60 * 1000;
 
 describe("Outcome detail freshness", () => {
   it("uses the server observation window from the monotonic request start", () => {
@@ -20,10 +18,10 @@ describe("Outcome detail freshness", () => {
   it("caps an overlong server window at twenty-four hours", () => {
     expect(
       outcomeDetailFreshnessDeadline(
-        { observedAt: 1, recheckAfter: 1 + OUTCOME_DETAIL_MAX_FRESHNESS_MS * 2 },
+        { observedAt: 1, recheckAfter: 1 + twentyFourHoursMs * 2 },
         20,
       ),
-    ).toBe(20 + OUTCOME_DETAIL_MAX_FRESHNESS_MS);
+    ).toBe(20 + twentyFourHoursMs);
   });
 
   it("does not create a display deadline when the server has none", () => {

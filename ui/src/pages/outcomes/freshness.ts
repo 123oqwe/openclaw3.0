@@ -1,6 +1,6 @@
 import type { OutcomeDetail } from "@openclaw/outcomes-contract";
 
-export const OUTCOME_DETAIL_MAX_FRESHNESS_MS = 24 * 60 * 60 * 1000;
+const OUTCOME_DETAIL_MAX_FRESHNESS_MS = 24 * 60 * 60 * 1000;
 
 /**
  * Derives a display-only deadline from the server observation window. The
