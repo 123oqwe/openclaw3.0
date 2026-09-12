@@ -99,4 +99,45 @@ describe("OutcomesPage", () => {
       expect(page.textContent).toContain("No outcomes yet");
     });
   });
+
+  it("renders the authenticated Outcome summaries after the first read succeeds", async () => {
+    const request = vi.fn(async () => ({
+      outcomes: [
+        {
+          id: "outcome-1",
+          title: "Launch beta",
+          phase: "draft",
+          revision: 1,
+          updatedAt: 1,
+          readiness: "incomplete",
+          acceptanceValidity: "none",
+        },
+      ],
+    }));
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-id="outcome-1"]')?.textContent).toContain(
+        "Launch beta",
+      );
+    });
+  });
+
+  it("renders a failed authenticated read as an error instead of an empty Outcome list", async () => {
+    const request = vi.fn(async () => {
+      throw new Error("gateway unavailable");
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[role="alert"]')?.textContent).toContain("Could not load outcomes");
+    });
+    expect(page.textContent).not.toContain("No outcomes yet");
+  });
 });
