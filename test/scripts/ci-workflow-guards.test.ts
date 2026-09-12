@@ -133,6 +133,7 @@ function evaluateWorkflowExpression(
     headRepository?: string;
     hostedRunnerProfileContract?: boolean;
     matrix?: Record<string, unknown>;
+    prepareOutcomeArtifacts?: boolean;
     preflightOutputs?: Record<string, string>;
     ref?: string;
     resolveTargetOutputs?: Record<string, string>;
@@ -197,6 +198,7 @@ function evaluateWorkflowExpression(
     },
     inputs: {
       dispatch_id: context.dispatchId ?? "",
+      prepare_outcome_artifacts: context.prepareOutcomeArtifacts ?? false,
       release_gate: context.releaseGate ?? false,
       release_scope: context.releaseScope ?? "full",
       target_context_ref: context.targetContextRef ?? "",
@@ -2341,9 +2343,31 @@ NODE
     const changedScopeStep = preflightSteps.find(
       (step: WorkflowStep) => step.name === "Detect changed scopes",
     );
-    expect(changedScopeStep.if).toContain(
-      "github.event_name == 'workflow_dispatch' && inputs.release_gate",
+    const ensureBaseStep = preflightSteps.find(
+      (step: WorkflowStep) => step.name === "Ensure preflight base commit",
     );
+    expect(ensureBaseStep.if).toBeUndefined();
+    expect(ensureBaseStep.with["base-sha"]).toContain("steps.diff_base.outputs.sha");
+    expect(ensureBaseStep.with["fetch-ref"]).toContain("github.event.repository.default_branch");
+    expect(changedScopeStep.if).toContain("github.event_name == 'workflow_dispatch'");
+    expect(
+      evaluateWorkflowExpression(`\${{ ${changedScopeStep.if} }}`, {
+        eventName: "workflow_dispatch",
+        releaseGate: false,
+        repository: "openclaw/openclaw",
+        runAttempt: 1,
+        steps: { docs_scope: { outputs: { docs_only: "true" } } },
+      }),
+    ).toBe(true);
+    expect(
+      evaluateWorkflowExpression(`\${{ ${changedScopeStep.if} }}`, {
+        eventName: "pull_request",
+        releaseGate: false,
+        repository: "openclaw/openclaw",
+        runAttempt: 1,
+        steps: { docs_scope: { outputs: { docs_only: "true" } } },
+      }),
+    ).toBe(false);
     expect(changedScopeStep.env?.OPENCLAW_ALLOW_RELEASE_GENERATED_MIX).toContain(
       "github.event_name == 'workflow_dispatch'",
     );
@@ -3642,6 +3666,7 @@ NODE
       eventName: "workflow_dispatch",
       historicalCompatibility: false,
       runnerBackend: "hybrid",
+      changedPaths: ["extensions/outcomes/index.ts"],
     });
 
     expect(blacksmith.status, blacksmith.output).toBe(0);
@@ -3692,6 +3717,7 @@ NODE
           historicalCompatibility: !partsSupported,
           macosNodeParts: partsSupported,
           runnerBackend,
+          changedPaths: ["extensions/outcomes/index.ts"],
         });
         expect(manifest.status, manifest.output).toBe(0);
         const rows = JSON.parse(
@@ -4629,6 +4655,7 @@ setImmediate(() => {
       historicalCompatibility: false,
       runnerBackend: "blacksmith",
       runnerProfile: "github",
+      changedPaths: ["extensions/outcomes/index.ts"],
     });
     expect(dispatchManifest.status, dispatchManifest.output).toBe(0);
     expect(
@@ -10512,6 +10539,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       historicalCompatibility: false,
       releaseGate: true,
       runnerProfile: "github",
+      changedPaths: [],
     });
     expect(releaseGate.status, releaseGate.output).toBe(0);
     expect(
@@ -10827,6 +10855,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     ({ scope, packageVersion, branch, context }) => {
       const options = {
         bundledPlanner: true,
+        changedPaths: ["package.json"],
         packageVersion,
         scopeEnv: {
           OPENCLAW_CI_TARGET_REF: "a".repeat(40),
@@ -10905,6 +10934,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     ({ context, direct, peeled, packageVersion, accepted }) => {
       const result = runCiManifestFixture({
         bundledPlanner: true,
+        changedPaths: ["package.json"],
         packageVersion: packageVersion ?? "2026.9.1",
         remoteTagRefs: {
           ...(direct ? { "refs/tags/v2026.9.1": direct.repeat(40) } : {}),
@@ -11080,7 +11110,10 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
         }));
         const result = runCiManifestFixture({
           bundledPlanner: true,
-          changedPaths: ["extensions/matrix/src/channel.ts"],
+          changedPaths:
+            eventName === "workflow_dispatch"
+              ? ["package.json"]
+              : ["extensions/matrix/src/channel.ts"],
           changedPlannerSource:
             selection === "precise"
               ? `export { createNodeTestShards as createChangedNodeTestShards } from "./ci-node-test-plan.mts";
@@ -11158,7 +11191,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(androidRun).toContain("test-play-compat)");
     expect(androidRun).toContain(":app:assemblePlayDebug");
 
-    const legacy = runCiManifestFixture({ bundledPlanner: false });
+    const legacy = runCiManifestFixture({ bundledPlanner: false, changedPaths: [] });
     expect(legacy.status, legacy.output).toBe(0);
     expect(legacy.outputs.historical_target).toBe("true");
     expect(legacy.outputs.use_compatible_android_ci).toBe("true");
@@ -11192,7 +11225,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       }),
     );
 
-    const current = runCiManifestFixture({ bundledPlanner: true });
+    const current = runCiManifestFixture({ bundledPlanner: true, changedPaths: [] });
     expect(current.status, current.output).toBe(0);
     expect(current.outputs.use_compatible_android_ci).toBe("false");
     expect(current.outputs.run_ios_build).toBe("true");
@@ -11204,6 +11237,32 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     expect(current.outputs.run_sqlite_session_lifecycle).toBe("true");
     expect(current.outputs.run_channel_contracts_shards).toBe("true");
     expect(current.outputs.run_protocol_event_coverage).toBe("true");
+
+    for (const changedPath of [
+      "extensions/outcomes/src/domain/read-model.ts",
+      "extensions/outcomes/src/domain/read-model.test.ts",
+    ]) {
+      const modernCompatibility = runCiManifestFixture({
+        bundledPlanner: true,
+        historicalCompatibility: true,
+        eventName: "workflow_dispatch",
+        changedPaths: [changedPath],
+      });
+      expect(modernCompatibility.status, modernCompatibility.output).toBe(0);
+      expect(modernCompatibility.outputs.checks_node_core_nondist_matrix).toContain(
+        "changed-extension-fallback-plan",
+      );
+    }
+
+    const missingModernFallback = runCiManifestFixture({
+      bundledPlanner: true,
+      changedPlannerSource: "export const createChangedNodeTestShards = () => [];",
+      historicalCompatibility: false,
+      eventName: "workflow_dispatch",
+      changedPaths: ["extensions/outcomes/src/domain/read-model.ts"],
+    });
+    expect(missingModernFallback.status).toBe(1);
+    expect(missingModernFallback.output).toContain("createChangedExtensionFallbackShards");
     expect(current.outputs.run_format_check).toBe("true");
     expect(
       JSON.parse(expectDefined(current.outputs.android_matrix, "current Android matrix output"))
@@ -11372,6 +11431,35 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       ]),
     );
 
+    for (const changedPaths of [
+      ["extensions/outcomes/src/domain/read-model.ts"],
+      ["extensions/outcomes/src/domain/read-model.test.ts"],
+      ["docs/ci.md"],
+    ]) {
+      const manual = runCiManifestFixture({
+        bundledPlanner: true,
+        changedPaths,
+        eventName: "workflow_dispatch",
+      });
+      expect(manual.status, manual.output).toBe(0);
+      const matrix = JSON.parse(
+        expectDefined(manual.outputs.checks_node_core_nondist_matrix, "manual node matrix"),
+      ).include as Array<Record<string, unknown>>;
+      if (changedPaths[0]!.startsWith("extensions/")) {
+        expect(matrix).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ check_name: "changed-extension-fallback-plan" }),
+          ]),
+        );
+      } else {
+        expect(matrix).not.toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ check_name: "changed-extension-fallback-plan" }),
+          ]),
+        );
+      }
+    }
+
     const matrixFallbackPullRequest = runCiManifestFixture({
       bundledPlanner: true,
       changedPaths: [
@@ -11488,10 +11576,19 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       });
       expect(failure.status, failure.output).toBe(1);
       expect(failure.output).toContain(
-        "Current PR CI requires complete changed paths for Node test planning",
+        "Current CI requires complete changed paths for Node test planning",
       );
       expect(failure.outputs.checks_node_core_nondist_matrix).toBeUndefined();
     }
+    const manualUnknownPaths = runCiManifestFixture({
+      bundledPlanner: true,
+      changedPaths: null,
+      eventName: "workflow_dispatch",
+    });
+    expect(manualUnknownPaths.status, manualUnknownPaths.output).toBe(1);
+    expect(manualUnknownPaths.output).toContain(
+      "Current CI requires complete changed paths for Node test planning",
+    );
 
     const currentMissingIos = runCiManifestFixture({
       bundledPlanner: true,
@@ -11515,6 +11612,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const frozenMissingCurrentCapabilities = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       historicalCompatibility: false,
       iosCapabilities: false,
       iosBuildCapability: true,
@@ -11537,6 +11635,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const releaseCandidateMissingSwiftWrappers = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       historicalCompatibility: false,
       iosCapabilities: false,
       iosBuildCapability: true,
@@ -11550,6 +11649,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const releaseCandidateMissingIosBuild = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       historicalCompatibility: false,
       iosCapabilities: false,
       iosBuildCapability: false,
@@ -11560,6 +11660,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
 
     const frozenTargetContext = runCiManifestFixture({
       bundledPlanner: false,
+      changedPaths: [],
       historicalCompatibility: false,
       targetContextCompatibility: true,
     });
@@ -12118,6 +12219,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
           historicalCompatibility: false,
           runnerBackend,
           uiE2eProjectsCapability,
+          changedPaths: [],
         });
         expect(manifest.status, manifest.output).toBe(0);
         expect(manifest.outputs.frozen_target).toBe("true");
@@ -13324,6 +13426,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
     ];
     const result = runCiManifestFixture({
       bundledPlanner: true,
+      changedPaths: [],
       nodeTestShards: selections.map((selection, index) =>
         Object.assign(
           {
@@ -13629,7 +13732,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
         .toSorted(),
     );
     expect(gate.if).toBe(
-      "${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) }}",
+      "${{ !cancelled() && (github.event_name != 'pull_request' || !github.event.pull_request.draft) && !(github.repository == '123oqwe/openclaw3.0' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts) }}",
     );
     expect(gate.permissions).toEqual({ contents: "read" });
 
@@ -13645,27 +13748,70 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       expect(verifyStep.env.JOB_RESULTS).toContain(`${job}=\${{ needs.${job}.result }}|`);
     }
     expect(verifyStep.env.JOB_RESULTS).toContain(
-      "prepare-outcome-artifacts=${{ needs.prepare-outcome-artifacts.result }}|${{ github.repository == '123oqwe/openclaw-private' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}",
+      "prepare-outcome-artifacts=${{ needs.prepare-outcome-artifacts.result }}|${{ github.repository == '123oqwe/openclaw3.0' && github.event_name == 'workflow_dispatch' && inputs.prepare_outcome_artifacts }}",
     );
     expect(resultRows).toHaveLength(gate.needs.length);
   });
 
-  it("removes the trusted Outcome artifact harness before candidate path admission", () => {
+  it("retains the trusted Outcome artifact harness through cleanup", () => {
     const steps = readCiWorkflow().jobs["prepare-outcome-artifacts"].steps;
     const setupIndex = steps.findIndex(
       (step: WorkflowStep) => step.name === "Setup Outcome artifact Node",
-    );
-    const removeIndex = steps.findIndex(
-      (step: WorkflowStep) => step.name === "Remove trusted CI harness from artifact workspace",
     );
     const prepareIndex = steps.findIndex(
       (step: WorkflowStep) => step.name === "Prepare bounded Outcome artifacts",
     );
 
-    expect(steps[removeIndex]?.run).toBe("rm -rf --one-file-system .ci-harness");
     expect(setupIndex).toBeGreaterThanOrEqual(0);
-    expect(removeIndex).toBeGreaterThan(setupIndex);
-    expect(prepareIndex).toBeGreaterThan(removeIndex);
+    expect(prepareIndex).toBeGreaterThan(setupIndex);
+    expect(
+      steps.some(
+        (step: WorkflowStep) => step.name === "Remove trusted CI harness from artifact workspace",
+      ),
+    ).toBe(false);
+  });
+
+  it("runs a serial Outcome benchmark control only after the originating shard", () => {
+    const job = readCiWorkflow().jobs["checks-node-core-test-nondist-shard"];
+    const steps = job.steps as WorkflowStep[];
+    const control = expectDefined(
+      steps.find(({ name }) => name === "Run isolated Outcome plugin-state benchmark control"),
+      "isolated Outcome benchmark control",
+    );
+    const original = steps.findIndex(({ name }) => name === "Run Node test shard");
+    const controlIndex = steps.findIndex(
+      ({ name }) => name === "Run isolated Outcome plugin-state benchmark control",
+    );
+    const uploadIndex = steps.findIndex(
+      ({ name }) => name === "Upload Outcome plugin-state benchmark",
+    );
+    expect(control.if).toBe(
+      "success() && hashFiles(format('.artifacts/outcomes-benchmark/{0}-{1}.json', github.job, matrix.shard_name)) != ''",
+    );
+    expect(controlIndex).toBeGreaterThan(original);
+    expect(controlIndex).toBeLessThan(uploadIndex);
+    expect(control.env).toMatchObject({
+      OPENCLAW_TEST_PROJECTS_PARALLEL: "1",
+      OPENCLAW_VITEST_MAX_WORKERS: "1",
+      OPENCLAW_VITEST_SHARD_NAME: "outcomes-plugin-state-isolated-control",
+      OPENCLAW_OUTCOME_BENCHMARK_MODE: "isolated-control",
+      OPENCLAW_OUTCOME_BENCHMARK_FILE_PARALLELISM: "false",
+      OPENCLAW_OUTCOME_BENCHMARK_SHARD: "outcomes-plugin-state-isolated-control",
+    });
+    expect(control.run).toContain("node scripts/run-vitest.mjs run");
+    expect(control.run).toContain("--maxWorkers=1");
+    expect(control.run).toContain("--no-file-parallelism");
+    expect(control.run).toContain(
+      "--testNamePattern '^Outcome repository host adapter measures bounded host-adapter list and mutation behavior across the P-01 matrix$'",
+    );
+    expect(control.run).toContain(
+      "extensions/outcomes/src/store/plugin-state-repository.capacity.test.ts",
+    );
+    const originalStep = expectDefined(
+      steps.find(({ name }) => name === "Run Node test shard"),
+      "normal Outcome benchmark shard",
+    );
+    expect(originalStep.env).toMatchObject({ OPENCLAW_OUTCOME_BENCHMARK_MODE: "normal-shard" });
   });
 
   it("does not admit the final gate for cancelled workflows or draft pull requests", () => {
@@ -13685,6 +13831,51 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
           ).toBe(!cancelled && (eventName !== "pull_request" || !draft));
         }
       }
+    }
+  });
+
+  it("skips ci-gate only for the review-only Outcome artifact dispatch", () => {
+    const gate = readCiWorkflow().jobs["ci-gate"];
+    const cases = [
+      {
+        context: {
+          eventName: "workflow_dispatch" as const,
+          prepareOutcomeArtifacts: true,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: false,
+      },
+      {
+        context: {
+          eventName: "workflow_dispatch" as const,
+          prepareOutcomeArtifacts: false,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: true,
+      },
+      {
+        context: { eventName: "workflow_dispatch" as const, repository: "123oqwe/openclaw3.0" },
+        expected: true,
+      },
+      {
+        context: {
+          eventName: "pull_request" as const,
+          prepareOutcomeArtifacts: true,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: true,
+      },
+      {
+        context: {
+          eventName: "push" as const,
+          prepareOutcomeArtifacts: true,
+          repository: "123oqwe/openclaw3.0",
+        },
+        expected: true,
+      },
+    ];
+    for (const { context, expected } of cases) {
+      expect(evaluateWorkflowExpression(gate.if, { ...context, runAttempt: 1 })).toBe(expected);
     }
   });
 
@@ -16164,7 +16355,7 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   expect(job.permissions).toEqual({ contents: "read" });
   expect(job.needs).toBeUndefined();
   expect(job["runs-on"]).toBe("ubuntu-24.04");
-  expect(job.if).toContain("github.repository == '123oqwe/openclaw-private'");
+  expect(job.if).toContain("github.repository == '123oqwe/openclaw3.0'");
   expect(job.if).toContain("github.event_name == 'workflow_dispatch'");
   expect(job.if).toContain("inputs.prepare_outcome_artifacts");
   expect(workflow.jobs.preflight.if).toContain("!inputs.prepare_outcome_artifacts");
@@ -16180,13 +16371,12 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
 
   const bodies = steps.map(({ run }) => run ?? "").join("\n");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs admission");
-  expect(bodies).toContain("pnpm install --lockfile-only --ignore-scripts --no-frozen-lockfile");
   expect(bodies).toContain("pnpm install --frozen-lockfile --ignore-scripts");
-  expect(bodies).toContain("pnpm config:docs:gen");
-  expect(bodies).toContain("pnpm plugins:inventory:gen");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
-  expect(bodies).toContain("git ls-files --others --exclude-standard -z");
-  expect(bodies).toContain("git add -N -- docs/plugins/reference/outcomes.md");
+  expect(bodies).toContain(
+    "git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'",
+  );
+  expect(bodies).not.toContain("rm -rf --one-file-system .ci-harness");
   expect(bodies).not.toMatch(/(?:^|\s)git push(?:\s|$)/mu);
 
   const upload = expectDefined(

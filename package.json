@@ -896,6 +896,10 @@
     "./plugin-sdk/plugin-state-runtime": {
       "default": "./dist/plugin-sdk/plugin-state-runtime.js"
     },
+    "./plugin-sdk/normalization-runtime": {
+      "types": "./dist/plugin-sdk/normalization-runtime.d.ts",
+      "default": "./dist/plugin-sdk/normalization-runtime.js"
+    },
     "./plugin-sdk/markdown-table-runtime": {
       "default": "./dist/plugin-sdk/markdown-table-runtime.js"
     },

@@ -3,7 +3,7 @@
 import fs from "node:fs";
 import { pathToFileURL } from "node:url";
 
-const PRIVATE_REPOSITORY = "123oqwe/openclaw-private";
+const PRODUCT_REPOSITORY = "123oqwe/openclaw3.0";
 const EXACT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
 const OUTCOME_LOCK_IMPORTER = "  extensions/outcomes:";
 const ALLOWED_PATHS = new Set([
@@ -18,21 +18,58 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/openclaw.plugin.json",
   "extensions/outcomes/package.json",
   "extensions/outcomes/runtime-api.ts",
+  "extensions/outcomes/src/gateway/cursor.test.ts",
+  "extensions/outcomes/src/gateway/cursor.ts",
+  "extensions/outcomes/src/gateway/errors.ts",
   "extensions/outcomes/src/gateway/health.ts",
+  "extensions/outcomes/src/gateway/input-normalizers.ts",
+  "extensions/outcomes/src/gateway/method-helpers.ts",
+  "src/gateway/outcomes-methods.dispatch.test.ts",
+  "src/gateway/outcomes-workboard.public-api.integration.test.ts",
+  "extensions/outcomes/src/gateway/workboard.integration.test.ts",
+  "extensions/outcomes/src/gateway/methods.test.ts",
+  "extensions/outcomes/src/gateway/methods.ts",
+  "extensions/outcomes/src/gateway/workboard-refresh.ts",
+  "extensions/outcomes/src/gateway/p02-admission.contract.md",
+  "extensions/outcomes/src/gateway/registrar.ts",
+  "extensions/outcomes/src/gateway/schemas.ts",
+  "extensions/outcomes/src/adapters/workboard-adapter.test.ts",
+  "extensions/outcomes/src/adapters/workboard-adapter.ts",
+  "extensions/outcomes/src/adapters/fixtures/workboard-list.v1.json",
+  "extensions/outcomes/src/assurance/evidence.test.ts",
+  "extensions/outcomes/src/assurance/evidence.ts",
   "extensions/outcomes/src/runtime-capabilities.test.ts",
+  "extensions/outcomes/src/domain/canonical-plan.ts",
+  "extensions/outcomes/src/domain/constants.ts",
+  "extensions/outcomes/src/domain/hash.ts",
+  "extensions/outcomes/src/domain/read-model.test.ts",
+  "extensions/outcomes/src/domain/read-model.ts",
+  "extensions/outcomes/src/domain/reducer.ts",
+  "extensions/outcomes/src/domain/repository.contract.test.ts",
+  "extensions/outcomes/src/domain/schema.test.ts",
+  "extensions/outcomes/src/domain/schema.ts",
+  "extensions/outcomes/src/domain/types.ts",
+  "extensions/outcomes/src/store/plugin-state-repository.test.ts",
+  "extensions/outcomes/src/store/plugin-state-repository.capacity.test.ts",
+  "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
+  "extensions/outcomes/src/store/plugin-state-repository.ts",
+  "extensions/outcomes/src/store/outcome-repository.ts",
+  "packages/outcomes-contract/src/index.test.ts",
+  "packages/outcomes-contract/src/index.ts",
   "pnpm-lock.yaml",
   "scripts/outcome-artifact-policy.mjs",
   "src/plugins/contracts/plugin-sdk-runtime-api-guardrails.test.ts",
   "test/scripts/ci-workflow-guards.test.ts",
   "test/scripts/outcome-artifact-policy.test.ts",
+  "ui/src/e2e/browser-bootstrap.e2e.test.ts",
 ]);
 
 export function assertOutcomeArtifactAdmission({ eventName, repository, targetRef, workflowSha }) {
   if (eventName !== "workflow_dispatch") {
     throw new Error("Outcome artifact preparation requires workflow_dispatch");
   }
-  if (repository !== PRIVATE_REPOSITORY) {
-    throw new Error("Outcome artifact preparation is private-repository only");
+  if (repository !== PRODUCT_REPOSITORY) {
+    throw new Error("Outcome artifact preparation is product-repository only");
   }
   if (!EXACT_SHA_PATTERN.test(targetRef)) {
     throw new Error("Outcome artifact target_ref must be a lowercase 40-character SHA");

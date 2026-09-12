@@ -8,6 +8,12 @@
     "@openclaw/plugin-sdk": "workspace:*",
     "openclaw": "workspace:*"
   },
+  "dependencies": {
+    "@openclaw/outcomes-contract": "workspace:*",
+    "@openclaw/workboard-contract": "workspace:*",
+    "typebox": "1.3.18",
+    "zod": "4.4.3"
+  },
   "peerDependencies": {
     "openclaw": ">=2026.8.1"
   },

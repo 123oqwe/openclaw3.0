@@ -25,6 +25,17 @@ suite.define(() => {
         const bootstrapToken = "synthetic-owner-bootstrap";
         const deviceToken = "synthetic-paired-browser";
         let helperCalls = 0;
+        let diagnosticSequence = 0;
+        let broadRequestId = 0;
+        const activeBroadRequests = new Map<number, Promise<void>>();
+        const settleBroadRequest = new Map<number, () => void>();
+        let isTearingDown = false;
+        const trace = (stage: string, routePath?: string) => {
+          diagnosticSequence += 1;
+          console.info(
+            `[browser-bootstrap-diagnostic] seq=${diagnosticSequence} stage=${stage} path=${routePath ?? "none"}`,
+          );
+        };
         let releaseHandoff!: () => void;
         const handoffReady = new Promise<void>((resolve) => {
           releaseHandoff = resolve;
@@ -35,16 +46,57 @@ suite.define(() => {
             // Exercise secure-origin browser behavior while serving only this test's local bundle.
             await page.route(`${origin}/**`, async (route) => {
               const requested = new URL(route.request().url());
-              if (requested.pathname === "/.well-known/openclaw/browser-bootstrap") {
-                await route.fallback();
-                return;
-              }
-              const upstream = new URL(
-                `${requested.pathname}${requested.search}`,
-                suite.server.baseUrl,
+              const requestId = ++broadRequestId;
+              let settle!: () => void;
+              activeBroadRequests.set(
+                requestId,
+                new Promise<void>((resolve) => {
+                  settle = resolve;
+                }),
               );
-              const response = await route.fetch({ url: upstream.href });
-              await route.fulfill({ response });
+              settleBroadRequest.set(requestId, settle);
+              trace("broad-enter", `${requestId}:${requested.pathname}`);
+              try {
+                if (isTearingDown) {
+                  trace("broad-teardown-abort", `${requestId}:${requested.pathname}`);
+                  await route.abort("failed");
+                  return;
+                }
+                const isDiagnosticPath =
+                  requested.pathname === "/avatar/main" ||
+                  requested.pathname === "/.well-known/openclaw/browser-bootstrap";
+                if (isDiagnosticPath) {
+                  trace("broad-diagnostic", `${requestId}:${requested.pathname}`);
+                }
+                if (requested.pathname === "/.well-known/openclaw/browser-bootstrap") {
+                  trace("broad-fallback", `${requestId}:${requested.pathname}`);
+                  await route.fallback();
+                  return;
+                }
+                if (requested.pathname === "/avatar/main") {
+                  trace("avatar-fulfill-before", `${requestId}:${requested.pathname}`);
+                  await route.fulfill({ status: 404, body: "" });
+                  trace("avatar-fulfill-after", `${requestId}:${requested.pathname}`);
+                  return;
+                }
+                const upstream = new URL(
+                  `${requested.pathname}${requested.search}`,
+                  suite.server.baseUrl,
+                );
+                trace("broad-fetch-before", `${requestId}:${requested.pathname}`);
+                const response = await route.fetch({ url: upstream.href });
+                trace("broad-fetch-complete", `${requestId}:${requested.pathname}`);
+                trace("broad-fulfill-before", `${requestId}:${requested.pathname}`);
+                await route.fulfill({ response });
+                trace("broad-fulfill-after", `${requestId}:${requested.pathname}`);
+              } catch (error) {
+                trace("broad-error", `${requestId}:${requested.pathname}`);
+                throw error;
+              } finally {
+                settleBroadRequest.get(requestId)?.();
+                settleBroadRequest.delete(requestId);
+                activeBroadRequests.delete(requestId);
+              }
             });
             const gateway = await installMockGateway(page, {
               sessionKey,
@@ -63,19 +115,24 @@ suite.define(() => {
               ],
             });
             await page.route(`${origin}/.well-known/openclaw/browser-bootstrap`, async (route) => {
+              trace("bootstrap-enter", "/.well-known/openclaw/browser-bootstrap");
               helperCalls += 1;
               expect(route.request().method()).toBe("GET");
               expect(route.request().headers().authorization).toBeUndefined();
               await handoffReady;
+              trace("bootstrap-fulfill-before", "/.well-known/openclaw/browser-bootstrap");
               await route.fulfill({
                 status: 200,
                 contentType: "application/json",
                 headers: { "Cache-Control": "no-store" },
                 body: JSON.stringify({ bootstrapToken, bootstrapProfile: "owner" }),
               });
+              trace("bootstrap-fulfill-after", "/.well-known/openclaw/browser-bootstrap");
             });
 
+            trace("goto-before", "/");
             await page.goto(deepLink);
+            trace("goto-after", "/");
             const initialConnect = await gateway.waitForRequest("connect");
             expect(initialConnect.params).not.toHaveProperty("auth.bootstrapToken");
             expect(initialConnect.params).not.toHaveProperty("auth.deviceToken");
@@ -107,7 +164,9 @@ suite.define(() => {
 
             // Navigation is sufficient here; readiness is asserted by the connect
             // handshake and control-ui text below.
+            trace("reload-before", "/");
             await page.reload({ waitUntil: "domcontentloaded" });
+            trace("reload-after", "/");
             const reloadConnect = await gateway.waitForRequest("connect");
             expect(reloadConnect.params).toMatchObject({ auth: { deviceToken } });
             expect(reloadConnect.params).not.toHaveProperty("auth.bootstrapToken");
@@ -122,9 +181,24 @@ suite.define(() => {
             expect(page.url()).toBe(deepLink);
             await page.screenshot({ path: path.join(artifactDir, "3-reloaded.png") });
           },
-          () => releaseHandoff(),
+          () => {
+            trace("cleanup-before-release", "none");
+            isTearingDown = true;
+            releaseHandoff();
+            trace("cleanup-after-release", "none");
+          },
           // Drain active interception handlers before withPage closes the context.
-          () => page.unrouteAll({ behavior: "wait" }),
+          async () => {
+            while (activeBroadRequests.size > 0) {
+              trace(
+                "cleanup-before-unroute",
+                `active=${[...activeBroadRequests.keys()].join(",")}`,
+              );
+              await Promise.all(activeBroadRequests.values());
+            }
+            await page.unrouteAll({ behavior: "wait" });
+            trace("cleanup-after-unroute", "none");
+          },
         );
         return page.video();
       },

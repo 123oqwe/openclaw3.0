@@ -12,7 +12,7 @@ describe("outcome artifact policy", () => {
     expect(() =>
       assertOutcomeArtifactAdmission({
         eventName: "workflow_dispatch",
-        repository: "123oqwe/openclaw-private",
+        repository: "123oqwe/openclaw3.0",
         targetRef: TARGET_SHA,
         workflowSha: TARGET_SHA,
       }),
@@ -28,7 +28,7 @@ describe("outcome artifact policy", () => {
       expect(() =>
         assertOutcomeArtifactAdmission({
           eventName: "workflow_dispatch",
-          repository: "123oqwe/openclaw-private",
+          repository: "123oqwe/openclaw3.0",
           targetRef: TARGET_SHA,
           workflowSha: TARGET_SHA,
           ...override,
@@ -37,7 +37,7 @@ describe("outcome artifact policy", () => {
     }
   });
 
-  it("accepts only the fixed P-00 generated-output allowlist", () => {
+  it("accepts only the fixed Outcome artifact allowlist", () => {
     expect(() =>
       assertOutcomeArtifactPaths([
         "docs/.generated/config-baseline.sha256",
@@ -47,7 +47,19 @@ describe("outcome artifact policy", () => {
         "docs/plugins/reference/outcomes.md",
         "extensions/outcomes/index.ts",
         "extensions/outcomes/src/gateway/health.ts",
+        "extensions/outcomes/src/gateway/p02-admission.contract.md",
+        "src/gateway/outcomes-workboard.public-api.integration.test.ts",
+        "extensions/outcomes/src/adapters/workboard-adapter.test.ts",
+        "extensions/outcomes/src/adapters/workboard-adapter.ts",
+        "extensions/outcomes/src/adapters/fixtures/workboard-list.v1.json",
+        "extensions/outcomes/src/assurance/evidence.test.ts",
+        "extensions/outcomes/src/assurance/evidence.ts",
+        "extensions/outcomes/src/domain/constants.ts",
+        "extensions/outcomes/src/store/plugin-state-repository.capacity.test.ts",
+        "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
+        "extensions/outcomes/src/store/outcome-repository.ts",
         "pnpm-lock.yaml",
+        "ui/src/e2e/browser-bootstrap.e2e.test.ts",
       ]),
     ).not.toThrow();
     expect(() => assertOutcomeArtifactPaths([".env"])).toThrow();
