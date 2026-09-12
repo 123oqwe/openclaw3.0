@@ -125,8 +125,8 @@ function activeRecordAtSize(id: string, targetBytes: number): OutcomeRecord {
 type OutcomePerformanceScenarioReport = {
   actualRecordBytes: number;
   eventLoop: { deltaMs: number };
-  list: { count: number; p95?: number };
-  mutation: { count: number; p95?: number };
+  list: { count: number; p95?: number | null };
+  mutation: { count: number; p95?: number | null };
   recordCount: number;
   requestedRecordBytes: number;
   samples: number;
@@ -536,6 +536,15 @@ describe("Outcome repository host adapter", () => {
           list: { ...scenario.list, p95: OUTCOME_PERFORMANCE_TARGETS_MS.listP95 + 1 },
         })),
       "exceeds or misreports its target",
+    ],
+    [
+      "an absent p95",
+      (report: OutcomeIsolatedBenchmarkReport) =>
+        withFirstOutcomeBenchmarkScenario(report, (scenario) => ({
+          ...scenario,
+          mutation: { ...scenario.mutation, p95: undefined },
+        })),
+      "must be a finite non-negative number",
     ],
     [
       "a non-finite timing",
