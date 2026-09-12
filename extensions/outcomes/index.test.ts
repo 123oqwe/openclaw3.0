@@ -180,6 +180,8 @@ describe("Outcome plugin shell", () => {
   it("rejects health parameters outside the public empty-object contract before probing", async () => {
     const registerGatewayMethod = vi.fn();
     const openKeyedStore = vi.fn();
+    const isAvailable = vi.fn(async () => true);
+    const request = vi.fn();
 
     plugin.register(
       createTestPluginApi({
@@ -187,11 +189,14 @@ describe("Outcome plugin shell", () => {
         name: "Outcomes",
         runtime: {
           state: { openKeyedStore },
-          gateway: { isAvailable: async () => true, request: vi.fn() },
+          gateway: { isAvailable, request },
         } as never,
         registerGatewayMethod,
       }),
     );
+    openKeyedStore.mockClear();
+    isAvailable.mockClear();
+    request.mockClear();
 
     const healthRegistration = registerGatewayMethod.mock.calls.find(
       ([method]) => method === "outcomes.health",
@@ -205,5 +210,7 @@ describe("Outcome plugin shell", () => {
       message: "Outcome request could not be completed",
     });
     expect(openKeyedStore).not.toHaveBeenCalled();
+    expect(isAvailable).not.toHaveBeenCalled();
+    expect(request).not.toHaveBeenCalled();
   });
 });
