@@ -625,6 +625,76 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("creates a draft only after the Gateway confirms the form submission", async () => {
+    let resolveCreate: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [] });
+      }
+      if (method === "outcomes.create") {
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveCreate = resolve;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.create"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('openclaw-modal-dialog[label="Create outcome"]')).not.toBeNull();
+    });
+    const form = page.querySelector<HTMLFormElement>('[data-outcome-create-form]');
+    expect(form).not.toBeNull();
+    const title = form?.querySelector<HTMLInputElement>('input[name="title"]');
+    const objective = form?.querySelector<HTMLTextAreaElement>('textarea[name="objective"]');
+    const criterion = form?.querySelector<HTMLInputElement>('input[name="criterion"]');
+    if (!title || !objective || !criterion || !form) {
+      throw new Error("Outcome create form fields are missing");
+    }
+    title.value = "Launch the release";
+    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    objective.value = "Confirm the release is ready";
+    objective.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    criterion.value = "Release evidence is available";
+    criterion.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.create", {
+        criteria: [
+          {
+            id: expect.any(String),
+            required: true,
+            text: "Release evidence is available",
+          },
+        ],
+        id: expect.any(String),
+        objective: "Confirm the release is ready",
+        title: "Launch the release",
+      });
+    });
+    expect(page.textContent).toContain("No outcomes");
+
+    resolveCreate?.({ outcome: outcomeDetail("outcome-new", "Launch the release") });
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("Launch the release");
+      expect(page.querySelector('openclaw-modal-dialog[label="Create outcome"]')).toBeNull();
+    });
+  });
+
   it("requires confirmation before cancelling a selected Outcome", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {
