@@ -118,6 +118,23 @@ function requireNumber(payload: GatewayCallResult, key: string): number {
   return value;
 }
 
+function outcomeGatewayConfig(owner: OpenClawTestInstance, workboardEnabled: boolean) {
+  return {
+    gateway: {
+      auth: { mode: "token", token: owner.gatewayToken },
+      controlUi: { enabled: true },
+      port: owner.port,
+    },
+    hooks: { enabled: true, path: "/hooks", token: owner.hookToken },
+    plugins: {
+      entries: {
+        outcomes: { enabled: true },
+        workboard: { enabled: workboardEnabled },
+      },
+    },
+  };
+}
+
 suite.define(() => {
   it("creates, links, activates, refreshes, and reloads an Outcome through the real Gateway", async () => {
     const cardId = requireCardId(
@@ -206,6 +223,24 @@ suite.define(() => {
         await instance.stopGateway();
         await page.getByText("Outcome connection unavailable", { exact: true }).waitFor({ state: "visible" });
         await expect.poll(() => detail.count()).toBe(0);
+        await instance.state.writeConfig(outcomeGatewayConfig(instance, false));
+        await instance.startGateway();
+        await waitForControlUiGatewayReady(page);
+        await page.reload();
+        await waitForControlUiGatewayReady(page);
+        await page
+          .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
+          .waitFor({ state: "visible" });
+        await page.locator('[data-outcome-select]').click();
+        await page.getByText("Workboard disabled", { exact: true }).waitFor({ state: "visible" });
+        await page.screenshot({
+          fullPage: true,
+          path: path.join(suite.artifactDir, "outcomes-workboard-disabled.png"),
+        });
+
+        await instance.stopGateway();
+        await page.getByText("Outcome connection unavailable", { exact: true }).waitFor({ state: "visible" });
+        await instance.state.writeConfig(outcomeGatewayConfig(instance, true));
         await instance.startGateway();
         await waitForControlUiGatewayReady(page);
         await page.reload();
