@@ -23,6 +23,8 @@ const suite = createControlUiE2eSuite({
       config: {
         gateway: { controlUi: { enabled: true } },
         plugins: {
+          enabled: true,
+          allow: ["outcomes", "workboard"],
           entries: {
             outcomes: { enabled: true },
             workboard: { enabled: true },
@@ -57,6 +59,8 @@ const unavailableSuite = createControlUiE2eSuite({
       config: {
         gateway: { controlUi: { enabled: true } },
         plugins: {
+          enabled: true,
+          allow: ["outcomes", "workboard"],
           entries: {
             outcomes: { enabled: false },
             workboard: { enabled: true },
@@ -236,6 +240,8 @@ function outcomeGatewayConfig(owner: OpenClawTestInstance, workboardEnabled: boo
     },
     hooks: { enabled: true, path: "/hooks", token: owner.hookToken },
     plugins: {
+      enabled: true,
+      allow: ["outcomes", "workboard"],
       entries: {
         outcomes: { enabled: true },
         workboard: { enabled: workboardEnabled },
