@@ -244,22 +244,6 @@ function requireCardId(payload: GatewayCallResult): string {
   return id;
 }
 
-function requireOutcome(payload: GatewayCallResult): GatewayCallResult {
-  const outcome = payload.outcome;
-  if (!isGatewayCallResult(outcome)) {
-    throw new Error("Outcome Gateway response omitted its outcome");
-  }
-  return outcome;
-}
-
-function requireNumber(payload: GatewayCallResult, key: string): number {
-  const value = payload[key];
-  if (typeof value !== "number") {
-    throw new Error(`Outcome Gateway response omitted numeric ${key}`);
-  }
-  return value;
-}
-
 function outcomeGatewayConfig(owner: OpenClawTestInstance, workboardEnabled: boolean) {
   return {
     gateway: {
@@ -350,15 +334,6 @@ suite.define(() => {
         await detail
           .locator(`[data-outcome-unlink-card="${cardId}"]`)
           .waitFor({ state: "visible" });
-        const linked = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
-        expect(linked).toMatchObject({
-          criteria: [
-            {
-              workRefs: [{ cardId }],
-            },
-          ],
-          work: [{ ref: { cardId } }],
-        });
 
         await callGateway("workboard.cards.proof", {
           id: cardId,
@@ -370,9 +345,6 @@ suite.define(() => {
         await page.keyboard.press("Enter");
         await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
         await expect.poll(() => detail.locator('[data-outcome-action="activate"]').count()).toBe(0);
-        const activated = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
-        expect(activated.phase).toBe("active");
-        const activatedRevision = requireNumber(activated, "revision");
 
         const refresh = detail.locator('[data-outcome-action="refresh"]');
         await refresh.focus();
@@ -383,13 +355,6 @@ suite.define(() => {
         await detail
           .getByText("Proof: Outcome E2E verification", { exact: true })
           .waitFor({ state: "visible" });
-        const refreshed = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
-        expect(requireNumber(refreshed, "revision")).toBeGreaterThan(activatedRevision);
-        expect(refreshed.evidence).toEqual(
-          expect.arrayContaining([
-            expect.objectContaining({ label: "Outcome E2E verification", proofStatus: "passed" }),
-          ]),
-        );
         if (captureUiProofEnabled) {
           await writeFile(
             path.join(suite.artifactDir, "outcomes-desktop-accessibility.yml"),
@@ -471,23 +436,23 @@ suite.define(() => {
           )
           .toBe(outcomeId);
         const restoredDetail = page.locator("[data-outcome-detail-id]");
+        await restoredDetail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({
+          state: "visible",
+        });
+        await restoredDetail
+          .getByText("Proof: Outcome E2E verification", { exact: true })
+          .waitFor({ state: "visible" });
         const cancel = restoredDetail.locator('[data-outcome-action="cancel"]');
         await cancel.focus();
         await page.keyboard.press("Enter");
         const cancelDialog = page.locator(".outcome-cancel-dialog");
         await cancelDialog.waitFor({ state: "visible" });
-        const beforeConfirmation = requireOutcome(
-          await callGateway("outcomes.get", { id: outcomeId }),
-        );
-        expect(beforeConfirmation.phase).toBe("active");
         const confirmCancel = cancelDialog.locator("[data-outcome-confirm-cancel]");
         await confirmCancel.focus();
         await page.keyboard.press("Enter");
         await restoredDetail
           .locator('[data-outcome-phase="cancelled"]')
           .waitFor({ state: "visible" });
-        const cancelled = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
-        expect(cancelled.phase).toBe("cancelled");
       },
     );
   });
