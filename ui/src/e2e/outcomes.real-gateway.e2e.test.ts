@@ -7,6 +7,7 @@ import {
   type OpenClawTestInstance,
 } from "../../../test/helpers/openclaw-test-instance.ts";
 import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
+import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 import { OUTCOME_DETAIL_MAX_FRESHNESS_MS } from "../pages/outcomes/freshness.ts";
@@ -159,6 +160,7 @@ function requireNewBrowserDeviceId(
     (device) =>
       typeof device.deviceId === "string" &&
       !existingDeviceIds.has(device.deviceId) &&
+      device.clientId === GATEWAY_CLIENT_NAMES.CONTROL_UI &&
       (device.role === "operator" ||
         (Array.isArray(device.roles) && device.roles.includes("operator"))),
   );
