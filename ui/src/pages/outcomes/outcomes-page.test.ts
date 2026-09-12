@@ -31,23 +31,46 @@ function outcomeSummary(id: string, title: string): OutcomeSummary {
 }
 
 function outcomeDetail(id: string, title: string): OutcomeDetail {
+  const workRef = {
+    boardIdAtLink: "board-1",
+    cardCreatedAt: 1,
+    cardId: "card-1",
+    owner: "workboard" as const,
+  };
   return {
     ...outcomeSummary(id, title),
     acceptance: { acceptanceValidity: "none" },
-    attention: [],
+    attention: [{ code: "blocked", criterionId: "criterion-1" }],
     closureHash: null,
     contractRevision: 1,
     createdAt: 1,
-    criteria: [],
+    criteria: [
+      {
+        evidenceSetHash: null,
+        id: "criterion-1",
+        required: true,
+        sourcesVisibility: "complete",
+        text: "Verify the release evidence",
+        workRefs: [workRef],
+      },
+    ],
     evidence: [],
-    nextActions: [],
+    nextActions: ["refresh"],
     objective: `${title} objective`,
     observedAt: 1,
     planGeneration: 0,
     planHash: null,
     recheckAfter: null,
     sourceIssues: [],
-    work: [],
+    work: [
+      {
+        currentBoardId: "board-1",
+        observedAt: 1,
+        ref: workRef,
+        status: "blocked",
+        upstreamStale: false,
+      },
+    ],
   };
 }
 
@@ -416,7 +439,9 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
@@ -425,6 +450,10 @@ describe("OutcomesPage", () => {
       expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
     });
     expect(page.textContent).toContain("Outcome A objective");
+    expect(page.textContent).toContain("Verify the release evidence");
+    expect(page.textContent).toContain("card-1");
+    expect(page.textContent).toContain("Blocked");
+    expect(page.textContent).toContain("Refresh");
   });
 
   it("does not let an old selected Outcome detail overwrite a newer selection", async () => {
@@ -432,7 +461,10 @@ describe("OutcomesPage", () => {
     const request = vi.fn((method: string, params: { id?: string }) => {
       if (method === "outcomes.list") {
         return Promise.resolve({
-          outcomes: [outcomeSummary("outcome-a", "Outcome A"), outcomeSummary("outcome-b", "Outcome B")],
+          outcomes: [
+            outcomeSummary("outcome-a", "Outcome A"),
+            outcomeSummary("outcome-b", "Outcome B"),
+          ],
         });
       }
       if (method === "outcomes.get" && params.id === "outcome-a") {
@@ -451,8 +483,12 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
     await vi.waitFor(() => {
