@@ -13,7 +13,12 @@ import {
 import type { OutcomeRecord } from "../domain/types.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
-import { outcomeError, outcomeStorageError } from "./errors.js";
+import {
+  OutcomeErrorCodes,
+  outcomeError,
+  outcomeOwnerError,
+  outcomeStorageError,
+} from "./errors.js";
 import {
   normalizeCreate,
   normalizePatch,
