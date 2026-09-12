@@ -15,6 +15,10 @@ const enOutcomes = {
     loadDetailFailed: "Couldn't load outcome details: {error}",
     mutationFailed: "Request failed: {error}",
     createOutcome: "Create outcome",
+    retryCreateOutcome: "Retry the same outcome",
+    abandonPendingCreate: "Start a different outcome",
+    pendingCreateHelp:
+      "The previous request may have been accepted. Retry it before changing these fields, or explicitly start a different outcome.",
     createHelp: "Start an Outcome with its first required criterion.",
     title: "Title",
     objective: "Objective",

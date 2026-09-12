@@ -403,8 +403,12 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.createError = null;
   }
 
-  private invalidateCreateRequest() {
+  private abandonPendingCreateRequest() {
+    if (this.creating) {
+      return;
+    }
     this.createRequest = null;
+    this.createError = null;
   }
 
   private updateCreateField(field: "title" | "objective", value: string) {
@@ -412,13 +416,13 @@ class OutcomesPage extends OpenClawLightDomElement {
       return;
     }
     if (field === "title") {
-      if (this.createTitle !== value) {
-        this.invalidateCreateRequest();
+      if (this.createRequest) {
+        return;
       }
       this.createTitle = value;
     } else {
-      if (this.createObjective !== value) {
-        this.invalidateCreateRequest();
+      if (this.createRequest) {
+        return;
       }
       this.createObjective = value;
     }
@@ -428,7 +432,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     if (this.creating || this.createCriteria[index] === value) {
       return;
     }
-    this.invalidateCreateRequest();
+    if (this.createRequest) {
+      return;
+    }
     this.createCriteria = this.createCriteria.map((criterion, criterionIndex) =>
       criterionIndex === index ? value : criterion,
     );
@@ -438,7 +444,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     if (this.creating || this.createCriteria.length >= 5) {
       return;
     }
-    this.invalidateCreateRequest();
+    if (this.createRequest) {
+      return;
+    }
     this.createCriteria = [...this.createCriteria, ""];
   }
 
@@ -446,7 +454,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     if (this.creating || this.createCriteria.length <= 1) {
       return;
     }
-    this.invalidateCreateRequest();
+    if (this.createRequest) {
+      return;
+    }
     this.createCriteria = this.createCriteria.filter((_, criterionIndex) => criterionIndex !== index);
   }
 
@@ -1069,6 +1079,8 @@ class OutcomesPage extends OpenClawLightDomElement {
         creating: this.creating,
         error: this.createError,
         objective: this.createObjective,
+        pendingRequest: this.createRequest !== null,
+        onAbandonPendingRequest: () => this.abandonPendingCreateRequest(),
         onAddCriterion: () => this.addCreateCriterion(),
         onDismiss: (event) => this.dismissCreateDialog(event),
         onInput: (field, value) => this.updateCreateField(field, value),

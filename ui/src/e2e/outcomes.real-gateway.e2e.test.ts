@@ -97,8 +97,16 @@ function requireCardId(payload: GatewayCallResult): string {
   return id;
 }
 
+function requireOutcome(payload: GatewayCallResult): GatewayCallResult {
+  const outcome = payload.outcome;
+  if (!outcome || typeof outcome !== "object" || Array.isArray(outcome)) {
+    throw new Error("Outcome Gateway response omitted its outcome");
+  }
+  return outcome as GatewayCallResult;
+}
+
 suite.define(() => {
-  it("creates, links, starts, refreshes, and reloads an Outcome through the real Gateway", async () => {
+  it("creates, links, activates, refreshes, and reloads an Outcome through the real Gateway", async () => {
     const cardId = requireCardId(
       await callGateway("workboard.cards.create", {
         priority: "normal",
@@ -128,24 +136,54 @@ suite.define(() => {
 
         const detail = page.locator("[data-outcome-detail-id]");
         await detail.waitFor({ state: "visible" });
+        const outcomeId = await detail.getAttribute("data-outcome-detail-id");
+        if (!outcomeId) {
+          throw new Error("Outcome detail omitted its ID");
+        }
         await detail.locator('[data-outcome-action="link-work"]').click();
         const linkForm = page.locator("[data-outcome-link-form]");
         await linkForm.locator('select[name="card"]').selectOption(cardId);
         await linkForm.locator("[data-outcome-confirm-link]").click();
         await expect(detail.getByText(`Card ${cardId}`, { exact: true })).toBeVisible();
 
+        await callGateway("workboard.cards.proof", {
+          id: cardId,
+          label: "Outcome E2E verification",
+          status: "passed",
+        });
         await detail.locator('[data-outcome-action="activate"]').click();
+        await expect(detail.locator('[data-outcome-phase="active"]')).toBeVisible();
+        await expect(detail.locator('[data-outcome-action="activate"]')).toHaveCount(0);
+        const activated = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
+        expect(activated.phase).toBe("active");
+        expect(activated.revision).toEqual(expect.any(Number));
+
         await detail.locator('[data-outcome-action="refresh"]').click();
+        await expect(detail.locator('[data-outcome-action="refresh"]')).toBeEnabled();
+        const refreshed = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
+        expect(refreshed.revision).toBeGreaterThan(activated.revision as number);
+        expect(refreshed.evidence).toEqual(
+          expect.arrayContaining([
+            expect.objectContaining({ label: "Outcome E2E verification", proofStatus: "passed" }),
+          ]),
+        );
 
         if (!instance) {
           throw new Error("Outcome Gateway fixture was not started");
         }
         await instance.stopGateway();
+        await expect(page.getByText("Outcome connection unavailable", { exact: true })).toBeVisible();
+        await expect(detail).toHaveCount(0);
         await instance.startGateway();
         await waitForControlUiGatewayReady(page);
         await page.reload();
         await waitForControlUiGatewayReady(page);
         await expect(page.locator(".outcome-summary", { hasText: "Release Outcome E2E" })).toBeVisible();
+        await page.locator('[data-outcome-select]').click();
+        await expect(page.locator('[data-outcome-detail-id]')).toHaveAttribute(
+          "data-outcome-detail-id",
+          outcomeId,
+        );
       },
     );
   });

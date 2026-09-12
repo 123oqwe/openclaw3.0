@@ -761,6 +761,86 @@ describe("OutcomesPage", () => {
     expect(createParams[1]).toEqual(createParams[0]);
   });
 
+  it("requires ending an unknown create attempt before a changed form gets a new identity", async () => {
+    let rejectCreate: ((reason?: unknown) => void) | undefined;
+    const createParams: Array<Record<string, unknown>> = [];
+    const request = vi.fn((method: string, params: Record<string, unknown>) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [] });
+      }
+      if (method === "outcomes.create") {
+        createParams.push(params);
+        if (createParams.length === 1) {
+          return new Promise<{ outcome: OutcomeDetail }>((_resolve, reject) => {
+            rejectCreate = reject;
+          });
+        }
+        if (createParams.length === 2) {
+          return Promise.reject(new Error("still unknown"));
+        }
+        return Promise.resolve({ outcome: outcomeDetail("outcome-new", "Changed title") });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.create"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-create-form]")).not.toBeNull();
+    });
+    const form = page.querySelector<HTMLFormElement>("[data-outcome-create-form]");
+    const title = form?.querySelector<HTMLInputElement>('input[name="title"]');
+    const objective = form?.querySelector<HTMLTextAreaElement>('textarea[name="objective"]');
+    const criterion = form?.querySelector<HTMLInputElement>('input[name="criterion"]');
+    if (!form || !title || !objective || !criterion) {
+      throw new Error("Outcome create form fields are missing");
+    }
+    title.value = "Original title";
+    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    objective.value = "Original objective";
+    objective.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    criterion.value = "Original criterion";
+    criterion.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(createParams).toHaveLength(1));
+    rejectCreate?.(new Error("response lost"));
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-pending-create]")).not.toBeNull();
+    });
+
+    expect(title.disabled).toBe(true);
+    title.value = "Changed title";
+    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(createParams).toHaveLength(2));
+    expect(createParams[1]).toEqual(createParams[0]);
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-create-form] [role="alert"]')).not.toBeNull();
+    });
+
+    page
+      .querySelector<HTMLButtonElement>("[data-outcome-abandon-pending-create]")
+      ?.click();
+    await vi.waitFor(() => expect(title.disabled).toBe(false));
+    title.value = "Changed title";
+    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(createParams).toHaveLength(3));
+    expect(createParams[2]).toMatchObject({ title: "Changed title" });
+    expect(createParams[2]).not.toEqual(createParams[0]);
+  });
+
   it("submits five explicit Outcome criteria through the authenticated Gateway", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {

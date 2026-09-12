@@ -35,6 +35,8 @@ export type CreateOutcomeDialogViewData = {
   creating: boolean;
   error: string | null;
   objective: string;
+  pendingRequest: boolean;
+  onAbandonPendingRequest: () => void;
   onAddCriterion: () => void;
   onCriterionInput: (index: number, value: string) => void;
   onDismiss: (event: Event) => void;
@@ -274,7 +276,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
         <input
           name="title"
           required
-          ?disabled=${data.creating}
+          ?disabled=${data.creating || data.pendingRequest}
           .value=${data.title}
           @input=${(event: InputEvent) =>
             data.onInput("title", (event.target as HTMLInputElement).value)}
@@ -285,7 +287,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
         <textarea
           name="objective"
           required
-          ?disabled=${data.creating}
+          ?disabled=${data.creating || data.pendingRequest}
           .value=${data.objective}
           @input=${(event: InputEvent) =>
             data.onInput("objective", (event.target as HTMLTextAreaElement).value)}
@@ -301,7 +303,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
                 <input
                   name="criterion"
                   required
-                  ?disabled=${data.creating}
+                  ?disabled=${data.creating || data.pendingRequest}
                   .value=${criterion}
                   @input=${(event: InputEvent) =>
                     data.onCriterionInput(index, (event.target as HTMLInputElement).value)}
@@ -311,7 +313,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
                 ? html`<button
                     data-outcome-remove-criterion=${index}
                     type="button"
-                    ?disabled=${data.creating}
+                    ?disabled=${data.creating || data.pendingRequest}
                     @click=${() => data.onRemoveCriterion(index)}
                   >
                     ${t("outcomesPage.removeCriterion")}
@@ -324,7 +326,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
           ? html`<button
               data-outcome-add-criterion
               type="button"
-              ?disabled=${data.creating}
+              ?disabled=${data.creating || data.pendingRequest}
               @click=${data.onAddCriterion}
             >
               ${t("outcomesPage.addCriterion")}
@@ -334,7 +336,22 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
       ${data.error
         ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.error}</p>`
         : nothing}
+      ${data.pendingRequest
+        ? html`<p class="outcomes-state" data-outcome-pending-create>
+            ${t("outcomesPage.pendingCreateHelp")}
+          </p>`
+        : nothing}
       <div class="outcome-cancel-dialog__actions">
+        ${data.pendingRequest
+          ? html`<button
+              data-outcome-abandon-pending-create
+              type="button"
+              ?disabled=${data.creating}
+              @click=${data.onAbandonPendingRequest}
+            >
+              ${t("outcomesPage.abandonPendingCreate")}
+            </button>`
+          : nothing}
         <button
           data-outcome-dismiss-create
           type="button"
@@ -344,7 +361,11 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
           ${t("common.back")}
         </button>
         <button data-outcome-confirm-create type="submit" ?disabled=${data.creating}>
-          ${data.creating ? t("common.loading") : t("outcomesPage.createOutcome")}
+          ${data.creating
+            ? t("common.loading")
+            : data.pendingRequest
+              ? t("outcomesPage.retryCreateOutcome")
+              : t("outcomesPage.createOutcome")}
         </button>
       </div>
     </form>
@@ -374,6 +395,9 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     </button>
     <h2 class="outcome-detail__title">${data.detail.title}</h2>
     <p class="outcome-detail__objective">${data.detail.objective}</p>
+    <p class="outcome-detail__phase" data-outcome-phase=${data.detail.phase}>
+      ${phaseLabel(data.detail.phase)}
+    </p>
     <p class="outcome-detail__readiness" data-outcome-readiness=${data.detail.readiness}>
       ${readinessLabel(data.detail.readiness)}
     </p>
