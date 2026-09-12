@@ -332,6 +332,19 @@ suite.define(() => {
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
+        const summary = page.locator(".outcome-summary", { hasText: "Mobile keyboard Outcome" });
+        await summary.locator("[data-outcome-select]").click();
+        const detail = page.locator('[data-outcome-detail-id]');
+        await detail.waitFor({ state: "visible" });
+        expect(
+          await page
+            .locator(".outcomes-list-panel")
+            .evaluate((element) => getComputedStyle(element).display),
+        ).toBe("none");
+        await detail.locator(".outcome-detail__back").click();
+        await expect
+          .poll(() => summary.locator("[data-outcome-select]").evaluate((element) => element === document.activeElement))
+          .toBe(true);
         await page.screenshot({
           fullPage: true,
           path: path.join(suite.artifactDir, "outcomes-mobile-keyboard-create.png"),

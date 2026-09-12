@@ -254,53 +254,58 @@ export function renderOutcomesList(data: OutcomesListViewData) {
       <section class="outcomes-state" role="status">${t("outcomesPage.empty")}</section>
     `;
   }
-  return html`${data.canCreate
+  return html`<section
+    class="outcomes-list-panel"
+    data-outcome-detail-selected=${data.selectedOutcomeId === null ? "false" : "true"}
+  >
+    ${data.canCreate
       ? html`<button data-outcome-action="create" type="button" @click=${data.onRequestCreate}>
           ${t("outcomesPage.createOutcome")}
         </button>`
       : nothing}<section class="outcomes-list" aria-label=${t("outcomesPage.listLabel")}>
-    ${data.outcomes.map(
-      (outcome) => html`
-        <article class="outcome-summary" data-outcome-id=${outcome.id}>
-          <h2 class="outcome-summary__title">${outcome.title}</h2>
-          <dl class="outcome-summary__status">
-            <div>
-              <dt class="sr-only">${t("outcomesPage.phaseLabel")}</dt>
-              <dd data-outcome-phase=${outcome.phase}>${phaseLabel(outcome.phase)}</dd>
-            </div>
-            <div>
-              <dt class="sr-only">${t("outcomesPage.readinessLabel")}</dt>
-              <dd data-outcome-readiness=${outcome.readiness}>
-                ${readinessLabel(outcome.readiness)}
-              </dd>
-            </div>
-          </dl>
-          <button
-            class="outcome-summary__select"
-            data-outcome-select=${outcome.id}
-            type="button"
-            aria-current=${data.selectedOutcomeId === outcome.id ? "true" : "false"}
-            @click=${() => data.onSelect(outcome.id)}
-          >
-            ${t("outcomesPage.viewOutcome")}
-          </button>
-        </article>
-      `,
-    )}
-  </section>
-  ${data.loadMoreError
-    ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.loadMoreError}</p>`
-    : nothing}
-  ${data.hasMore
-    ? html`<button
-        data-outcome-action="load-more"
-        type="button"
-        ?disabled=${data.loadingMore}
-        @click=${data.onLoadMore}
-      >
-        ${data.loadingMore ? t("common.loading") : t("outcomesPage.loadMore")}
-      </button>`
-    : nothing}`;
+      ${data.outcomes.map(
+        (outcome) => html`
+          <article class="outcome-summary" data-outcome-id=${outcome.id}>
+            <h2 class="outcome-summary__title">${outcome.title}</h2>
+            <dl class="outcome-summary__status">
+              <div>
+                <dt class="sr-only">${t("outcomesPage.phaseLabel")}</dt>
+                <dd data-outcome-phase=${outcome.phase}>${phaseLabel(outcome.phase)}</dd>
+              </div>
+              <div>
+                <dt class="sr-only">${t("outcomesPage.readinessLabel")}</dt>
+                <dd data-outcome-readiness=${outcome.readiness}>
+                  ${readinessLabel(outcome.readiness)}
+                </dd>
+              </div>
+            </dl>
+            <button
+              class="outcome-summary__select"
+              data-outcome-select=${outcome.id}
+              type="button"
+              aria-current=${data.selectedOutcomeId === outcome.id ? "true" : "false"}
+              @click=${() => data.onSelect(outcome.id)}
+            >
+              ${t("outcomesPage.viewOutcome")}
+            </button>
+          </article>
+        `,
+      )}
+    </section>
+    ${data.loadMoreError
+      ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.loadMoreError}</p>`
+      : nothing}
+    ${data.hasMore
+      ? html`<button
+          data-outcome-action="load-more"
+          type="button"
+          ?disabled=${data.loadingMore}
+          @click=${data.onLoadMore}
+        >
+          ${data.loadingMore ? t("common.loading") : t("outcomesPage.loadMore")}
+        </button>`
+      : nothing}
+  </section>`;
 }
 
 export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {

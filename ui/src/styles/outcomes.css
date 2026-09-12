@@ -185,6 +185,10 @@
 }
 
 @media (max-width: 560px) {
+  .outcomes-list-panel[data-outcome-detail-selected="true"] {
+    display: none;
+  }
+
   .outcome-create-dialog {
     padding: var(--space-3);
   }
