@@ -15,10 +15,12 @@ describe("renderOutcomesList", () => {
 
     render(
       renderOutcomesList({
+        canCreate: false,
         disconnected: false,
         error: null,
         loaded: true,
         loading: false,
+        onRequestCreate: () => undefined,
         onSelect: () => undefined,
         outcomes: [
           {
@@ -53,10 +55,12 @@ describe("renderOutcomesList", () => {
 
     render(
       renderOutcomesList({
+        canCreate: false,
         disconnected: false,
         error: null,
         loaded: true,
         loading: false,
+        onRequestCreate: () => undefined,
         onSelect: () => undefined,
         outcomes: [
           {
@@ -85,10 +89,12 @@ describe("renderOutcomesList", () => {
 
     render(
       renderOutcomesList({
+        canCreate: false,
         disconnected: false,
         error: null,
         loaded: true,
         loading: false,
+        onRequestCreate: () => undefined,
         onSelect: () => undefined,
         outcomes: [
           {
