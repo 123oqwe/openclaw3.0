@@ -262,7 +262,8 @@ export function renderOutcomesList(data: OutcomesListViewData) {
       ? html`<button data-outcome-action="create" type="button" @click=${data.onRequestCreate}>
           ${t("outcomesPage.createOutcome")}
         </button>`
-      : nothing}<section class="outcomes-list" aria-label=${t("outcomesPage.listLabel")}>
+      : nothing}
+    <section class="outcomes-list" aria-label=${t("outcomesPage.listLabel")}>
       ${data.outcomes.map(
         (outcome) => html`
           <article class="outcome-summary" data-outcome-id=${outcome.id}>
@@ -358,7 +359,8 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
                   required
                   ?disabled=${data.creating || data.pendingRequest}
                   .value=${criterion}
-                  @input=${(event: InputEvent) => data.onCriterionInput(index, formControlValue(event))}
+                  @input=${(event: InputEvent) =>
+                    data.onCriterionInput(index, formControlValue(event))}
                 />
               </label>
               ${data.criteria.length > 1
@@ -439,8 +441,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
   }
   if (data.error) {
     return html`<section class="outcomes-state outcomes-state--error" role="alert">
-      ${back}
-      ${data.error}
+      ${back} ${data.error}
     </section>`;
   }
   if (!data.detail) {
@@ -459,20 +460,16 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     <p class="outcome-detail__phase" data-outcome-phase=${data.detail.phase}>
       ${phaseLabel(data.detail.phase)}
     </p>
-    <p
-      class="outcome-detail__acceptance"
-      data-outcome-acceptance=${acceptanceValidity}
-    >
+    <p class="outcome-detail__acceptance" data-outcome-acceptance=${acceptanceValidity}>
       ${t("outcomesPage.acceptanceLabel")}: ${acceptanceValidityLabel(acceptanceValidity)}
     </p>
-    <p
-      class="outcome-detail__readiness"
-      data-outcome-readiness=${readiness}
-    >
+    <p class="outcome-detail__readiness" data-outcome-readiness=${readiness}>
       ${readinessLabel(readiness)}
     </p>
     ${data.detailExpired
-      ? html`<section class="outcomes-state" role="alert">${t("outcomesPage.detailsExpired")}</section>`
+      ? html`<section class="outcomes-state" role="alert">
+          ${t("outcomesPage.detailsExpired")}
+        </section>`
       : nothing}
     ${data.detail.sourceIssues.length > 0
       ? html`<section class="outcome-detail__section" role="alert">
@@ -528,9 +525,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               (work) => html`<li data-outcome-work-card=${work.ref.cardId}>
                 ${t("outcomesPage.linkedCard", { cardId: work.ref.cardId })}
                 <span>${t("outcomesPage.workStatus", { status: work.status })}</span>
-                ${work.upstreamStale
-                  ? html`<span>${t("outcomesPage.workStale")}</span>`
-                  : nothing}
+                ${work.upstreamStale ? html`<span>${t("outcomesPage.workStale")}</span>` : nothing}
               </li>`,
             )}
           </ul>
@@ -545,7 +540,9 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 ${evidenceKindLabel(evidence.kind)}: ${evidence.label ?? evidence.sourceId}
                 ${evidence.proofStatus === undefined
                   ? nothing
-                  : html`<span>${t("outcomesPage.proofStatus", { status: evidence.proofStatus })}</span>`}
+                  : html`<span
+                      >${t("outcomesPage.proofStatus", { status: evidence.proofStatus })}</span
+                    >`}
               </li>`,
             )}
           </ul>
@@ -704,7 +701,8 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 required
                 ?disabled=${data.editing}
                 .value=${data.editObjective}
-                @input=${(event: InputEvent) => data.onEditInput("objective", formControlValue(event))}
+                @input=${(event: InputEvent) =>
+                  data.onEditInput("objective", formControlValue(event))}
               ></textarea>
             </label>
             <fieldset class="outcome-create-dialog__criteria">
@@ -719,8 +717,8 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                         required
                         ?disabled=${data.editing}
                         .value=${criterion.text}
-                          @input=${(event: InputEvent) =>
-                            data.onEditCriterionInput(index, formControlValue(event))}
+                        @input=${(event: InputEvent) =>
+                          data.onEditCriterionInput(index, formControlValue(event))}
                       />
                     </label>
                     ${data.editCriteria.length > 1
@@ -811,9 +809,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 )}
               </select>
             </label>
-            ${data.linkCardsLoading
-              ? html`<p role="status">${t("common.loading")}</p>`
-              : nothing}
+            ${data.linkCardsLoading ? html`<p role="status">${t("common.loading")}</p>` : nothing}
             ${data.linkError
               ? html`<p class="outcomes-state outcomes-state--error" role="alert">
                   ${data.linkError}

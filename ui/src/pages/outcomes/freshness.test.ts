@@ -32,10 +32,7 @@ describe("Outcome detail freshness", () => {
   });
 
   it("is unaffected by client wall-clock rollback because callers supply monotonic time", () => {
-    const deadline = outcomeDetailFreshnessDeadline(
-      { observedAt: 100, recheckAfter: 200 },
-      10_000,
-    );
+    const deadline = outcomeDetailFreshnessDeadline({ observedAt: 100, recheckAfter: 200 }, 10_000);
 
     expect(isOutcomeDetailFresh(deadline, 10_099)).toBe(true);
     expect(isOutcomeDetailFresh(deadline, 10_100)).toBe(false);

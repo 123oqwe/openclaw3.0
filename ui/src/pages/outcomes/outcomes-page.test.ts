@@ -269,7 +269,9 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="load-more"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="load-more"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="load-more"]')?.click();
     await vi.waitFor(() => {
@@ -674,7 +676,9 @@ describe("OutcomesPage", () => {
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
     await vi.waitFor(() => {
-      expect(page.textContent).toContain("Outcome details need refreshing before tracking can start.");
+      expect(page.textContent).toContain(
+        "Outcome details need refreshing before tracking can start.",
+      );
     });
     expect(page.querySelector('[data-outcome-readiness="stale"]')).not.toBeNull();
     expect(page.querySelector('[data-outcome-acceptance="needs-review"]')).not.toBeNull();
@@ -757,7 +761,9 @@ describe("OutcomesPage", () => {
 
     await vi.waitFor(() => {
       expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
 
@@ -824,7 +830,9 @@ describe("OutcomesPage", () => {
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]')?.click();
 
@@ -834,9 +842,9 @@ describe("OutcomesPage", () => {
         id: "outcome-a",
       });
     });
-    expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]')?.disabled).toBe(
-      true,
-    );
+    expect(
+      page.querySelector<HTMLButtonElement>('[data-outcome-action="activate"]')?.disabled,
+    ).toBe(true);
     expect(page.textContent).not.toContain("Active");
 
     resolveActivation?.({
@@ -878,14 +886,16 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.click();
 
     await vi.waitFor(() => {
       expect(page.querySelector('openclaw-modal-dialog[label="Create outcome"]')).not.toBeNull();
     });
-    const form = page.querySelector<HTMLFormElement>('[data-outcome-create-form]');
+    const form = page.querySelector<HTMLFormElement>("[data-outcome-create-form]");
     expect(form).not.toBeNull();
     const title = form?.querySelector<HTMLInputElement>('input[name="title"]');
     const objective = form?.querySelector<HTMLTextAreaElement>('textarea[name="objective"]');
@@ -955,7 +965,9 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.click();
 
@@ -1026,7 +1038,9 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.click();
     await vi.waitFor(() => {
@@ -1111,14 +1125,14 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="create"]')?.click();
 
     await vi.waitFor(() => {
-      expect(
-        page.querySelector<HTMLButtonElement>("[data-outcome-add-criterion]"),
-      ).not.toBeNull();
+      expect(page.querySelector<HTMLButtonElement>("[data-outcome-add-criterion]")).not.toBeNull();
     });
     for (let index = 1; index < 5; index += 1) {
       page.querySelector<HTMLButtonElement>("[data-outcome-add-criterion]")?.click();
@@ -1130,7 +1144,9 @@ describe("OutcomesPage", () => {
     const form = page.querySelector<HTMLFormElement>("[data-outcome-create-form]");
     const title = form?.querySelector<HTMLInputElement>('input[name="title"]');
     const objective = form?.querySelector<HTMLTextAreaElement>('textarea[name="objective"]');
-    const criteria = Array.from(form?.querySelectorAll<HTMLInputElement>('input[name="criterion"]') ?? []);
+    const criteria = Array.from(
+      form?.querySelectorAll<HTMLInputElement>('input[name="criterion"]') ?? [],
+    );
     if (!form || !title || !objective || criteria.length !== 5) {
       throw new Error("Outcome create form fields are missing");
     }
@@ -1190,11 +1206,15 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]"),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>("[data-outcome-action=edit-contract]")).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>("[data-outcome-action=edit-contract]"),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>("[data-outcome-action=edit-contract]")?.click();
 
@@ -1229,7 +1249,9 @@ describe("OutcomesPage", () => {
     });
     expect(page.textContent).toContain("Outcome A objective");
 
-    resolveUpdate?.({ outcome: { ...outcomeDetail("outcome-a", "Outcome A revised"), revision: 2 } });
+    resolveUpdate?.({
+      outcome: { ...outcomeDetail("outcome-a", "Outcome A revised"), revision: 2 },
+    });
     await vi.waitFor(() => {
       expect(page.textContent).toContain("Outcome A revised objective");
       expect(page.querySelector("[data-outcome-edit-form]")).toBeNull();
@@ -1282,11 +1304,15 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]"),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>("[data-outcome-action=link-work]")).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>("[data-outcome-action=link-work]"),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>("[data-outcome-action=link-work]")?.click();
 
@@ -1364,11 +1390,15 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]"),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>("[data-outcome-unlink-card=card-1]")).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>("[data-outcome-unlink-card=card-1]"),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>("[data-outcome-unlink-card=card-1]")?.click();
 
@@ -1432,7 +1462,9 @@ describe("OutcomesPage", () => {
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')?.click();
 
@@ -1440,7 +1472,7 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => {
       expect(page.querySelector('openclaw-modal-dialog[label="Cancel outcome"]')).not.toBeNull();
     });
-    page.querySelector<HTMLButtonElement>('[data-outcome-confirm-cancel]')?.click();
+    page.querySelector<HTMLButtonElement>("[data-outcome-confirm-cancel]")?.click();
 
     await vi.waitFor(() => {
       expect(request).toHaveBeenCalledWith("outcomes.cancel", {
@@ -1493,12 +1525,18 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     await vi.waitFor(() => {
@@ -1511,7 +1549,9 @@ describe("OutcomesPage", () => {
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')?.click();
     await vi.waitFor(() => {
       expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled).toBe(false);
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled,
+      ).toBe(false);
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
     await vi.waitFor(() => {
@@ -1569,13 +1609,21 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]'),
+      ).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     await vi.waitFor(() => {
@@ -1591,8 +1639,12 @@ describe("OutcomesPage", () => {
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled).toBe(true);
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')?.disabled).toBe(true);
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled,
+      ).toBe(true);
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')?.disabled,
+      ).toBe(true);
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     page.querySelector<HTMLButtonElement>('[data-outcome-action="cancel"]')?.click();
@@ -1646,7 +1698,9 @@ describe("OutcomesPage", () => {
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     await vi.waitFor(() => {
@@ -1658,7 +1712,9 @@ describe("OutcomesPage", () => {
 
     await vi.waitFor(() => {
       expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled).toBe(true);
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled,
+      ).toBe(true);
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     expect(refreshCalls).toBe(1);
@@ -1668,7 +1724,9 @@ describe("OutcomesPage", () => {
     });
     await vi.waitFor(() => {
       expect(detailReads).toBe(3);
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled).toBe(false);
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled,
+      ).toBe(false);
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     await vi.waitFor(() => {

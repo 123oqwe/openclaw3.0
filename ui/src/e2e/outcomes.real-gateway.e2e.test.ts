@@ -2,12 +2,12 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
+import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
 } from "../../../test/helpers/openclaw-test-instance.ts";
 import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
-import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 
@@ -88,7 +88,10 @@ function isGatewayCallResult(value: unknown): value is GatewayCallResult {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
-async function callGateway(method: string, params: Record<string, unknown>): Promise<GatewayCallResult> {
+async function callGateway(
+  method: string,
+  params: Record<string, unknown>,
+): Promise<GatewayCallResult> {
   if (!instance) {
     throw new Error("Outcome Gateway fixture was not started");
   }
@@ -267,16 +270,21 @@ suite.define(() => {
         await page.goto(handoffUrl);
         await waitForControlUiGatewayReady(page);
         expect(
-          await page.evaluate((secret) => ({
-            body: document.body.textContent?.includes(secret) ?? false,
-            url: location.href.includes(secret),
-          }), bootstrapToken),
+          await page.evaluate(
+            (secret) => ({
+              body: document.body.textContent?.includes(secret) ?? false,
+              url: location.href.includes(secret),
+            }),
+            bootstrapToken,
+          ),
         ).toEqual({ body: false, url: false });
 
         await page.locator('[data-outcome-action="create"]').click();
         const createForm = page.locator("[data-outcome-create-form]");
         await createForm.locator('input[name="title"]').fill("Release Outcome E2E");
-        await createForm.locator('textarea[name="objective"]').fill("Prove the public Outcome flow");
+        await createForm
+          .locator('textarea[name="objective"]')
+          .fill("Prove the public Outcome flow");
         await createForm.locator('input[name="criterion"]').fill("A real Workboard card is linked");
         await createForm.locator("[data-outcome-confirm-create]").click();
 
@@ -372,7 +380,9 @@ suite.define(() => {
           throw new Error("Outcome Gateway fixture was not started");
         }
         await instance.stopGateway();
-        await page.getByText("Outcome connection unavailable", { exact: true }).waitFor({ state: "visible" });
+        await page
+          .getByText("Outcome connection unavailable", { exact: true })
+          .waitFor({ state: "visible" });
         await expect.poll(() => detail.count()).toBe(0);
         if (captureUiProofEnabled) {
           await page.screenshot({
@@ -388,7 +398,7 @@ suite.define(() => {
         await page
           .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
           .waitFor({ state: "visible" });
-        await page.locator('[data-outcome-select]').click();
+        await page.locator("[data-outcome-select]").click();
         await page.getByText("Workboard disabled", { exact: true }).waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,
@@ -396,7 +406,9 @@ suite.define(() => {
         });
 
         await instance.stopGateway();
-        await page.getByText("Outcome connection unavailable", { exact: true }).waitFor({ state: "visible" });
+        await page
+          .getByText("Outcome connection unavailable", { exact: true })
+          .waitFor({ state: "visible" });
         await instance.state.writeConfig(outcomeGatewayConfig(instance, true));
         await instance.startGateway();
         await waitForControlUiGatewayReady(page);
@@ -405,22 +417,28 @@ suite.define(() => {
         await page
           .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
           .waitFor({ state: "visible" });
-        await page.locator('[data-outcome-select]').click();
+        await page.locator("[data-outcome-select]").click();
         await expect
-          .poll(() => page.locator('[data-outcome-detail-id]').getAttribute("data-outcome-detail-id"))
+          .poll(() =>
+            page.locator("[data-outcome-detail-id]").getAttribute("data-outcome-detail-id"),
+          )
           .toBe(outcomeId);
-        const restoredDetail = page.locator('[data-outcome-detail-id]');
+        const restoredDetail = page.locator("[data-outcome-detail-id]");
         const cancel = restoredDetail.locator('[data-outcome-action="cancel"]');
         await cancel.focus();
         await page.keyboard.press("Enter");
         const cancelDialog = page.locator(".outcome-cancel-dialog");
         await cancelDialog.waitFor({ state: "visible" });
-        const beforeConfirmation = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
+        const beforeConfirmation = requireOutcome(
+          await callGateway("outcomes.get", { id: outcomeId }),
+        );
         expect(beforeConfirmation.phase).toBe("active");
         const confirmCancel = cancelDialog.locator("[data-outcome-confirm-cancel]");
         await confirmCancel.focus();
         await page.keyboard.press("Enter");
-        await restoredDetail.locator('[data-outcome-phase="cancelled"]').waitFor({ state: "visible" });
+        await restoredDetail
+          .locator('[data-outcome-phase="cancelled"]')
+          .waitFor({ state: "visible" });
         const cancelled = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
         expect(cancelled.phase).toBe("cancelled");
       },
@@ -468,7 +486,7 @@ suite.define(() => {
         ).toBe(true);
         const summary = page.locator(".outcome-summary", { hasText: titleText });
         await summary.locator("[data-outcome-select]").click();
-        const detail = page.locator('[data-outcome-detail-id]');
+        const detail = page.locator("[data-outcome-detail-id]");
         await detail.waitFor({ state: "visible" });
         expect(
           await page
@@ -477,7 +495,11 @@ suite.define(() => {
         ).toBe("none");
         await detail.locator(".outcome-detail__back").click();
         await expect
-          .poll(() => summary.locator("[data-outcome-select]").evaluate((element) => element === document.activeElement))
+          .poll(() =>
+            summary
+              .locator("[data-outcome-select]")
+              .evaluate((element) => element === document.activeElement),
+          )
           .toBe(true);
         await create.focus();
         await page.keyboard.press("Enter");
@@ -513,13 +535,17 @@ suite.define(() => {
         await page.locator('[data-outcome-action="create"]').click();
         const createForm = page.locator("[data-outcome-create-form]");
         await createForm.locator('input[name="title"]').fill("Revoked browser Outcome");
-        await createForm.locator('textarea[name="objective"]').fill("This must disappear on revocation");
-        await createForm.locator('input[name="criterion"]').fill("The browser can no longer read this");
+        await createForm
+          .locator('textarea[name="objective"]')
+          .fill("This must disappear on revocation");
+        await createForm
+          .locator('input[name="criterion"]')
+          .fill("The browser can no longer read this");
         await createForm.locator("[data-outcome-confirm-create]").click();
         const summary = page.locator(".outcome-summary", { hasText: "Revoked browser Outcome" });
         await summary.waitFor({ state: "visible" });
         await summary.locator("[data-outcome-select]").click();
-        const detail = page.locator('[data-outcome-detail-id]');
+        const detail = page.locator("[data-outcome-detail-id]");
         await detail.waitFor({ state: "visible" });
         await detail
           .getByText("This must disappear on revocation", { exact: true })
@@ -566,7 +592,9 @@ unavailableSuite.define(() => {
       async ({ page }) => {
         await page.goto(await outcomesUrlFor(instance));
         await waitForControlUiGatewayReady(page);
-        await page.getByText("Outcome access unavailable", { exact: true }).waitFor({ state: "visible" });
+        await page
+          .getByText("Outcome access unavailable", { exact: true })
+          .waitFor({ state: "visible" });
         await expect.poll(() => page.locator(".outcomes-list").count()).toBe(0);
         await page.screenshot({
           fullPage: true,

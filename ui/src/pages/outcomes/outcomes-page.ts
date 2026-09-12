@@ -431,63 +431,63 @@ class OutcomesPage extends OpenClawLightDomElement {
   private canRefreshOutcome(): boolean {
     return Boolean(
       this.detail &&
-        this.detail.nextActions.includes("refresh") &&
-        this.gatewayIdentity?.canRead &&
-        canCallGatewayMethod(this.gateway.snapshot, "outcomes.refresh", "operator.write"),
+      this.detail.nextActions.includes("refresh") &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.refresh", "operator.write"),
     );
   }
 
   private canCreateOutcome(): boolean {
     return Boolean(
       this.gatewayIdentity?.canRead &&
-        canCallGatewayMethod(this.gateway.snapshot, "outcomes.create", "operator.write"),
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.create", "operator.write"),
     );
   }
 
   private canEditOutcome(): boolean {
     return Boolean(
       this.detail &&
-        this.detail.nextActions.includes("edit-contract") &&
-        this.gatewayIdentity?.canRead &&
-        canCallGatewayMethod(this.gateway.snapshot, "outcomes.update", "operator.write"),
+      this.detail.nextActions.includes("edit-contract") &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.update", "operator.write"),
     );
   }
 
   private canLinkOutcome(): boolean {
     return Boolean(
       this.detail &&
-        this.detail.nextActions.includes("link-work") &&
-        this.gatewayIdentity?.canRead &&
-        canCallGatewayMethod(this.gateway.snapshot, "outcomes.linkWorkboard", "operator.write") &&
-        canCallGatewayMethod(this.gateway.snapshot, "workboard.cards.list", "operator.read"),
+      this.detail.nextActions.includes("link-work") &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.linkWorkboard", "operator.write") &&
+      canCallGatewayMethod(this.gateway.snapshot, "workboard.cards.list", "operator.read"),
     );
   }
 
   private canUnlinkOutcome(): boolean {
     return Boolean(
       this.detail &&
-        this.detail.nextActions.includes("unlink-work") &&
-        this.gatewayIdentity?.canRead &&
-        canCallGatewayMethod(this.gateway.snapshot, "outcomes.unlinkWorkboard", "operator.write"),
+      this.detail.nextActions.includes("unlink-work") &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.unlinkWorkboard", "operator.write"),
     );
   }
 
   private canActivateOutcome(): boolean {
     return Boolean(
-        this.detail &&
-        this.detail.nextActions.includes("activate") &&
-        !this.isDetailExpired() &&
-        this.gatewayIdentity?.canRead &&
-        canCallGatewayMethod(this.gateway.snapshot, "outcomes.activate", "operator.write"),
+      this.detail &&
+      this.detail.nextActions.includes("activate") &&
+      !this.isDetailExpired() &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.activate", "operator.write"),
     );
   }
 
   private canCancelOutcome(): boolean {
     return Boolean(
       this.detail &&
-        this.detail.nextActions.includes("cancel") &&
-        this.gatewayIdentity?.canRead &&
-        canCallGatewayMethod(this.gateway.snapshot, "outcomes.cancel", "operator.write"),
+      this.detail.nextActions.includes("cancel") &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.cancel", "operator.write"),
     );
   }
 
@@ -496,9 +496,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     return (
       id !== null &&
       ownerId !== null &&
-      this.mutationInFlightOutcomeLocks.some(
-        (lock) => lock.id === id && lock.ownerId === ownerId,
-      )
+      this.mutationInFlightOutcomeLocks.some((lock) => lock.id === id && lock.ownerId === ownerId)
     );
   }
 
@@ -553,11 +551,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     if (deadline === null || this.detailExpired) {
       return;
     }
-    this.detailFreshnessTimer = globalThis.setTimeout(() => {
-      if (!isOutcomeDetailFresh(this.detailFreshnessDeadline, performance.now())) {
-        this.detailExpired = true;
-      }
-    }, Math.max(0, deadline - performance.now()));
+    this.detailFreshnessTimer = globalThis.setTimeout(
+      () => {
+        if (!isOutcomeDetailFresh(this.detailFreshnessDeadline, performance.now())) {
+          this.detailExpired = true;
+        }
+      },
+      Math.max(0, deadline - performance.now()),
+    );
   }
 
   private isDetailExpired(): boolean {
@@ -674,7 +675,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     if (this.createRequest) {
       return;
     }
-    this.createCriteria = this.createCriteria.filter((_, criterionIndex) => criterionIndex !== index);
+    this.createCriteria = this.createCriteria.filter(
+      (_, criterionIndex) => criterionIndex !== index,
+    );
   }
 
   private async submitCreateOutcome(event: SubmitEvent) {
@@ -799,7 +802,10 @@ class OutcomesPage extends OpenClawLightDomElement {
     const scope = this.gateway.capture();
     const title = this.editTitle.trim();
     const objective = this.editObjective.trim();
-    const criteria = this.editCriteria.map((criterion) => ({ ...criterion, text: criterion.text.trim() }));
+    const criteria = this.editCriteria.map((criterion) => ({
+      ...criterion,
+      text: criterion.text.trim(),
+    }));
     if (
       this.editing ||
       !detail ||
@@ -827,7 +833,11 @@ class OutcomesPage extends OpenClawLightDomElement {
     const requestStartedAt = performance.now();
     let mutationResultWasCurrent = false;
     try {
-      const updated = await updateOutcome(client, id, expectedRevision, { criteria, objective, title });
+      const updated = await updateOutcome(client, id, expectedRevision, {
+        criteria,
+        objective,
+        title,
+      });
       if (
         sequence === this.editRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -972,7 +982,12 @@ class OutcomesPage extends OpenClawLightDomElement {
     const requestStartedAt = performance.now();
     let mutationResultWasCurrent = false;
     try {
-      const linked = await linkOutcomeWorkboard(client, { cardId, criterionId, expectedRevision, id });
+      const linked = await linkOutcomeWorkboard(client, {
+        cardId,
+        criterionId,
+        expectedRevision,
+        id,
+      });
       if (
         sequence === this.linkRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -1020,7 +1035,8 @@ class OutcomesPage extends OpenClawLightDomElement {
       detail.id !== id ||
       !detail.criteria.some(
         (criterion) =>
-          criterion.id === criterionId && criterion.workRefs.some((reference) => reference.cardId === cardId),
+          criterion.id === criterionId &&
+          criterion.workRefs.some((reference) => reference.cardId === cardId),
       ) ||
       !snapshot?.selfUser?.id ||
       !client ||

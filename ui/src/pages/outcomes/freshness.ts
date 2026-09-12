@@ -18,9 +18,6 @@ export function outcomeDetailFreshnessDeadline(
   return requestStartedAt + Math.min(serverWindow, OUTCOME_DETAIL_MAX_FRESHNESS_MS);
 }
 
-export function isOutcomeDetailFresh(
-  deadline: number | null,
-  monotonicNow: number,
-): boolean {
+export function isOutcomeDetailFresh(deadline: number | null, monotonicNow: number): boolean {
   return deadline === null || monotonicNow < deadline;
 }
