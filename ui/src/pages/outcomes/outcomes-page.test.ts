@@ -490,6 +490,70 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("refreshes a selected Outcome only after the Gateway confirms the mutation", async () => {
+    let resolveRefresh: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: { ...outcomeDetail("outcome-a", "Outcome A"), readiness: "stale" as const },
+        });
+      }
+      if (method === "outcomes.refresh") {
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.refresh"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.refresh", {
+        expectedRevision: 1,
+        id: "outcome-a",
+      });
+    });
+    expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.disabled).toBe(
+      true,
+    );
+    expect(
+      page.querySelector('[data-outcome-detail-id="outcome-a"]')?.getAttribute("data-outcome-readiness"),
+    ).toBe("stale");
+
+    resolveRefresh?.({
+      outcome: { ...outcomeDetail("outcome-a", "Outcome A"), readiness: "blocked", revision: 2 },
+    });
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector('[data-outcome-detail-id="outcome-a"]')?.getAttribute("data-outcome-readiness"),
+      ).toBe("blocked");
+    });
+  });
+
   it("does not let an old selected Outcome detail overwrite a newer selection", async () => {
     let resolveFirstDetail: ((result: { outcome: OutcomeDetail }) => void) | undefined;
     const request = vi.fn((method: string, params: { id?: string }) => {
