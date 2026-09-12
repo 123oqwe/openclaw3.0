@@ -506,4 +506,58 @@ describe("OutcomesPage", () => {
     expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).toBeNull();
     expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
   });
+
+  it("revalidates a same-identity selection after reconnecting without showing stale detail", async () => {
+    let detailRequests = 0;
+    let resolveRevalidatedDetail: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        detailRequests += 1;
+        if (detailRequests === 1) {
+          return Promise.resolve({ outcome: outcomeDetail("outcome-a", "Outcome A") });
+        }
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveRevalidatedDetail = resolve;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const { gateway, mutableGateway, updateSnapshot } = createGatewayWithSnapshotListener(client);
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
+    });
+
+    mutableGateway.connectionRevision = 2;
+    updateSnapshot({});
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.get", { id: "outcome-a" });
+      expect(detailRequests).toBe(2);
+    });
+    expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).toBeNull();
+    expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).toHaveAttribute(
+      "aria-current",
+      "true",
+    );
+    expect(page.textContent).toContain("Revalidating outcome details");
+
+    resolveRevalidatedDetail?.({ outcome: outcomeDetail("outcome-a", "Outcome A (revalidated)") });
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("Outcome A (revalidated) objective");
+    });
+  });
 });
