@@ -1727,6 +1727,57 @@ describe("OutcomesPage", () => {
     expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
   });
 
+  it("does not show an old selected Outcome detail error after a newer selection", async () => {
+    let rejectFirstDetail: ((error: Error) => void) | undefined;
+    const request = vi.fn((method: string, params: { id?: string }) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({
+          outcomes: [
+            outcomeSummary("outcome-a", "Outcome A"),
+            outcomeSummary("outcome-b", "Outcome B"),
+          ],
+        });
+      }
+      if (method === "outcomes.get" && params.id === "outcome-a") {
+        return new Promise<{ outcome: OutcomeDetail }>((_, reject) => {
+          rejectFirstDetail = reject;
+        });
+      }
+      if (method === "outcomes.get" && params.id === "outcome-b") {
+        return Promise.resolve({ outcome: outcomeDetail("outcome-b", "Outcome B") });
+      }
+      throw new Error(`Unexpected request: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.get", { id: "outcome-a" });
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
+    });
+
+    rejectFirstDetail?.(new Error("A detail should no longer be current"));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await page.updateComplete;
+
+    expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
+    expect(page.textContent).not.toContain("Couldn't load outcome details");
+  });
+
   it("revalidates a same-identity selection after reconnecting without showing stale detail", async () => {
     let detailRequests = 0;
     let resolveRevalidatedDetail: ((result: { outcome: OutcomeDetail }) => void) | undefined;
