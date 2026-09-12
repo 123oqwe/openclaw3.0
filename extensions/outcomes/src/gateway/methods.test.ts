@@ -139,6 +139,27 @@ async function createLinkedOutcome(harness: ReturnType<typeof createHarness>, id
 }
 
 describe("P-02 Outcome handlers", () => {
+  it.each([
+    ["outcomes.create", {}],
+    ["outcomes.get", {}],
+    ["outcomes.list", { limit: 0 }],
+    ["outcomes.update", {}],
+    ["outcomes.linkWorkboard", {}],
+    ["outcomes.unlinkWorkboard", {}],
+    ["outcomes.activate", {}],
+    ["outcomes.refresh", {}],
+    ["outcomes.cancel", {}],
+  ])("rejects malformed %s input before owner or store access", async (method, params) => {
+    const harness = createHarness();
+    expect(await harness.call(method, params, null as never)).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_INVALID_REQUEST" },
+    ]);
+    expect(harness.entryReads()).toBe(0);
+    expect(harness.writes()).toBe(0);
+  });
+
   it("maps a bounded host capacity failure without exposing its exception", async () => {
     const harness = createHarness({
       registerError: Object.assign(new Error("private store path"), {
