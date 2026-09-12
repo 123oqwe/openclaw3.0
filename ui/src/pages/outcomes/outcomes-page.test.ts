@@ -1006,7 +1006,7 @@ describe("OutcomesPage", () => {
               id: "card-2",
               labels: [],
               position: 0,
-              priority: "medium",
+              priority: "normal",
               status: "todo",
               title: "Prepare the launch",
               updatedAt: 2,
