@@ -9,14 +9,14 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { createTestPluginApi } from "openclaw/plugin-sdk/plugin-test-api";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   GATEWAY_CLIENT_IDS,
   GATEWAY_CLIENT_MODES,
 } from "../../packages/gateway-protocol/src/client-info.js";
 import { PROTOCOL_VERSION } from "../../packages/gateway-protocol/src/version.js";
 import { summarizeBenchmarkTimings } from "../../scripts/lib/benchmark-harness.mts";
-import { loadBundledPluginPublicSurfaceModuleSync } from "../plugin-sdk/facade-runtime.js";
+import { loadBundledPluginPublicSurfaceModule } from "../plugin-sdk/facade-runtime.js";
 import { withPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
 import { createGatewayMethodRegistry } from "./methods/registry.js";
 import type { GatewayRequestContext, GatewayRequestOptions } from "./server-methods/types.js";
@@ -180,18 +180,16 @@ function activeBenchmarkRecord(
       planHash,
       decidedPlan: plan,
       evidenceSetHash: "b".repeat(64),
-      note: "x".repeat(2_000),
+      note: "",
       decidedAt: index,
     };
     record.decisions.push(decision);
-    const overshoot = outcomeRecordBytes(record) - targetBytes;
-    if (overshoot > 0) {
-      decision.note = decision.note.slice(0, Math.max(0, decision.note.length - overshoot));
-      if (outcomeRecordBytes(record) > targetBytes) {
-        record.decisions.pop();
-        break;
-      }
+    const bytesBeforeNote = outcomeRecordBytes(record);
+    if (bytesBeforeNote > targetBytes) {
+      record.decisions.pop();
+      break;
     }
+    decision.note = "x".repeat(Math.min(2_000, targetBytes - bytesBeforeNote));
   }
   if (outcomeRecordBytes(record) < targetBytes * 0.9 || outcomeRecordBytes(record) > targetBytes) {
     throw new Error(`unable to construct ${targetBytes}-byte Outcome benchmark record`);
@@ -216,11 +214,20 @@ type OutcomeRuntimeApi = {
   registerOutcomeGatewayMethods(api: ReturnType<typeof createTestPluginApi>): void;
 };
 
-function registerOutcomeGatewayMethods(api: ReturnType<typeof createTestPluginApi>): void {
-  loadBundledPluginPublicSurfaceModuleSync<OutcomeRuntimeApi>({
+let outcomeRuntimeApi: OutcomeRuntimeApi | undefined;
+
+beforeAll(async () => {
+  outcomeRuntimeApi = await loadBundledPluginPublicSurfaceModule<OutcomeRuntimeApi>({
     dirName: "outcomes",
     artifactBasename: "runtime-api.js",
-  }).registerOutcomeGatewayMethods(api);
+  });
+});
+
+function registerOutcomeGatewayMethods(api: ReturnType<typeof createTestPluginApi>): void {
+  if (!outcomeRuntimeApi) {
+    throw new Error("Outcome public runtime surface was not loaded before the harness");
+  }
+  outcomeRuntimeApi.registerOutcomeGatewayMethods(api);
 }
 
 function createContext(): GatewayRequestContext {
