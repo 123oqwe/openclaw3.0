@@ -156,7 +156,9 @@ function p02Guidance(
     }
   };
   const addAction = (action: OutcomeNextAction) => {
-    if (!nextActions.includes(action)) nextActions.push(action);
+    if (!nextActions.includes(action)) {
+      nextActions.push(action);
+    }
   };
   const projectionsByRef = new Map(
     projections.map((projection) => [workRefIdentity(projection.ref), projection]),
@@ -169,7 +171,9 @@ function p02Guidance(
       addAction("edit-contract");
       addAction("link-work");
     }
-    if (criterion.workRefs.length > 0) hasLinkedWork = true;
+    if (criterion.workRefs.length > 0) {
+      hasLinkedWork = true;
+    }
     let sourceIsCurrent = criterion.workRefs.length > 0;
     for (const ref of criterion.workRefs) {
       const projection = projectionsByRef.get(workRefIdentity(ref));
@@ -191,9 +195,13 @@ function p02Guidance(
         sourceIsCurrent = false;
       }
     }
-    if (!sourceIsCurrent) continue;
+    if (!sourceIsCurrent) {
+      continue;
+    }
     const sourceDigests = currentEvidenceSourceDigests(record, criterion, projections, observedAt);
-    if (sourceDigests === undefined) continue;
+    if (sourceDigests === undefined) {
+      continue;
+    }
     if (sourceDigests.length === 0) {
       addAttention("evidence-missing", criterion.id);
       addAction("refresh");
@@ -201,7 +209,9 @@ function p02Guidance(
       addAttention("verification-required", criterion.id);
     }
   }
-  if (hasLinkedWork) addAction("unlink-work");
+  if (hasLinkedWork) {
+    addAction("unlink-work");
+  }
   if (
     record.phase === "draft" &&
     record.criteria
