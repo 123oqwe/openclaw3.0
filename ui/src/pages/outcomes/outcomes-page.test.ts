@@ -120,9 +120,9 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector('[data-outcome-id="outcome-1"]')?.textContent).toContain(
-        "Launch beta",
-      );
+      const outcome = page.querySelector('[data-outcome-id="outcome-1"]');
+      expect(outcome).not.toBeNull();
+      expect(outcome?.textContent).toContain("Launch beta");
     });
   });
 
@@ -136,7 +136,9 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector('[role="alert"]')?.textContent).toContain("Could not load outcomes");
+      const alert = page.querySelector('[role="alert"]');
+      expect(alert).not.toBeNull();
+      expect(alert?.textContent).toContain("Could not load outcomes");
     });
     expect(page.textContent).not.toContain("No outcomes yet");
   });
