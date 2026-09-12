@@ -154,6 +154,7 @@ function createHarness(state: { env: NodeJS.ProcessEnv }) {
   };
   const context = createContext();
   let workboardAvailable = true;
+  let workboardListRequests = 0;
   const buildRegistry = () =>
     createGatewayMethodRegistry(
       registrations
@@ -170,14 +171,18 @@ function createHarness(state: { env: NodeJS.ProcessEnv }) {
     method: string,
     params: Record<string, unknown>,
     options?: { requireAuthenticatedRequest?: boolean; scopes?: string[]; timeoutMs?: number },
-  ) =>
-    await dispatchGatewayMethodInProcess(method, params, {
+  ) => {
+    if (method === "workboard.cards.list") {
+      workboardListRequests += 1;
+    }
+    return await dispatchGatewayMethodInProcess(method, params, {
       forceSyntheticClient: true,
       requireAuthenticatedRequest: options?.requireAuthenticatedRequest === true,
       requireScopedClient: options?.requireAuthenticatedRequest === true,
       ...(options?.scopes ? { syntheticScopes: [...options.scopes] } : {}),
       ...(options?.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
     });
+  };
   const createApi = (pluginId: Registration["pluginId"], runtime: unknown) =>
     createTestPluginApi({
       id: pluginId,
@@ -204,6 +209,10 @@ function createHarness(state: { env: NodeJS.ProcessEnv }) {
   return {
     context,
     outcomeWrites,
+    outcomeStore,
+    getWorkboardListRequests() {
+      return workboardListRequests;
+    },
     setWorkboardAvailable(available: boolean) {
       workboardAvailable = available;
     },
@@ -250,6 +259,8 @@ describe("Outcome public Workboard Gateway integration", () => {
         method: "outcomes.linkWorkboard",
         request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: cardResult.card.id },
       });
+      const writesBeforeGet = { ...harness.outcomeWrites };
+      const listRequestsBeforeGet = harness.getWorkboardListRequests();
       const detail = await dispatch({
         client: owner,
         context: harness.context,
@@ -266,6 +277,30 @@ describe("Outcome public Workboard Gateway integration", () => {
           ],
         },
       });
+      expect(harness.outcomeWrites).toEqual(writesBeforeGet);
+      expect(harness.getWorkboardListRequests()).toBe(listRequestsBeforeGet + 1);
+      await expect(
+        dispatch({
+          client: owner,
+          context: harness.context,
+          method: "outcomes.refresh",
+          request: { id: outcomeId, expectedRevision: 2 },
+        }),
+      ).resolves.toMatchObject({
+        refresh: { status: "available" },
+        outcome: { id: outcomeId, revision: 3 },
+      });
+      await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toMatchObject({
+        revision: 3,
+        projections: [
+          {
+            availability: "available",
+            ref: { cardId: cardResult.card.id },
+            proofs: [expect.objectContaining({ sourceId: expect.any(String) })],
+            artifacts: [expect.objectContaining({ sourceId: expect.any(String) })],
+          },
+        ],
+      });
     });
   });
 
@@ -274,6 +309,12 @@ describe("Outcome public Workboard Gateway integration", () => {
       const harness = createHarness(state);
       const owner = createOperatorClient("manager-a", ["operator.write"]);
       const foreign = createOperatorClient("manager-b", ["operator.read"]);
+      const card = (await dispatch({
+        client: owner,
+        context: harness.context,
+        method: "workboard.cards.create",
+        request: { title: "Owner-only Workboard source", priority: "normal" },
+      })) as { card: { id: string } };
       await dispatch({
         client: owner,
         context: harness.context,
@@ -285,7 +326,22 @@ describe("Outcome public Workboard Gateway integration", () => {
           criteria: [{ id: criterionId, text: "Private evidence", required: true }],
         },
       });
+      await dispatch({
+        client: owner,
+        context: harness.context,
+        method: "outcomes.linkWorkboard",
+        request: { id: outcomeId, expectedRevision: 1, criterionId, cardId: card.card.id },
+      });
+      await expect(
+        dispatch({
+          client: owner,
+          context: harness.context,
+          method: "outcomes.get",
+          request: { id: outcomeId },
+        }),
+      ).resolves.toMatchObject({ outcome: { id: outcomeId } });
       const writesBefore = { ...harness.outcomeWrites };
+      const listRequestsBefore = harness.getWorkboardListRequests();
       await expect(
         dispatch({
           client: foreign,
@@ -304,6 +360,7 @@ describe("Outcome public Workboard Gateway integration", () => {
         }),
       ).rejects.toThrow("authenticated request authority expired");
       expect(harness.outcomeWrites).toEqual(writesBefore);
+      expect(harness.getWorkboardListRequests()).toBe(listRequestsBefore);
     });
   });
 
@@ -354,6 +411,16 @@ describe("Outcome public Workboard Gateway integration", () => {
         }),
       ).resolves.toMatchObject({ refresh: { status: "unavailable", reason: "workboard-disabled" } });
       expect(harness.outcomeWrites.update).toBe(writesBeforeGet.update + 1);
+      await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toMatchObject({
+        revision: 3,
+        projections: [
+          {
+            availability: "unavailable",
+            errorCode: "workboard-disabled",
+            ref: { cardId: card.card.id },
+          },
+        ],
+      });
     });
   });
 });
