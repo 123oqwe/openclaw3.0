@@ -26,11 +26,7 @@ import {
   normalizedUuid,
   withRefs,
 } from "./input-normalizers.js";
-import {
-  fail,
-  reportCapacityWarning,
-  respondMutation,
-} from "./method-helpers.js";
+import { fail, reportCapacityWarning, respondMutation } from "./method-helpers.js";
 import {
   outcomeCancelParamsSchema,
   outcomeActivateParamsSchema,
