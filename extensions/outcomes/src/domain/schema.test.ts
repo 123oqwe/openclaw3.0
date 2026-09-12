@@ -489,8 +489,7 @@ describe("Outcome create schema and canonical hash", () => {
       createdAt: 1,
       updatedAt: 1,
     };
-    expect(() => outcomeRecordSchema.parse(record)).not.toThrow();
-    expect(() => parseOutcomeRecord(record)).toThrow("131072-byte");
+    expect(() => outcomeRecordSchema.parse(record)).toThrow("131072-byte");
   });
 
   it("reports malformed historical snapshots through safeParse", () => {
@@ -851,8 +850,7 @@ describe("Outcome create schema and canonical hash", () => {
       decisions: [],
       acceptances: oversizedAcceptances,
     };
-    expect(outcomeRecordSchema.safeParse(oversizedRecord).success).toBe(true);
-    expect(() => parseOutcomeRecord(oversizedRecord)).toThrow("131072-byte");
+    expect(outcomeRecordSchema.safeParse(oversizedRecord).success).toBe(false);
   });
 
   it("preserves only coherent cancelled plan state", () => {

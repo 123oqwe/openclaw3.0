@@ -12,7 +12,7 @@ import {
   withOperatorToolGatewayAuthority,
 } from "./server-plugin-in-process-dispatch.js";
 import { withPluginRuntimeGatewayRequestScope } from "../plugins/runtime/gateway-request-scope.js";
-import { registerOutcomeGatewayMethods } from "../../extensions/outcomes/src/gateway/registrar.js";
+import { registerOutcomeGatewayMethods } from "../../extensions/outcomes/runtime-api.js";
 
 const outcomeId = "123e4567-e89b-42d3-a456-426614174000";
 

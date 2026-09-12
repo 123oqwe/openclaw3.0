@@ -53,7 +53,7 @@ describe("Outcome plugin shell", () => {
         id: "outcomes",
         name: "Outcomes",
         runtime: {
-          state: { openKeyedStore: vi.fn(() => ({})) },
+          state: { openKeyedStore: vi.fn(() => ({ deleteIf: vi.fn() })) },
         } as never,
         registerGatewayMethod,
       }),

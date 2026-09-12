@@ -1,5 +1,10 @@
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
-import type { OutcomeDetail, OutcomeSummary } from "@openclaw/outcomes-contract";
+import type {
+  OutcomeAttentionCode,
+  OutcomeDetail,
+  OutcomeNextAction,
+  OutcomeSummary,
+} from "@openclaw/outcomes-contract";
 import { evidenceSetHash } from "./hash.js";
 import type { OutcomeRecord } from "./types.js";
 
@@ -127,6 +132,95 @@ function currentDecision(
     )
     .toSorted((a, b) => b.decidedRevision - a.decidedRevision)[0];
   return selectedDecision === undefined ? undefined : { decision: selectedDecision, sourceDigests };
+}
+
+type P02Guidance = Pick<OutcomeDetail, "attention" | "nextActions">;
+
+/**
+ * The P-02 hint set is deliberately derived from the same current projections
+ * as the summary. It is guidance only: Gateway admission remains authoritative.
+ */
+function p02Guidance(
+  record: OutcomeRecord,
+  projections: CurrentProjection[],
+  observedAt: number,
+): P02Guidance {
+  if (record.phase === "cancelled") {
+    return { attention: [], nextActions: [] };
+  }
+  const attention: OutcomeDetail["attention"] = [];
+  const nextActions: OutcomeNextAction[] = [];
+  const addAttention = (code: OutcomeAttentionCode, criterionId?: string) => {
+    if (
+      !attention.some(
+        (item) => item.code === code && item.criterionId === criterionId,
+      )
+    ) {
+      attention.push(criterionId === undefined ? { code } : { code, criterionId });
+    }
+  };
+  const addAction = (action: OutcomeNextAction) => {
+    if (!nextActions.includes(action)) nextActions.push(action);
+  };
+  const projectionsByRef = new Map(
+    projections.map((projection) => [workRefIdentity(projection.ref), projection]),
+  );
+  let hasLinkedWork = false;
+  for (const criterion of record.criteria) {
+    const missingRequiredLink = criterion.required && criterion.workRefs.length === 0;
+    if (record.phase === "draft" || missingRequiredLink) {
+      addAttention("contract-incomplete", criterion.id);
+      addAction("edit-contract");
+      addAction("link-work");
+    }
+    if (criterion.workRefs.length > 0) hasLinkedWork = true;
+    let sourceIsCurrent = criterion.workRefs.length > 0;
+    for (const ref of criterion.workRefs) {
+      const projection = projectionsByRef.get(workRefIdentity(ref));
+      if (projection === undefined || projection.availability !== "available") {
+        addAttention("owner-unavailable", criterion.id);
+        addAction("refresh");
+        sourceIsCurrent = false;
+        continue;
+      }
+      if (isStaleProjection(projection, observedAt)) {
+        addAttention("stale", criterion.id);
+        addAction("refresh");
+        sourceIsCurrent = false;
+        continue;
+      }
+      if (projection.status === "blocked") {
+        addAttention("blocked", criterion.id);
+        addAction("refresh");
+        sourceIsCurrent = false;
+      }
+    }
+    if (!sourceIsCurrent) continue;
+    const sourceDigests = currentEvidenceSourceDigests(record, criterion, projections, observedAt);
+    if (sourceDigests === undefined) continue;
+    if (sourceDigests.length === 0) {
+      addAttention("evidence-missing", criterion.id);
+      addAction("refresh");
+    } else if (currentDecision(record, criterion, projections, observedAt) === undefined) {
+      addAttention("verification-required", criterion.id);
+    }
+  }
+  if (hasLinkedWork) addAction("unlink-work");
+  if (
+    record.phase === "draft" &&
+    record.criteria.filter((criterion) => criterion.required).every((criterion) => criterion.workRefs.length > 0)
+  ) {
+    addAction("activate");
+  }
+  if (
+    (record.phase === "draft" || record.phase === "active") &&
+    !record.operations.some((operation) =>
+      ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
+    )
+  ) {
+    addAction("cancel");
+  }
+  return { attention, nextActions };
 }
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
@@ -280,6 +374,7 @@ export function toOutcomeDetail(
       (earliest, candidate) => (earliest === null || candidate < earliest ? candidate : earliest),
       null,
     );
+  const guidance = p02Guidance(record, observedProjections, observedAt);
   return {
     ...summary,
     objective: record.objective,
@@ -302,7 +397,6 @@ export function toOutcomeDetail(
     observedAt,
     recheckAfter,
     closureHash: null,
-    attention: [],
-    nextActions: summary.phase === "cancelled" ? [] : ["refresh", "cancel"],
+    ...guidance,
   };
 }
