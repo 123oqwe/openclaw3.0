@@ -60,6 +60,7 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/src/store/outcome-repository.ts",
         "pnpm-lock.yaml",
         "ui/src/e2e/browser-bootstrap.e2e.test.ts",
+        "ui/src/pages/outcomes/client.ts",
         "ui/src/pages/outcomes/outcomes-page.test.ts",
         "ui/src/pages/outcomes/outcomes-page.ts",
         "ui/src/pages/outcomes/view.ts",
