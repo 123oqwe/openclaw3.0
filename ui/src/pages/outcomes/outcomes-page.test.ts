@@ -472,7 +472,30 @@ describe("OutcomesPage", () => {
         return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
       }
       if (method === "outcomes.get") {
-        return Promise.resolve({ outcome: outcomeDetail("outcome-a", "Outcome A") });
+        const detail = outcomeDetail("outcome-a", "Outcome A");
+        return Promise.resolve({
+          outcome: {
+            ...detail,
+            acceptance: { acceptanceValidity: "current", lastSuccessfulAt: 2 },
+            acceptanceValidity: "current",
+            evidence: [
+              {
+                criterionId: "criterion-1",
+                id: "evidence-1",
+                kind: "workboard-proof",
+                label: "Hosted verification",
+                observedAt: 2,
+                planGeneration: 0,
+                proofStatus: "passed",
+                sourceCreatedAt: 2,
+                sourceDigest: "a".repeat(64),
+                sourceId: "proof-1",
+                workRef: detail.criteria[0]!.workRefs[0]!,
+              },
+            ],
+            work: [{ ...detail.work[0]!, status: "done" }],
+          },
+        });
       }
       throw new Error(`Unexpected method: ${method}`);
     });
@@ -495,6 +518,11 @@ describe("OutcomesPage", () => {
     expect(page.textContent).toContain("Outcome A objective");
     expect(page.textContent).toContain("Verify the release evidence");
     expect(page.textContent).toContain("card-1");
+    expect(page.textContent).toContain("Acceptance: Current");
+    expect(page.textContent).toContain("Linked work");
+    expect(page.textContent).toContain("Status: done");
+    expect(page.textContent).toContain("Proof: Hosted verification");
+    expect(page.textContent).toContain("Proof status: passed");
     expect(page.textContent).toContain("A linked card is blocked");
     expect(page.textContent).toContain("Refresh");
     expect(page.querySelector('[data-outcome-action="refresh"]')).toBeNull();

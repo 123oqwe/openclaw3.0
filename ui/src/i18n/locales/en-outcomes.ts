@@ -8,6 +8,12 @@ const enOutcomes = {
     listLabel: "Outcomes",
     phaseLabel: "Phase",
     readinessLabel: "Readiness",
+    acceptanceLabel: "Acceptance",
+    workLabel: "Linked work",
+    workStatus: "Status: {status}",
+    workStale: "Source is stale",
+    evidenceLabel: "Evidence",
+    proofStatus: "Proof status: {status}",
     loadingDetail: "Loading details",
     revalidatingDetail: "Checking outcome details",
     empty: "No outcomes",
@@ -63,6 +69,15 @@ const enOutcomes = {
       readyForAcceptance: "Ready for acceptance",
       acceptanceNeedsReview: "Acceptance needs review",
       unknownOperation: "An operation needs observation",
+    },
+    acceptance: {
+      none: "Not accepted",
+      current: "Current",
+      needsReview: "Needs review",
+    },
+    evidence: {
+      proof: "Proof",
+      artifact: "Artifact",
     },
     nextAction: {
       editContract: "Edit contract",

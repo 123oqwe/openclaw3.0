@@ -2,6 +2,8 @@ import type {
   OutcomeDetail,
   OutcomeCriterionInput,
   OutcomeAttentionCode,
+  OutcomeAcceptanceValidity,
+  OutcomeEvidenceKind,
   OutcomeNextAction,
   OutcomePhase,
   OutcomeReadiness,
@@ -114,6 +116,23 @@ function phaseLabel(phase: OutcomePhase): string {
     case "cancelled":
       return t("outcomesPage.phase.cancelled");
   }
+}
+
+function acceptanceValidityLabel(validity: OutcomeAcceptanceValidity): string {
+  switch (validity) {
+    case "current":
+      return t("outcomesPage.acceptance.current");
+    case "needs-review":
+      return t("outcomesPage.acceptance.needsReview");
+    case "none":
+      return t("outcomesPage.acceptance.none");
+  }
+}
+
+function evidenceKindLabel(kind: OutcomeEvidenceKind): string {
+  return kind === "workboard-proof"
+    ? t("outcomesPage.evidence.proof")
+    : t("outcomesPage.evidence.artifact");
 }
 
 function readinessLabel(readiness: OutcomeReadiness): string {
@@ -415,6 +434,11 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     <p class="outcome-detail__phase" data-outcome-phase=${data.detail.phase}>
       ${phaseLabel(data.detail.phase)}
     </p>
+    <p class="outcome-detail__acceptance" data-outcome-acceptance=${data.detail.acceptanceValidity}>
+      ${t("outcomesPage.acceptanceLabel")}: ${acceptanceValidityLabel(
+        data.detail.acceptanceValidity,
+      )}
+    </p>
     <p class="outcome-detail__readiness" data-outcome-readiness=${data.detail.readiness}>
       ${readinessLabel(data.detail.readiness)}
     </p>
@@ -464,6 +488,37 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
         )}
       </ul>
     </section>
+    ${data.detail.work.length > 0
+      ? html`<section class="outcome-detail__section" aria-label=${t("outcomesPage.workLabel")}>
+          <h3>${t("outcomesPage.workLabel")}</h3>
+          <ul>
+            ${data.detail.work.map(
+              (work) => html`<li data-outcome-work-card=${work.ref.cardId}>
+                ${t("outcomesPage.linkedCard", { cardId: work.ref.cardId })}
+                <span>${t("outcomesPage.workStatus", { status: work.status })}</span>
+                ${work.upstreamStale
+                  ? html`<span>${t("outcomesPage.workStale")}</span>`
+                  : nothing}
+              </li>`,
+            )}
+          </ul>
+        </section>`
+      : nothing}
+    ${data.detail.evidence.length > 0
+      ? html`<section class="outcome-detail__section" aria-label=${t("outcomesPage.evidenceLabel")}>
+          <h3>${t("outcomesPage.evidenceLabel")}</h3>
+          <ul>
+            ${data.detail.evidence.map(
+              (evidence) => html`<li data-outcome-evidence=${evidence.sourceId}>
+                ${evidenceKindLabel(evidence.kind)}: ${evidence.label ?? evidence.sourceId}
+                ${evidence.proofStatus === undefined
+                  ? nothing
+                  : html`<span>${t("outcomesPage.proofStatus", { status: evidence.proofStatus })}</span>`}
+              </li>`,
+            )}
+          </ul>
+        </section>`
+      : nothing}
     ${data.detail.attention.length > 0
       ? html`<section class="outcome-detail__section">
           <h3>${t("outcomesPage.attentionLabel")}</h3>

@@ -160,6 +160,7 @@ suite.define(() => {
 
         await detail.locator('[data-outcome-action="refresh"]').click();
         await expect(detail.locator('[data-outcome-action="refresh"]')).toBeEnabled();
+        await expect(detail.getByText("Proof: Outcome E2E verification", { exact: true })).toBeVisible();
         const refreshed = requireOutcome(await callGateway("outcomes.get", { id: outcomeId }));
         expect(refreshed.revision).toBeGreaterThan(activated.revision as number);
         expect(refreshed.evidence).toEqual(
