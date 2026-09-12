@@ -21,10 +21,6 @@ export function findAuthorizedWorkboardCard(
   return matches[0];
 }
 
-export async function readAuthorizedWorkboardCard(api: OpenClawPluginApi, cardId: string) {
-  return findAuthorizedWorkboardCard(await readAuthorizedWorkboardCards(api), cardId);
-}
-
 class InvalidWorkboardResponseError extends Error {
   constructor() {
     super("invalid Workboard response");
