@@ -24,6 +24,7 @@
   color: var(--text-strong);
   font-size: 1rem;
   line-height: 1.4;
+  overflow-wrap: anywhere;
 }
 
 .outcome-summary__status {
@@ -55,10 +56,12 @@
 .outcome-detail__title {
   margin: var(--space-3) 0 0;
   color: var(--text-strong);
+  overflow-wrap: anywhere;
 }
 
 .outcome-detail__objective {
   margin: var(--space-2) 0 0;
+  overflow-wrap: anywhere;
 }
 
 .outcome-detail__readiness {

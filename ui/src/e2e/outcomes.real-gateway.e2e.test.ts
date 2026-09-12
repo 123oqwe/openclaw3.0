@@ -305,6 +305,7 @@ suite.define(() => {
         await page.goto(await outcomesUrl());
         await waitForControlUiGatewayReady(page);
 
+        const titleText = "x".repeat(160);
         const create = page.locator('[data-outcome-action="create"]');
         await create.focus();
         await page.keyboard.press("Enter");
@@ -312,7 +313,7 @@ suite.define(() => {
         await form.waitFor({ state: "visible" });
         const title = form.locator('input[name="title"]');
         await title.focus();
-        await page.keyboard.type("Mobile keyboard Outcome");
+        await page.keyboard.type(titleText);
         const objective = form.locator('textarea[name="objective"]');
         await objective.focus();
         await page.keyboard.type("Prove the narrow-screen keyboard flow");
@@ -324,7 +325,7 @@ suite.define(() => {
         await page.keyboard.press("Enter");
 
         await page
-          .locator(".outcome-summary", { hasText: "Mobile keyboard Outcome" })
+          .locator(".outcome-summary", { hasText: titleText })
           .waitFor({ state: "visible" });
         await expect
           .poll(() => create.evaluate((element) => element === document.activeElement))
@@ -332,7 +333,7 @@ suite.define(() => {
         expect(
           await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
         ).toBe(true);
-        const summary = page.locator(".outcome-summary", { hasText: "Mobile keyboard Outcome" });
+        const summary = page.locator(".outcome-summary", { hasText: titleText });
         await summary.locator("[data-outcome-select]").click();
         const detail = page.locator('[data-outcome-detail-id]');
         await detail.waitFor({ state: "visible" });
