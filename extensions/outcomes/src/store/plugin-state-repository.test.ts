@@ -861,5 +861,4 @@ describe("Outcome repository host adapter", () => {
     writeOutcomeBenchmarkArtifact(report);
     console.info(`[outcome-plugin-state-benchmark] ${JSON.stringify(report)}`);
   });
-
 });
