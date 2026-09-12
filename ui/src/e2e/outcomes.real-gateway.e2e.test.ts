@@ -119,6 +119,15 @@ function isGatewayCallResult(value: unknown): value is GatewayCallResult {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
+function gatewayFrame(payload: { toString(): string }): GatewayCallResult | undefined {
+  try {
+    const parsed: unknown = JSON.parse(payload.toString());
+    return isGatewayCallResult(parsed) ? parsed : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 async function callGateway(
   method: string,
   params: Record<string, unknown>,
@@ -296,6 +305,30 @@ suite.define(() => {
       },
       async ({ page }) => {
         await page.clock.install();
+        const refreshRequestIds = new Set<string>();
+        const refreshReplies = new Map<string, boolean>();
+        page.on("websocket", (socket) => {
+          socket.on("framesent", ({ payload }) => {
+            const frame = gatewayFrame(payload);
+            if (
+              frame?.type === "req" &&
+              frame.method === "outcomes.refresh" &&
+              typeof frame.id === "string"
+            ) {
+              refreshRequestIds.add(frame.id);
+            }
+          });
+          socket.on("framereceived", ({ payload }) => {
+            const frame = gatewayFrame(payload);
+            if (
+              frame?.type === "res" &&
+              typeof frame.id === "string" &&
+              refreshRequestIds.has(frame.id)
+            ) {
+              refreshReplies.set(frame.id, frame.ok === true);
+            }
+          });
+        });
         const handoffUrl = await outcomesUrl();
         const bootstrapToken = new URLSearchParams(new URL(handoffUrl).hash.slice(1)).get(
           "bootstrapToken",
@@ -366,10 +399,16 @@ suite.define(() => {
         await expect.poll(() => detail.locator('[data-outcome-action="activate"]').count()).toBe(0);
 
         const refresh = detail.locator('[data-outcome-action="refresh"]');
+        const refreshRequestCount = refreshRequestIds.size;
         await refresh.focus();
         await page.keyboard.press("Enter");
-        await expect(refresh).toHaveText("Refreshing");
-        await expect(refresh).toHaveText("Refresh");
+        await expect.poll(() => refreshRequestIds.size).toBe(refreshRequestCount + 1);
+        const refreshRequestId = Array.from(refreshRequestIds).at(-1);
+        if (!refreshRequestId) {
+          throw new Error("Outcome refresh did not emit a Gateway request ID");
+        }
+        await expect.poll(() => refreshReplies.has(refreshRequestId)).toBe(true);
+        expect(refreshReplies.get(refreshRequestId)).toBe(true);
         const evidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
         await evidence.waitFor({ state: "visible" });
         await expect
