@@ -371,7 +371,18 @@ describe("P-02 Outcome handlers", () => {
     const { id } = await createOutcome(harness);
     expect(await harness.call("outcomes.linkWorkboard", defaultLinkParams(id))).toMatchObject([
       true,
-      { outcome: { revision: 2, contractRevision: 2 } },
+      {
+        outcome: {
+          revision: 2,
+          contractRevision: 2,
+          criteria: [
+            {
+              workRefs: [{ cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" }],
+            },
+          ],
+          work: [{ ref: { cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" } }],
+        },
+      },
     ]);
     expect(harness.records.get(id)?.criteria[0]?.workRefs).toEqual([
       { owner: "workboard", cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" },

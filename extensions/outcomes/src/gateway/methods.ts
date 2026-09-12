@@ -304,7 +304,11 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        respondMutation(respond, decision, now);
+        const presentation =
+          decision.kind === "updated" || decision.kind === "noop"
+            ? buildRefreshCandidate(decision.record, [card], now)
+            : undefined;
+        respondMutation(respond, decision, now, presentation);
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
