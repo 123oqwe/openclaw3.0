@@ -2074,7 +2074,11 @@ jobs:
             src/plugins/contracts/plugin-sdk-runtime-api-guardrails.test.ts \
             test/scripts/ci-workflow-guards.test.ts \
             test/scripts/outcome-artifact-policy.test.ts \
-            ui/src/e2e/browser-bootstrap.e2e.test.ts
+            ui/src/e2e/browser-bootstrap.e2e.test.ts \
+            ui/src/pages/outcomes/outcomes-page.test.ts \
+            ui/src/pages/outcomes/outcomes-page.ts \
+            ui/src/pages/outcomes/view.ts \
+            ui/src/styles/outcomes.css
           {
             git diff --name-only -z HEAD
             git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'
