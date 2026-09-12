@@ -274,7 +274,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
             ?disabled=${data.refreshing || data.mutationInFlight}
             @click=${data.onRefresh}
           >
-            ${data.refreshing ? t("outcomesPage.refreshing") : t("outcomesPage.refresh")}
+            ${data.refreshing ? t("common.refreshing") : t("common.refresh")}
           </button>
           ${data.mutationError
             ? html`<p class="outcomes-state outcomes-state--error" role="alert">
@@ -291,7 +291,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           ?disabled=${data.cancelling || data.mutationInFlight}
           @click=${data.onRequestCancel}
         >
-          ${t("outcomesPage.cancel")}
+          ${t("common.cancel")}
         </button>`
       : nothing}
     ${data.cancelConfirmationOpen
@@ -323,7 +323,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 ?disabled=${data.cancelling}
                 @click=${data.onConfirmCancel}
               >
-                ${data.cancelling ? t("outcomesPage.cancelling") : t("outcomesPage.confirmCancel")}
+                ${data.cancelling ? t("outcomesPage.cancelling") : t("common.confirm")}
               </button>
             </div>
           </section>
