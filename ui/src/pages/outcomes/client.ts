@@ -38,3 +38,15 @@ export async function cancelOutcome(
   });
   return result.outcome;
 }
+
+export async function activateOutcome(
+  client: GatewayBrowserClient,
+  id: string,
+  expectedRevision: number,
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeMutationResult>("outcomes.activate", {
+    expectedRevision,
+    id,
+  });
+  return result.outcome;
+}

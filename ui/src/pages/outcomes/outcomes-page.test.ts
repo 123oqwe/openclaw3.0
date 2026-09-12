@@ -929,13 +929,15 @@ describe("OutcomesPage", () => {
       expect(request).toHaveBeenCalledWith("outcomes.get", { id: "outcome-a" });
       expect(detailRequests).toBe(2);
     });
-    expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).toBeNull();
-    expect(
-      page
-        .querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')
-        ?.getAttribute("aria-current"),
-    ).toBe("true");
-    expect(page.textContent).toContain("Checking outcome details");
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).toBeNull();
+      expect(
+        page
+          .querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')
+          ?.getAttribute("aria-current"),
+      ).toBe("true");
+      expect(page.textContent).toContain("Checking outcome details");
+    });
 
     resolveRevalidatedDetail?.({ outcome: outcomeDetail("outcome-a", "Outcome A (revalidated)") });
     await vi.waitFor(() => {

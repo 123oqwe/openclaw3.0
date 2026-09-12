@@ -9,7 +9,13 @@ import { formatUiError } from "../../lib/format-error.ts";
 import { canCallGatewayMethod } from "../../lib/gateway-methods.ts";
 import { GatewayPageController } from "../../lit/gateway-page-controller.ts";
 import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
-import { cancelOutcome, getOutcome, listOutcomes, refreshOutcome } from "./client.ts";
+import {
+  activateOutcome,
+  cancelOutcome,
+  getOutcome,
+  listOutcomes,
+  refreshOutcome,
+} from "./client.ts";
 import { renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
 type OutcomeGatewayIdentity = {
@@ -39,7 +45,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private cancelConfirmationOpen = false;
   @state() private cancelError: string | null = null;
   @state() private cancelling = false;
-  @state() private refreshError: string | null = null;
+  @state() private mutationError: string | null = null;
   @state() private refreshing = false;
   @state() private selectedOutcomeId: string | null = null;
   @state() private mutationInFlightOutcomeIds: readonly string[] = [];
@@ -125,7 +131,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRequestSequence += 1;
     this.detail = null;
     this.detailError = null;
-    this.refreshError = null;
+    this.mutationError = null;
     this.refreshing = false;
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
@@ -179,7 +185,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detail = null;
     this.detailError = null;
     this.detailRevalidating = false;
-    this.refreshError = null;
+    this.mutationError = null;
     this.refreshing = false;
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
@@ -194,7 +200,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailError = null;
     this.detailLoading = false;
     this.detailRevalidating = false;
-    this.refreshError = null;
+    this.mutationError = null;
     this.refreshing = false;
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
@@ -208,6 +214,15 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.detail.nextActions.includes("refresh") &&
         this.gatewayIdentity?.canRead &&
         canCallGatewayMethod(this.gateway.snapshot, "outcomes.refresh", "operator.write"),
+    );
+  }
+
+  private canActivateOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+        this.detail.nextActions.includes("activate") &&
+        this.gatewayIdentity?.canRead &&
+        canCallGatewayMethod(this.gateway.snapshot, "outcomes.activate", "operator.write"),
     );
   }
 
@@ -313,7 +328,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
-        this.cancelError = t("outcomesPage.cancelFailed", { error: formatUiError(error) });
+        this.cancelError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(id);
@@ -348,7 +363,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     }
     const sequence = ++this.mutationSequence;
     this.detailRequestSequence += 1;
-    this.refreshError = null;
+    this.mutationError = null;
     this.refreshing = true;
     this.beginOutcomeMutation(id);
     try {
@@ -367,7 +382,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         id === this.selectedOutcomeId &&
         this.gateway.isCurrent(scope)
       ) {
-        this.refreshError = t("outcomesPage.refreshFailed", { error: formatUiError(error) });
+        this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
       this.endOutcomeMutation(id);
@@ -378,6 +393,51 @@ class OutcomesPage extends OpenClawLightDomElement {
       ) {
         this.refreshing = false;
       }
+    }
+  }
+
+  private async activateSelectedOutcome() {
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    if (
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canActivateOutcome() ||
+      this.outcomeMutationIsInFlight(id)
+    ) {
+      return;
+    }
+    const sequence = ++this.mutationSequence;
+    this.detailRequestSequence += 1;
+    this.mutationError = null;
+    this.beginOutcomeMutation(id);
+    try {
+      const activated = await activateOutcome(client, id, detail.revision);
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        activated.revision >= detail.revision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.replaceOutcome(activated);
+      }
+    } catch (error) {
+      if (
+        sequence === this.mutationSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      this.endOutcomeMutation(id);
     }
   }
 
@@ -454,13 +514,15 @@ class OutcomesPage extends OpenClawLightDomElement {
         detail: this.detail,
         error: this.detailError,
         loading: this.detailLoading,
+        canActivate: this.canActivateOutcome(),
         canCancel: this.canCancelOutcome(),
         canRefresh: this.canRefreshOutcome(),
         cancelConfirmationOpen: this.cancelConfirmationOpen,
         cancelError: this.cancelError,
         cancelling: this.cancelling,
-        mutationError: this.refreshError,
+        mutationError: this.mutationError,
         mutationInFlight: this.outcomeMutationIsInFlight(this.selectedOutcomeId),
+        onActivate: () => void this.activateSelectedOutcome(),
         onCancelConfirmationDismiss: (event) => this.dismissCancelConfirmation(event),
         onConfirmCancel: () => void this.cancelSelectedOutcome(),
         onRequestCancel: () => this.openCancelConfirmation(),

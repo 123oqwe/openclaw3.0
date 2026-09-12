@@ -24,6 +24,7 @@ export type OutcomesListViewData = {
 };
 
 export type OutcomeDetailViewData = {
+  canActivate: boolean;
   canCancel: boolean;
   canRefresh: boolean;
   cancelConfirmationOpen: boolean;
@@ -33,6 +34,7 @@ export type OutcomeDetailViewData = {
   error: string | null;
   loading: boolean;
   onBack: () => void;
+  onActivate: () => void;
   onCancelConfirmationDismiss: (event: Event) => void;
   onConfirmCancel: () => void;
   onRequestCancel: () => void;
@@ -142,7 +144,7 @@ export function renderOutcomesList(data: OutcomesListViewData) {
   }
   if (data.loading && !data.loaded) {
     return html`<section class="outcomes-state" role="status" aria-live="polite">
-      ${t("outcomesPage.loading")}
+      ${t("common.loading")}
     </section>`;
   }
   if (data.error) {
@@ -207,7 +209,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
   }
   return html`<article class="outcome-detail" data-outcome-detail-id=${data.detail.id}>
     <button class="outcome-detail__back" type="button" @click=${data.onBack}>
-      ${t("outcomesPage.backToList")}
+      ${t("common.back")}
     </button>
     <h2 class="outcome-detail__title">${data.detail.title}</h2>
     <p class="outcome-detail__objective">${data.detail.objective}</p>
@@ -264,6 +266,23 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           <ul>
             ${data.detail.nextActions.map((action) => html`<li>${nextActionLabel(action)}</li>`)}
           </ul>
+        </section>`
+      : nothing}
+    ${data.canActivate && data.detail.nextActions.includes("activate")
+      ? html`<section class="outcome-detail__section outcome-detail__actions" aria-live="polite">
+          <button
+            data-outcome-action="activate"
+            type="button"
+            ?disabled=${data.mutationInFlight}
+            @click=${data.onActivate}
+          >
+            ${t("outcomesPage.nextAction.activate")}
+          </button>
+          ${data.mutationError
+            ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                ${data.mutationError}
+              </p>`
+            : nothing}
         </section>`
       : nothing}
     ${data.canRefresh && data.detail.nextActions.includes("refresh")
