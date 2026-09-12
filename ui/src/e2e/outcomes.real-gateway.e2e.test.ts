@@ -43,6 +43,40 @@ const suite = createControlUiE2eSuite({
 
 let instance: OpenClawTestInstance | undefined;
 
+const unavailableSuite = createControlUiE2eSuite({
+  name: "Control UI Outcomes without advertised access",
+  startServerBeforeBrowser: true,
+  async startServer() {
+    const owner = await createOpenClawTestInstance({
+      name: "control-ui-outcomes-unavailable",
+      config: {
+        gateway: { controlUi: { enabled: true } },
+        plugins: {
+          entries: {
+            outcomes: { enabled: false },
+            workboard: { enabled: true },
+          },
+        },
+      },
+    });
+    unavailableInstance = owner;
+    try {
+      await owner.startGateway();
+      return { baseUrl: `http://127.0.0.1:${owner.port}/`, close: () => owner.cleanup() };
+    } catch (error) {
+      await runQaGatewayFixture(
+        async () => {
+          throw error;
+        },
+        () => owner.cleanup(),
+      );
+      throw error;
+    }
+  },
+});
+
+let unavailableInstance: OpenClawTestInstance | undefined;
+
 type GatewayCallResult = Record<string, unknown>;
 
 function isGatewayCallResult(value: unknown): value is GatewayCallResult {
@@ -70,11 +104,8 @@ async function callGateway(method: string, params: Record<string, unknown>): Pro
   return parsed;
 }
 
-async function outcomesUrl(): Promise<string> {
-  if (!instance) {
-    throw new Error("Outcome Gateway fixture was not started");
-  }
-  const result = await instance.cli(["--no-color", "dashboard", "--json"]);
+async function outcomesUrlFor(owner: OpenClawTestInstance): Promise<string> {
+  const result = await owner.cli(["--no-color", "dashboard", "--json"]);
   expect(result.code, result.stderr).toBe(0);
   const parsed: unknown = JSON.parse(result.stdout);
   if (!isGatewayCallResult(parsed)) {
@@ -88,6 +119,13 @@ async function outcomesUrl(): Promise<string> {
   const target = new URL("outcomes", issued);
   target.hash = issued.hash;
   return target.toString();
+}
+
+async function outcomesUrl(): Promise<string> {
+  if (!instance) {
+    throw new Error("Outcome Gateway fixture was not started");
+  }
+  return outcomesUrlFor(instance);
 }
 
 function requireCardId(payload: GatewayCallResult): string {
@@ -297,6 +335,31 @@ suite.define(() => {
         await page.screenshot({
           fullPage: true,
           path: path.join(suite.artifactDir, "outcomes-mobile-keyboard-create.png"),
+        });
+      },
+    );
+  });
+});
+
+unavailableSuite.define(() => {
+  it("renders the unavailable Outcome state when the real Gateway does not advertise Outcome access", async () => {
+    if (!unavailableInstance) {
+      throw new Error("Unavailable Outcome Gateway fixture was not started");
+    }
+    await unavailableSuite.withPage(
+      {
+        locale: "en-US",
+        serviceWorkers: "block",
+        viewport: { height: 900, width: 1280 },
+      },
+      async ({ page }) => {
+        await page.goto(await outcomesUrlFor(unavailableInstance));
+        await waitForControlUiGatewayReady(page);
+        await page.getByText("Outcome access unavailable", { exact: true }).waitFor({ state: "visible" });
+        await expect.poll(() => page.locator(".outcomes-list").count()).toBe(0);
+        await page.screenshot({
+          fullPage: true,
+          path: path.join(unavailableSuite.artifactDir, "outcomes-access-unavailable.png"),
         });
       },
     );
