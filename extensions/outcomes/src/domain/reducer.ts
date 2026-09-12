@@ -382,9 +382,7 @@ export function reduceOutcomeUnlink(
   if (matchingRefs.length > 1) {
     return { kind: "rejected", record: current };
   }
-  const workRefs = criterion.workRefs.filter(
-    (ref) => ref.cardId !== mutation.cardId,
-  );
+  const workRefs = criterion.workRefs.filter((ref) => ref.cardId !== mutation.cardId);
   if (workRefs.length === criterion.workRefs.length) {
     return { kind: "noop", record: current };
   }
@@ -491,13 +489,23 @@ export function reduceOutcomeRefresh(
               sourceId: artifact.sourceId,
               digest: artifact.digest,
             })),
-            currentBoardId: cached.currentBoardId,
-            status: cached.status,
-            lastSuccessfulAt: cached.lastSuccessfulAt,
-            sourceUpdatedAt: cached.sourceUpdatedAt,
-            upstreamStale: cached.upstreamStale,
-            sourceFingerprint: cached.sourceFingerprint,
-            errorCode: cached.errorCode,
+            ...(cached.currentBoardId === undefined
+              ? {}
+              : { currentBoardId: cached.currentBoardId }),
+            ...(cached.status === undefined ? {} : { status: cached.status }),
+            ...(cached.lastSuccessfulAt === undefined
+              ? {}
+              : { lastSuccessfulAt: cached.lastSuccessfulAt }),
+            ...(cached.sourceUpdatedAt === undefined
+              ? {}
+              : { sourceUpdatedAt: cached.sourceUpdatedAt }),
+            ...(cached.upstreamStale === undefined
+              ? {}
+              : { upstreamStale: cached.upstreamStale }),
+            ...(cached.sourceFingerprint === undefined
+              ? {}
+              : { sourceFingerprint: cached.sourceFingerprint }),
+            ...(cached.errorCode === undefined ? {} : { errorCode: cached.errorCode }),
           };
         })
         .toSorted((left, right) => canonicalRefOrder(left.ref, right.ref)),

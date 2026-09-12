@@ -120,21 +120,19 @@ function createParams(id: string, title = "Outcome title") {
   };
 }
 
-const defaultLinkParams = (id: string) =>
-  ({ id, expectedRevision: 1, criterionId, cardId: "card-a" });
+const defaultLinkParams = (id: string) => ({
+  id,
+  expectedRevision: 1,
+  criterionId,
+  cardId: "card-a",
+});
 
-async function createOutcome(
-  harness: ReturnType<typeof createHarness>,
-  id = outcomeIds[0]!,
-) {
+async function createOutcome(harness: ReturnType<typeof createHarness>, id = outcomeIds[0]!) {
   await harness.call("outcomes.create", createParams(id));
   return { id, record: harness.records.get(id)! };
 }
 
-async function createLinkedOutcome(
-  harness: ReturnType<typeof createHarness>,
-  id = outcomeIds[0]!,
-) {
+async function createLinkedOutcome(harness: ReturnType<typeof createHarness>, id = outcomeIds[0]!) {
   await createOutcome(harness, id);
   await harness.call("outcomes.linkWorkboard", defaultLinkParams(id));
   return id;
@@ -341,9 +339,10 @@ describe("P-02 Outcome handlers", () => {
   it("links and unlinks only the authorized owner card identity with one Workboard read", async () => {
     const harness = createHarness();
     const { id } = await createOutcome(harness);
-    expect(
-      await harness.call("outcomes.linkWorkboard", defaultLinkParams(id)),
-    ).toMatchObject([true, { outcome: { revision: 2, contractRevision: 2 } }]);
+    expect(await harness.call("outcomes.linkWorkboard", defaultLinkParams(id))).toMatchObject([
+      true,
+      { outcome: { revision: 2, contractRevision: 2 } },
+    ]);
     expect(harness.records.get(id)?.criteria[0]?.workRefs).toEqual([
       { owner: "workboard", cardId: "card-a", cardCreatedAt: 1, boardIdAtLink: "board-a" },
     ]);
@@ -843,9 +842,11 @@ describe("P-02 Outcome handlers", () => {
       [{ ...card, createdAt: 2 }, card],
     ]) {
       harness.gatewayRequest.mockResolvedValueOnce({ cards });
-      expect(
-        await harness.call("outcomes.linkWorkboard", defaultLinkParams(id)),
-      ).toMatchObject([false, undefined, { code: "OUTCOME_IDENTITY_CONFLICT" }]);
+      expect(await harness.call("outcomes.linkWorkboard", defaultLinkParams(id))).toMatchObject([
+        false,
+        undefined,
+        { code: "OUTCOME_IDENTITY_CONFLICT" },
+      ]);
     }
     expect(harness.writes()).toBe(writes);
     expect(harness.gatewayRequest).toHaveBeenCalledTimes(2);
@@ -855,17 +856,17 @@ describe("P-02 Outcome handlers", () => {
     const id = outcomeIds[0]!;
     const unavailable = createHarness({ workboardCards: [] });
     await unavailable.call("outcomes.create", createParams(id));
-    expect(
-      await unavailable.call("outcomes.linkWorkboard", defaultLinkParams(id)),
-    ).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_UNAVAILABLE" }]);
+    expect(await unavailable.call("outcomes.linkWorkboard", defaultLinkParams(id))).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_OWNER_UNAVAILABLE" },
+    ]);
 
     const timeout = createHarness({
       workboardError: Object.assign(new Error("/private/path"), { code: "GATEWAY_TIMEOUT" }),
     });
     await timeout.call("outcomes.create", createParams(id));
-    expect(
-      await timeout.call("outcomes.linkWorkboard", defaultLinkParams(id)),
-    ).toMatchObject([
+    expect(await timeout.call("outcomes.linkWorkboard", defaultLinkParams(id))).toMatchObject([
       false,
       undefined,
       { code: "OUTCOME_OWNER_TIMEOUT", message: "Outcome request could not be completed" },

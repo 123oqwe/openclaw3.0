@@ -71,7 +71,7 @@ type BenchmarkOutcomeRecord = {
   planGeneration: number;
   planHash: string;
   criteria: BenchmarkCriterion[];
-  projections: [];
+  projections: Array<Record<string, unknown>>;
   evidence: [];
   decisions: Array<{
     id: string;
@@ -765,12 +765,6 @@ describe("P-02 Outcome Gateway admission", () => {
             env: state.env,
           },
         );
-        const diagnosticRecord = activeBenchmarkRecord(randomUUID(), 4 * 1024, [
-          { ...BENCHMARK_OWNER_CARD },
-        ]);
-        await expect(
-          diagnosticStore.registerIfAbsent(diagnosticRecord.id, diagnosticRecord),
-        ).resolves.toBe(true);
         let diagnosticRegisterCalls = 0;
         let diagnosticSuccessfulUpdates = 0;
         let diagnosticUpdateCalls = 0;
@@ -807,6 +801,57 @@ describe("P-02 Outcome Gateway admission", () => {
           store: instrumentedDiagnosticStore,
         });
         const client = createOperatorClient(BENCHMARK_OWNER_ID, ["operator.write"]);
+        const diagnosticId = randomUUID();
+        const diagnosticCriterionId = randomUUID();
+        await expect(
+          dispatch({
+            client,
+            context,
+            method: "outcomes.create",
+            request: {
+              id: diagnosticId,
+              title: "Gateway dispatch benchmark",
+              objective: "Measure an authenticated Outcome refresh",
+              criteria: [
+                {
+                  id: diagnosticCriterionId,
+                  text: "Refresh one authorized Workboard card",
+                  required: true,
+                },
+              ],
+            },
+          }),
+        ).resolves.toMatchObject({ outcome: { id: diagnosticId, revision: 1 } });
+        await expect(
+          dispatch({
+            client,
+            context,
+            method: "outcomes.linkWorkboard",
+            request: {
+              id: diagnosticId,
+              expectedRevision: 1,
+              criterionId: diagnosticCriterionId,
+              cardId: BENCHMARK_OWNER_CARD.cardId,
+            },
+          }),
+        ).resolves.toMatchObject({ outcome: { id: diagnosticId, revision: 2 } });
+        await expect(
+          dispatch({
+            client,
+            context,
+            method: "outcomes.activate",
+            request: { id: diagnosticId, expectedRevision: 2 },
+          }),
+        ).resolves.toMatchObject({ outcome: { id: diagnosticId, revision: 3 } });
+        const diagnosticRecord = await diagnosticStore.lookup(diagnosticId);
+        if (!diagnosticRecord) {
+          throw new Error("dispatcher benchmark setup did not persist an Outcome record");
+        }
+        diagnosticRegisterCalls = 0;
+        diagnosticSuccessfulUpdates = 0;
+        diagnosticUpdateCalls = 0;
+        diagnosticDeleteCalls = 0;
+        ownerRequest.mockClear();
         const getSamplesMs: number[] = [];
         const refreshSamplesMs: number[] = [];
         for (let sample = 0; sample < OUTCOME_BENCHMARK_SAMPLES; sample += 1) {
@@ -846,11 +891,11 @@ describe("P-02 Outcome Gateway admission", () => {
             client,
             context,
             method: "outcomes.refresh",
-            request: { id: diagnosticRecord.id, expectedRevision: 100 + sample },
+            request: { id: diagnosticRecord.id, expectedRevision: diagnosticRecord.revision + sample },
           });
           refreshSamplesMs.push(performance.now() - refreshStartedAt);
           expect(refresh).toMatchObject({
-            outcome: { id: diagnosticRecord.id, revision: 101 + sample },
+            outcome: { id: diagnosticRecord.id, revision: diagnosticRecord.revision + sample + 1 },
             refresh: { status: "available" },
           });
           expect(ownerRequest).toHaveBeenCalledTimes(ownerCallsBeforeRefresh + 1);
@@ -859,7 +904,7 @@ describe("P-02 Outcome Gateway admission", () => {
           expect(diagnosticUpdateCalls).toBe(mutationsBeforeRefresh.updates + 1);
           expect(diagnosticSuccessfulUpdates).toBe(mutationsBeforeRefresh.successfulUpdates + 1);
           await expect(diagnosticStore.lookup(diagnosticRecord.id)).resolves.toMatchObject({
-            revision: 101 + sample,
+            revision: diagnosticRecord.revision + sample + 1,
           });
         }
         expect(ownerRequest).toHaveBeenCalledTimes(OUTCOME_BENCHMARK_SAMPLES * 2);
@@ -915,6 +960,34 @@ describe("P-02 Outcome Gateway admission", () => {
             "local",
           workflowSha: process.env.OPENCLAW_OUTCOME_BENCHMARK_WORKFLOW_SHA ?? "local",
         });
+        const availableRecord = await diagnosticStore.lookup(diagnosticRecord.id);
+        const availableProjection = availableRecord?.projections[0];
+        expect(availableProjection).toMatchObject({ availability: "available", upstreamStale: false });
+        expect(availableProjection).not.toHaveProperty("errorCode");
+
+        ownerRequest.mockImplementationOnce(async () => {
+          throw new Error("Workboard source unavailable");
+        });
+        await expect(
+          dispatch({
+            client,
+            context,
+            method: "outcomes.refresh",
+            request: {
+              id: diagnosticRecord.id,
+              expectedRevision: diagnosticRecord.revision + OUTCOME_BENCHMARK_SAMPLES,
+            },
+          }),
+        ).resolves.toMatchObject({ refresh: { status: "unavailable", reason: "workboard-disabled" } });
+        const unavailableRecord = await diagnosticStore.lookup(diagnosticRecord.id);
+        const unavailableProjection = unavailableRecord?.projections[0];
+        expect(unavailableProjection).toMatchObject({
+          availability: "unavailable",
+          currentBoardId: BENCHMARK_OWNER_CARD.boardIdAtLink,
+          errorCode: "workboard-disabled",
+          upstreamStale: false,
+        });
+        expect(unavailableProjection).not.toHaveProperty("sourceFingerprint");
       },
     );
   });
