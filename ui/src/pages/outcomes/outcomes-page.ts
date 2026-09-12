@@ -70,7 +70,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   private authorizationKey(snapshot: ApplicationContext["gateway"]["snapshot"]): string {
     const auth = snapshot.hello?.auth;
     const scopes = auth?.scopes?.toSorted().join("\u0000") ?? "";
-    const methods = snapshot.hello?.features.methods?.toSorted().join("\u0000") ?? "";
+    const methods = snapshot.hello?.features?.methods?.toSorted().join("\u0000") ?? "";
     return `${auth?.role ?? ""}\u0001${scopes}\u0001${methods}`;
   }
 
