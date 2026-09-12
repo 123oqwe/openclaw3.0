@@ -225,7 +225,7 @@ describe("Outcome public Workboard Gateway integration", () => {
       { label: "outcome-public-workboard", scenario: "minimal" },
       async (state) => {
         const harness = createHarness(state);
-        const owner = createOperatorClient("manager-a", ["operator.write"]);
+        const owner = createOperatorClient("manager-a", ["operator.read", "operator.write"]);
         const cardResult = (await dispatch({
           client: owner,
           context: harness.context,
@@ -312,7 +312,7 @@ describe("Outcome public Workboard Gateway integration", () => {
       { label: "outcome-public-workboard-authority", scenario: "minimal" },
       async (state) => {
         const harness = createHarness(state);
-        const owner = createOperatorClient("manager-a", ["operator.write"]);
+        const owner = createOperatorClient("manager-a", ["operator.read", "operator.write"]);
         const foreign = createOperatorClient("manager-b", ["operator.read"]);
         const card = (await dispatch({
           client: owner,
@@ -375,7 +375,7 @@ describe("Outcome public Workboard Gateway integration", () => {
       { label: "outcome-public-workboard-disabled", scenario: "minimal" },
       async (state) => {
         const harness = createHarness(state);
-        const owner = createOperatorClient("manager-a", ["operator.write"]);
+        const owner = createOperatorClient("manager-a", ["operator.read", "operator.write"]);
         const card = (await dispatch({
           client: owner,
           context: harness.context,
