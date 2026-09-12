@@ -1,8 +1,9 @@
 # P-02 admission and DTO contract test map
 
-This is a test-only implementation map. It deliberately adds no runtime entrypoint,
-Gateway registration, or placeholder import. The executable tests are added with the
-first real P-02 handler and must use the host registrar/authentication fixtures.
+This map records the actual P-02 registration and test boundary. Runtime registration
+lives in `registrar.ts` and is exposed only through `runtime-api.ts`; the executable
+admission tests use the host registrar/authentication fixtures rather than a parallel
+authorization abstraction.
 
 ## Shared admission fixture
 
@@ -55,11 +56,16 @@ either owner store helper.
   a changed proof/artifact field or a changed current board must produce a new
   digest.
 
-## Handler package sequence
+## Implemented handler and test map
 
-The first executable package registers only `outcomes.create`, `outcomes.get`,
-`outcomes.list`, `outcomes.update`, and `outcomes.cancel`. It uses the strict P-01
-repository and redacted read model, but it does not call Workboard. Its Hosted tests cover:
+The current P-02 registrar registers `outcomes.create`, `outcomes.get`,
+`outcomes.list`, `outcomes.update`, `outcomes.linkWorkboard`,
+`outcomes.unlinkWorkboard`, `outcomes.activate`, `outcomes.refresh`, and
+`outcomes.cancel`. It uses the strict P-01 repository and redacted read model; only
+the Workboard link/unlink/get/refresh paths call the authenticated public owner
+method. P-04/P-05/P-06 methods remain unregistered.
+
+The Hosted test suite covers:
 
 1. Registration/admission: capture all five descriptors with `createTestPluginApi`, then
    dispatch each through the host registry/scope helpers above. Assert unauthenticated,
@@ -86,33 +92,32 @@ repository and redacted read model, but it does not call Workboard. Its Hosted t
 7. Response DTOs are explicit allowlists: no manager profile, request hash, raw refs/evidence,
    database paths, or internal operation fields are exposed.
 
-The second package adds `outcomes.linkWorkboard`, `outcomes.unlinkWorkboard`, and
-`outcomes.activate`. Link/unlink require expectedRevision and obtain card identity only through
-the authenticated Workboard adapter; they retain historical evidence while changing
-active/accepted contracts into the next active generation, and reject missing, inaccessible,
-colliding, or stale identity without a write. Activate requires expectedRevision and only accepts
-a draft whose required criteria have at least one link; it freezes generation one and the
-canonical plan hash without accepting a caller-supplied phase, generation, hash, or timestamp.
+Link/unlink require expectedRevision and obtain card identity only through the
+authenticated Workboard adapter. They retain historical evidence while changing
+active/accepted contracts into the next active generation, and reject missing,
+inaccessible, colliding, or stale identity without a write. Activate requires
+expectedRevision and only accepts a draft whose required criteria have at least one
+link; it freezes generation one and the canonical plan hash without accepting a
+caller-supplied phase, generation, hash, or timestamp.
 
-The third package adds `outcomes.refresh` after the Workboard adapter contract is executable.
-Refresh requires expectedRevision and performs at most one authenticated `workboard.cards.list`
-request per Outcome. It maps disabled, timeout, not-found, and identity-conflict distinctly; a
-failed refresh preserves displayable cached projection fields, clears `sourceFingerprint`, and
-cannot make prior evidence current.
+Refresh requires expectedRevision and performs at most one authenticated
+`workboard.cards.list` request per Outcome. It maps disabled, timeout, not-found,
+and identity-conflict distinctly; a failed refresh preserves displayable cached
+projection fields, clears `sourceFingerprint`, and cannot make prior evidence current.
 
 All packages keep typed mappings distinct for unauthenticated, forbidden, not-found,
 revision-conflict, invalid-input, capacity, and internal failures without leaking exceptions.
 
-## First executable test draft
+## Executable test locations
 
-When the P-01 technical gate permits real P-02 wiring, add
-`extensions/outcomes/src/gateway/p02-admission.test.ts` beside the handler. Its first
-three cases are: `registers only the first-package descriptors`; `rejects a client
-timestamp before repository access`; and `hides a foreign owned record as not-found`.
-The fixture registers the captured plugin descriptors in `createGatewayMethodRegistry`
-and dispatches through the scoped host helpers above. It opens the actual `outcomes-v1`
-keyed namespace only through the plugin runtime API. This is a test draft, not an
-authorization to add an import-only or mock-only test before the real handler exists.
+`extensions/outcomes/src/gateway/methods.test.ts` covers handler DTO, owner-scoped
+repository, zero-write, clock, pagination, mutation and Workboard behavior.
+`extensions/outcomes/src/gateway/workboard.integration.test.ts` covers registered
+runtime access to the frozen public Workboard response. The real host dispatcher,
+scope implication and effective authority-revocation cases live in
+`src/gateway/outcomes-methods.dispatch.test.ts`; it loads the bundled public runtime
+surface through the existing facade loader and does not statically import extension
+source into the core type graph.
 
 ## Evidence requirements
 
