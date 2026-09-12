@@ -1,6 +1,7 @@
 import { consume } from "@lit/context";
 import type {
   OutcomeCreateParams,
+  OutcomeCriterionInput,
   OutcomeDetail,
   OutcomeSummary,
 } from "@openclaw/outcomes-contract";
@@ -20,6 +21,7 @@ import {
   getOutcome,
   listOutcomes,
   refreshOutcome,
+  updateOutcome,
 } from "./client.ts";
 import { renderCreateOutcomeDialog, renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
@@ -60,11 +62,18 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private createTitle = "";
   @state() private createObjective = "";
   @state() private createCriteria: readonly string[] = [""];
+  @state() private editDialogOpen = false;
+  @state() private editing = false;
+  @state() private editError: string | null = null;
+  @state() private editTitle = "";
+  @state() private editObjective = "";
+  @state() private editCriteria: readonly OutcomeCriterionInput[] = [];
 
   private requestGeneration = 0;
   private detailRequestSequence = 0;
   private mutationSequence = 0;
   private createRequestSequence = 0;
+  private editRequestSequence = 0;
   private createRequest: OutcomeCreateParams | null = null;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
 
@@ -157,6 +166,13 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.createCriteria = [""];
     this.createRequest = null;
     this.createRequestSequence += 1;
+    this.editDialogOpen = false;
+    this.editing = false;
+    this.editError = null;
+    this.editTitle = "";
+    this.editObjective = "";
+    this.editCriteria = [];
+    this.editRequestSequence += 1;
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
@@ -202,6 +218,7 @@ class OutcomesPage extends OpenClawLightDomElement {
 
   private selectOutcome(id: string) {
     this.mutationSequence += 1;
+    this.editRequestSequence += 1;
     this.selectedOutcomeId = id;
     this.detail = null;
     this.detailError = null;
@@ -211,11 +228,15 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
     this.cancelling = false;
+    this.editDialogOpen = false;
+    this.editing = false;
+    this.editError = null;
     void this.loadSelectedOutcome();
   }
 
   private clearSelectedOutcome() {
     this.detailRequestSequence += 1;
+    this.editRequestSequence += 1;
     this.selectedOutcomeId = null;
     this.detail = null;
     this.detailError = null;
@@ -226,6 +247,9 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
     this.cancelling = false;
+    this.editDialogOpen = false;
+    this.editing = false;
+    this.editError = null;
     this.mutationSequence += 1;
   }
 
@@ -242,6 +266,15 @@ class OutcomesPage extends OpenClawLightDomElement {
     return Boolean(
       this.gatewayIdentity?.canRead &&
         canCallGatewayMethod(this.gateway.snapshot, "outcomes.create", "operator.write"),
+    );
+  }
+
+  private canEditOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+        this.detail.nextActions.includes("edit-contract") &&
+        this.gatewayIdentity?.canRead &&
+        canCallGatewayMethod(this.gateway.snapshot, "outcomes.update", "operator.write"),
     );
   }
 
@@ -413,6 +446,128 @@ class OutcomesPage extends OpenClawLightDomElement {
     } finally {
       if (sequence === this.createRequestSequence && this.gateway.isCurrent(scope)) {
         this.creating = false;
+      }
+    }
+  }
+
+  private openEditDialog() {
+    const detail = this.detail;
+    if (!detail || this.editing || !this.canEditOutcome()) {
+      return;
+    }
+    this.editError = null;
+    this.editTitle = detail.title;
+    this.editObjective = detail.objective;
+    this.editCriteria = detail.criteria.map(({ id, required, text }) => ({ id, required, text }));
+    this.editDialogOpen = true;
+  }
+
+  private dismissEditDialog(event?: Event) {
+    if (this.editing) {
+      event?.preventDefault();
+      return;
+    }
+    this.editDialogOpen = false;
+    this.editError = null;
+  }
+
+  private updateEditField(field: "title" | "objective", value: string) {
+    if (this.editing) {
+      return;
+    }
+    if (field === "title") {
+      this.editTitle = value;
+    } else {
+      this.editObjective = value;
+    }
+  }
+
+  private updateEditCriterion(index: number, text: string) {
+    if (this.editing) {
+      return;
+    }
+    this.editCriteria = this.editCriteria.map((criterion, criterionIndex) =>
+      criterionIndex === index ? { ...criterion, text } : criterion,
+    );
+  }
+
+  private addEditCriterion() {
+    if (this.editing || this.editCriteria.length >= 5) {
+      return;
+    }
+    this.editCriteria = [
+      ...this.editCriteria,
+      { id: crypto.randomUUID(), required: true, text: "" },
+    ];
+  }
+
+  private removeEditCriterion(index: number) {
+    if (this.editing || this.editCriteria.length <= 1) {
+      return;
+    }
+    this.editCriteria = this.editCriteria.filter((_, criterionIndex) => criterionIndex !== index);
+  }
+
+  private async submitEditOutcome(event: SubmitEvent) {
+    event.preventDefault();
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    const title = this.editTitle.trim();
+    const objective = this.editObjective.trim();
+    const criteria = this.editCriteria.map((criterion) => ({ ...criterion, text: criterion.text.trim() }));
+    if (
+      this.editing ||
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !title ||
+      !objective ||
+      criteria.length < 1 ||
+      criteria.length > 5 ||
+      criteria.some((criterion) => !criterion.text) ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canEditOutcome()
+    ) {
+      return;
+    }
+    const expectedRevision = detail.revision;
+    const sequence = ++this.editRequestSequence;
+    this.editError = null;
+    this.editing = true;
+    this.detailRequestSequence += 1;
+    this.beginOutcomeMutation(id);
+    try {
+      const updated = await updateOutcome(client, id, expectedRevision, { criteria, objective, title });
+      if (
+        sequence === this.editRequestSequence &&
+        id === this.selectedOutcomeId &&
+        updated.revision >= expectedRevision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.replaceOutcome(updated);
+        this.editDialogOpen = false;
+      }
+    } catch (error) {
+      if (
+        sequence === this.editRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.editError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      this.endOutcomeMutation(id);
+      if (
+        sequence === this.editRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.editing = false;
       }
     }
   }
@@ -683,6 +838,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         loading: this.detailLoading,
         canActivate: this.canActivateOutcome(),
         canCancel: this.canCancelOutcome(),
+        canEdit: this.canEditOutcome(),
         canRefresh: this.canRefreshOutcome(),
         cancelConfirmationOpen: this.cancelConfirmationOpen,
         cancelError: this.cancelError,
@@ -690,6 +846,13 @@ class OutcomesPage extends OpenClawLightDomElement {
         mutationError: this.mutationError,
         mutationInFlight: this.outcomeMutationIsInFlight(this.selectedOutcomeId),
         onActivate: () => void this.activateSelectedOutcome(),
+        onDismissEdit: (event) => this.dismissEditDialog(event),
+        onEditCriterionInput: (index, value) => this.updateEditCriterion(index, value),
+        onEditInput: (field, value) => this.updateEditField(field, value),
+        onRequestAddEditCriterion: () => this.addEditCriterion(),
+        onRequestEdit: () => this.openEditDialog(),
+        onRequestRemoveEditCriterion: (index) => this.removeEditCriterion(index),
+        onSubmitEdit: (event) => void this.submitEditOutcome(event),
         onCancelConfirmationDismiss: (event) => this.dismissCancelConfirmation(event),
         onConfirmCancel: () => void this.cancelSelectedOutcome(),
         onRequestCancel: () => this.openCancelConfirmation(),
@@ -698,6 +861,12 @@ class OutcomesPage extends OpenClawLightDomElement {
         refreshing: this.refreshing,
         onBack: () => this.clearSelectedOutcome(),
         selectedOutcomeId: this.selectedOutcomeId,
+        editCriteria: this.editCriteria,
+        editDialogOpen: this.editDialogOpen,
+        editError: this.editError,
+        editing: this.editing,
+        editObjective: this.editObjective,
+        editTitle: this.editTitle,
       })}
     `;
   }

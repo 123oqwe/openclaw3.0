@@ -22,6 +22,8 @@ const enOutcomes = {
     criterionNumber: "Criterion {number}",
     addCriterion: "Add criterion",
     removeCriterion: "Remove criterion",
+    editOutcome: "Edit outcome",
+    editHelp: "Update this Outcome contract before tracking begins.",
     cancelOutcome: "Cancel outcome",
     cancelHelp: "Stops tracking permanently.",
     cancelling: "Cancelling",

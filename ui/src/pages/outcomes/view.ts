@@ -1,5 +1,6 @@
 import type {
   OutcomeDetail,
+  OutcomeCriterionInput,
   OutcomeAttentionCode,
   OutcomeNextAction,
   OutcomePhase,
@@ -46,19 +47,33 @@ export type CreateOutcomeDialogViewData = {
 export type OutcomeDetailViewData = {
   canActivate: boolean;
   canCancel: boolean;
+  canEdit: boolean;
   canRefresh: boolean;
   cancelConfirmationOpen: boolean;
   cancelError: string | null;
   cancelling: boolean;
   detail: OutcomeDetail | null;
+  editCriteria: readonly OutcomeCriterionInput[];
+  editDialogOpen: boolean;
+  editError: string | null;
+  editing: boolean;
+  editObjective: string;
+  editTitle: string;
   error: string | null;
   loading: boolean;
   onBack: () => void;
   onActivate: () => void;
+  onDismissEdit: (event: Event) => void;
+  onEditCriterionInput: (index: number, value: string) => void;
+  onEditInput: (field: "title" | "objective", value: string) => void;
+  onRequestAddEditCriterion: () => void;
+  onRequestEdit: () => void;
+  onRequestRemoveEditCriterion: (index: number) => void;
   onCancelConfirmationDismiss: (event: Event) => void;
   onConfirmCancel: () => void;
   onRequestCancel: () => void;
   onRefresh: () => void;
+  onSubmitEdit: (event: SubmitEvent) => void;
   mutationError: string | null;
   mutationInFlight: boolean;
   revalidating: boolean;
@@ -398,6 +413,18 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           </ul>
         </section>`
       : nothing}
+    ${data.canEdit && data.detail.nextActions.includes("edit-contract")
+      ? html`<section class="outcome-detail__section outcome-detail__actions">
+          <button
+            data-outcome-action="edit-contract"
+            type="button"
+            ?disabled=${data.mutationInFlight}
+            @click=${data.onRequestEdit}
+          >
+            ${t("outcomesPage.nextAction.editContract")}
+          </button>
+        </section>`
+      : nothing}
     ${data.canActivate && data.detail.nextActions.includes("activate")
       ? html`<section class="outcome-detail__section outcome-detail__actions" aria-live="polite">
           <button
@@ -476,6 +503,106 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               </button>
             </div>
           </section>
+        </openclaw-modal-dialog>`
+      : nothing}
+    ${data.editDialogOpen
+      ? html`<openclaw-modal-dialog
+          label=${t("outcomesPage.editOutcome")}
+          description=${t("outcomesPage.editHelp")}
+          @modal-cancel=${data.onDismissEdit}
+        >
+          <form
+            class="outcome-create-dialog"
+            data-outcome-edit-form
+            aria-busy=${data.editing ? "true" : "false"}
+            @submit=${data.onSubmitEdit}
+          >
+            <h2>${t("outcomesPage.editOutcome")}</h2>
+            <p>${t("outcomesPage.editHelp")}</p>
+            <label>
+              ${t("outcomesPage.title")}
+              <input
+                name="title"
+                required
+                ?disabled=${data.editing}
+                .value=${data.editTitle}
+                @input=${(event: InputEvent) =>
+                  data.onEditInput("title", (event.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label>
+              ${t("outcomesPage.objective")}
+              <textarea
+                name="objective"
+                required
+                ?disabled=${data.editing}
+                .value=${data.editObjective}
+                @input=${(event: InputEvent) =>
+                  data.onEditInput("objective", (event.target as HTMLTextAreaElement).value)}
+              ></textarea>
+            </label>
+            <fieldset class="outcome-create-dialog__criteria">
+              <legend>${t("outcomesPage.criteria")}</legend>
+              ${data.editCriteria.map(
+                (criterion, index) => html`
+                  <div class="outcome-create-dialog__criterion">
+                    <label>
+                      ${t("outcomesPage.criterionNumber", { number: index + 1 })}
+                      <input
+                        name="criterion"
+                        required
+                        ?disabled=${data.editing}
+                        .value=${criterion.text}
+                        @input=${(event: InputEvent) =>
+                          data.onEditCriterionInput(
+                            index,
+                            (event.target as HTMLInputElement).value,
+                          )}
+                      />
+                    </label>
+                    ${data.editCriteria.length > 1
+                      ? html`<button
+                          data-outcome-remove-edit-criterion=${index}
+                          type="button"
+                          ?disabled=${data.editing}
+                          @click=${() => data.onRequestRemoveEditCriterion(index)}
+                        >
+                          ${t("outcomesPage.removeCriterion")}
+                        </button>`
+                      : nothing}
+                  </div>
+                `,
+              )}
+              ${data.editCriteria.length < 5
+                ? html`<button
+                    data-outcome-add-edit-criterion
+                    type="button"
+                    ?disabled=${data.editing}
+                    @click=${data.onRequestAddEditCriterion}
+                  >
+                    ${t("outcomesPage.addCriterion")}
+                  </button>`
+                : nothing}
+            </fieldset>
+            ${data.editError
+              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                  ${data.editError}
+                </p>`
+              : nothing}
+            <div class="outcome-cancel-dialog__actions">
+              <button
+                data-outcome-dismiss-edit
+                type="button"
+                ?disabled=${data.editing}
+                @click=${() => data.onDismissEdit(new Event("modal-cancel"))}
+              >
+                ${t("common.back")}
+              </button>
+              <button data-outcome-confirm-edit type="submit" ?disabled=${data.editing}>
+                ${data.editing ? t("common.loading") : t("common.confirm")}
+              </button>
+            </div>
+          </form>
         </openclaw-modal-dialog>`
       : nothing}
   </article>`;

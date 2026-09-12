@@ -832,6 +832,81 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("updates an editable contract only after the Gateway confirms it", async () => {
+    let resolveUpdate: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: { ...outcomeDetail("outcome-a", "Outcome A"), nextActions: ["edit-contract"] },
+        });
+      }
+      if (method === "outcomes.update") {
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveUpdate = resolve;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.update"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>("[data-outcome-action=edit-contract]")).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>("[data-outcome-action=edit-contract]")?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-edit-form]")).not.toBeNull();
+    });
+    const form = page.querySelector<HTMLFormElement>("[data-outcome-edit-form]");
+    const title = form?.querySelector<HTMLInputElement>('input[name="title"]');
+    if (!form || !title) {
+      throw new Error("Outcome edit form fields are missing");
+    }
+    title.value = "Outcome A revised";
+    title.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.update", {
+        expectedRevision: 1,
+        id: "outcome-a",
+        patch: {
+          criteria: [
+            {
+              id: "criterion-1",
+              required: true,
+              text: "Verify the release evidence",
+            },
+          ],
+          objective: "Outcome A objective",
+          title: "Outcome A revised",
+        },
+      });
+    });
+    expect(page.textContent).toContain("Outcome A objective");
+
+    resolveUpdate?.({ outcome: { ...outcomeDetail("outcome-a", "Outcome A revised"), revision: 2 } });
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("Outcome A revised objective");
+      expect(page.querySelector("[data-outcome-edit-form]")).toBeNull();
+    });
+  });
+
   it("requires confirmation before cancelling a selected Outcome", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {

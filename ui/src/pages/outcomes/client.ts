@@ -5,6 +5,7 @@ import type {
   OutcomeListResult,
   OutcomeMutationResult,
   OutcomeRefreshResult,
+  OutcomeUpdateParams,
 } from "@openclaw/outcomes-contract";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 
@@ -22,6 +23,20 @@ export async function createOutcome(
   params: OutcomeCreateParams,
 ): Promise<OutcomeDetail> {
   const result = await client.request<OutcomeCreateResult>("outcomes.create", params);
+  return result.outcome;
+}
+
+export async function updateOutcome(
+  client: GatewayBrowserClient,
+  id: string,
+  expectedRevision: number,
+  patch: OutcomeUpdateParams["patch"],
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeMutationResult>("outcomes.update", {
+    expectedRevision,
+    id,
+    patch,
+  });
   return result.outcome;
 }
 
