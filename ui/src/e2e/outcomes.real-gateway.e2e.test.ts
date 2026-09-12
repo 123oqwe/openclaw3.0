@@ -186,6 +186,20 @@ suite.define(() => {
           ]),
         );
 
+        await callGateway("workboard.cards.claim", { id: cardId, ownerId: "outcome-e2e" });
+        await callGateway("workboard.cards.block", {
+          id: cardId,
+          reason: "Outcome E2E needs operator attention",
+        });
+        await detail.locator('[data-outcome-action="refresh"]').click();
+        await detail
+          .getByText("A linked card is blocked", { exact: true })
+          .waitFor({ state: "visible" });
+        await page.screenshot({
+          fullPage: true,
+          path: path.join(suite.artifactDir, "outcomes-blocked-linked-work.png"),
+        });
+
         if (!instance) {
           throw new Error("Outcome Gateway fixture was not started");
         }
