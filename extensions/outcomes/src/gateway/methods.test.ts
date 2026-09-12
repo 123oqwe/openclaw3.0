@@ -486,6 +486,46 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.gatewayRequest).toHaveBeenCalledTimes(3);
   });
 
+  it("does not read Workboard after a mutation of an unlinked Outcome", async () => {
+    const harness = createHarness();
+    const { id } = await createOutcome(harness);
+    expect(
+      await harness.call("outcomes.update", {
+        id,
+        expectedRevision: 1,
+        patch: { title: "Updated without links" },
+      }),
+    ).toMatchObject([true, { outcome: { revision: 2, title: "Updated without links" } }]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+  });
+
+  it("keeps a committed mutation successful when its linked source cannot be read", async () => {
+    const harness = createHarness();
+    const id = await createLinkedOutcome(harness);
+    harness.gatewayRequest.mockClear();
+    harness.gatewayRequest.mockRejectedValueOnce(new Error("source unavailable"));
+
+    expect(
+      await harness.call("outcomes.update", {
+        id,
+        expectedRevision: 2,
+        patch: { title: "Updated while source is unavailable" },
+      }),
+    ).toMatchObject([
+      true,
+      {
+        outcome: {
+          revision: 3,
+          title: "Updated while source is unavailable",
+          criteria: [{ workRefs: [], sourcesVisibility: "restricted" }],
+          work: [],
+        },
+      },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.records.get(id)?.title).toBe("Updated while source is unavailable");
+  });
+
   it("hides foreign unlinks and lets the owner remove an unavailable source link", async () => {
     const harness = createHarness();
     const id = await createLinkedOutcome(harness);
