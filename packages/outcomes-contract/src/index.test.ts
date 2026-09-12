@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as contract from "./index.js";
 import {
   OUTCOME_DEFAULT_LIST_LIMIT,
+  OUTCOME_ERROR_CODES,
   OUTCOME_MAX_LIST_LIMIT,
   OUTCOME_PHASES,
   OUTCOME_REFRESH_STATUSES,
@@ -21,12 +22,31 @@ describe("outcomes public contract", () => {
     expect(OUTCOME_REFRESH_STATUSES).toEqual(["available", "unavailable", "identity-conflict"]);
   });
 
+  it("publishes the bounded P-02 error-code vocabulary", () => {
+    expect(OUTCOME_ERROR_CODES).toEqual({
+      CAPACITY_EXCEEDED: "OUTCOME_CAPACITY_EXCEEDED",
+      IDENTITY_CONFLICT: "OUTCOME_IDENTITY_CONFLICT",
+      ID_UNAVAILABLE: "OUTCOME_ID_UNAVAILABLE",
+      INTERNAL: "OUTCOME_INTERNAL",
+      INVALID_CURSOR: "OUTCOME_INVALID_CURSOR",
+      INVALID_REQUEST: "OUTCOME_INVALID_REQUEST",
+      INVALID_STATE: "OUTCOME_INVALID_STATE",
+      NOT_FOUND: "OUTCOME_NOT_FOUND",
+      NOT_QUIESCENT: "OUTCOME_NOT_QUIESCENT",
+      OWNER_FORBIDDEN: "OUTCOME_OWNER_FORBIDDEN",
+      OWNER_TIMEOUT: "OUTCOME_OWNER_TIMEOUT",
+      OWNER_UNAVAILABLE: "OUTCOME_OWNER_UNAVAILABLE",
+      REVISION_CONFLICT: "OUTCOME_REVISION_CONFLICT",
+    });
+  });
+
   it("keeps core detail views free of persistence identity and internal history", () => {
     expect(Object.keys(contract).toSorted()).toEqual(
       [
         "OUTCOME_ACCEPTANCE_VALIDITY",
         "OUTCOME_ATTENTION_CODES",
         "OUTCOME_DEFAULT_LIST_LIMIT",
+        "OUTCOME_ERROR_CODES",
         "OUTCOME_EVIDENCE_KINDS",
         "OUTCOME_MAX_LIST_LIMIT",
         "OUTCOME_NEXT_ACTIONS",

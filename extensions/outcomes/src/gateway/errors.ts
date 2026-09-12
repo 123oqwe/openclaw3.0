@@ -1,27 +1,18 @@
 import { WorkboardIdentityConflictError } from "../adapters/workboard-adapter.js";
 import {
+  OUTCOME_ERROR_CODES,
+  type OutcomeError,
+  type OutcomeErrorCode,
+} from "@openclaw/outcomes-contract";
+import {
   OutcomeRepositoryCapacityError,
   OutcomeRepositoryConflictError,
   OutcomeRepositoryNotFoundError,
 } from "../store/plugin-state-repository.js";
 
-export const OutcomeErrorCodes = {
-  INVALID_REQUEST: "OUTCOME_INVALID_REQUEST",
-  INVALID_CURSOR: "OUTCOME_INVALID_CURSOR",
-  NOT_FOUND: "OUTCOME_NOT_FOUND",
-  ID_UNAVAILABLE: "OUTCOME_ID_UNAVAILABLE",
-  REVISION_CONFLICT: "OUTCOME_REVISION_CONFLICT",
-  CAPACITY_EXCEEDED: "OUTCOME_CAPACITY_EXCEEDED",
-  INVALID_STATE: "OUTCOME_INVALID_STATE",
-  OWNER_UNAVAILABLE: "OUTCOME_OWNER_UNAVAILABLE",
-  OWNER_FORBIDDEN: "OUTCOME_OWNER_FORBIDDEN",
-  OWNER_TIMEOUT: "OUTCOME_OWNER_TIMEOUT",
-  IDENTITY_CONFLICT: "OUTCOME_IDENTITY_CONFLICT",
-  NOT_QUIESCENT: "OUTCOME_NOT_QUIESCENT",
-  INTERNAL: "OUTCOME_INTERNAL",
-} as const;
+export const OutcomeErrorCodes = OUTCOME_ERROR_CODES;
 
-export function outcomeError(code: (typeof OutcomeErrorCodes)[keyof typeof OutcomeErrorCodes]) {
+export function outcomeError(code: OutcomeErrorCode): OutcomeError {
   return { code, message: "Outcome request could not be completed" };
 }
 

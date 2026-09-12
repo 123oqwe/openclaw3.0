@@ -43,6 +43,22 @@ export const OUTCOME_NEXT_ACTIONS = [
 export const OUTCOME_EVIDENCE_KINDS = ["workboard-proof", "workboard-artifact"] as const;
 export const OUTCOME_PROOF_STATUSES = ["passed", "failed", "skipped", "unknown"] as const;
 export const OUTCOME_REFRESH_STATUSES = ["available", "unavailable", "identity-conflict"] as const;
+/** Public P-02 failure vocabulary; handlers never expose lower-level exceptions. */
+export const OUTCOME_ERROR_CODES = {
+  INVALID_REQUEST: "OUTCOME_INVALID_REQUEST",
+  INVALID_CURSOR: "OUTCOME_INVALID_CURSOR",
+  NOT_FOUND: "OUTCOME_NOT_FOUND",
+  ID_UNAVAILABLE: "OUTCOME_ID_UNAVAILABLE",
+  REVISION_CONFLICT: "OUTCOME_REVISION_CONFLICT",
+  CAPACITY_EXCEEDED: "OUTCOME_CAPACITY_EXCEEDED",
+  INVALID_STATE: "OUTCOME_INVALID_STATE",
+  OWNER_UNAVAILABLE: "OUTCOME_OWNER_UNAVAILABLE",
+  OWNER_FORBIDDEN: "OUTCOME_OWNER_FORBIDDEN",
+  OWNER_TIMEOUT: "OUTCOME_OWNER_TIMEOUT",
+  IDENTITY_CONFLICT: "OUTCOME_IDENTITY_CONFLICT",
+  NOT_QUIESCENT: "OUTCOME_NOT_QUIESCENT",
+  INTERNAL: "OUTCOME_INTERNAL",
+} as const;
 export const OUTCOME_MAX_LIST_LIMIT = 100;
 export const OUTCOME_DEFAULT_LIST_LIMIT = 25;
 export const OUTCOME_PROJECTION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
@@ -57,6 +73,8 @@ export type OutcomeNextAction = (typeof OUTCOME_NEXT_ACTIONS)[number];
 export type OutcomeEvidenceKind = (typeof OUTCOME_EVIDENCE_KINDS)[number];
 export type OutcomeProofStatus = (typeof OUTCOME_PROOF_STATUSES)[number];
 export type OutcomeRefreshStatus = (typeof OUTCOME_REFRESH_STATUSES)[number];
+export type OutcomeErrorCode = (typeof OUTCOME_ERROR_CODES)[keyof typeof OUTCOME_ERROR_CODES];
+export type OutcomeError = { code: OutcomeErrorCode; message: string };
 export type OutcomeAcceptanceReason =
   | "contract-changed"
   | "evidence-changed"
