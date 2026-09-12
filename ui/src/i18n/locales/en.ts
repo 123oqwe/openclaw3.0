@@ -2466,11 +2466,26 @@ export const en: TranslationMap & {
   },
   outcomesPage: {
     listLabel: "Outcomes",
+    phaseLabel: "Phase",
+    readinessLabel: "Readiness",
     loading: "Loading outcomes",
     empty: "No outcomes yet",
     loadFailed: "Could not load outcomes: {error}",
     disconnected: "Outcome connection is unavailable",
     unauthorized: "Outcome access is unavailable",
+    phase: {
+      draft: "Draft",
+      active: "Active",
+      accepted: "Accepted",
+      cancelled: "Cancelled",
+    },
+    readiness: {
+      incomplete: "Incomplete",
+      blocked: "Blocked",
+      ready: "Ready",
+      stale: "Stale",
+      unavailable: "Unavailable",
+    },
   },
   modelSetup: {
     missingAuth: "No provider credential is configured for this model. Set it up in Model Setup.",
