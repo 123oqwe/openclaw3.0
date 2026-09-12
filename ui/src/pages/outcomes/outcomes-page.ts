@@ -40,6 +40,11 @@ type OutcomeGatewayIdentity = {
   selfUserId: string | null;
 };
 
+type OutcomeMutationLock = {
+  id: string;
+  sequence: number;
+};
+
 function compareOutcomeSummaries(left: OutcomeSummary, right: OutcomeSummary): number {
   if (left.updatedAt !== right.updatedAt) {
     return right.updatedAt - left.updatedAt;
@@ -86,7 +91,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private mutationError: string | null = null;
   @state() private refreshing = false;
   @state() private selectedOutcomeId: string | null = null;
-  @state() private mutationInFlightOutcomeIds: readonly string[] = [];
+  @state() private mutationInFlightOutcomeLocks: readonly OutcomeMutationLock[] = [];
   @state() private createDialogOpen = false;
   @state() private creating = false;
   @state() private createError: string | null = null;
@@ -110,6 +115,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   private requestGeneration = 0;
   private detailRequestSequence = 0;
   private mutationSequence = 0;
+  private outcomeMutationLockSequence = 0;
   private createRequestSequence = 0;
   private editRequestSequence = 0;
   private linkRequestSequence = 0;
@@ -255,6 +261,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.linkCardId = "";
     this.linkRequestSequence += 1;
     this.mutationSequence += 1;
+    this.mutationInFlightOutcomeLocks = [];
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
     this.pendingListFocusId = null;
@@ -485,16 +492,18 @@ class OutcomesPage extends OpenClawLightDomElement {
   }
 
   private outcomeMutationIsInFlight(id: string | null): boolean {
-    return id !== null && this.mutationInFlightOutcomeIds.includes(id);
+    return id !== null && this.mutationInFlightOutcomeLocks.some((lock) => lock.id === id);
   }
 
-  private beginOutcomeMutation(id: string) {
-    this.mutationInFlightOutcomeIds = [...this.mutationInFlightOutcomeIds, id];
+  private beginOutcomeMutation(id: string): OutcomeMutationLock {
+    const lock = { id, sequence: ++this.outcomeMutationLockSequence };
+    this.mutationInFlightOutcomeLocks = [...this.mutationInFlightOutcomeLocks, lock];
+    return lock;
   }
 
-  private endOutcomeMutation(id: string) {
-    this.mutationInFlightOutcomeIds = this.mutationInFlightOutcomeIds.filter(
-      (outcomeId) => outcomeId !== id,
+  private endOutcomeMutation(lock: OutcomeMutationLock) {
+    this.mutationInFlightOutcomeLocks = this.mutationInFlightOutcomeLocks.filter(
+      (currentLock) => currentLock.sequence !== lock.sequence,
     );
   }
 
@@ -794,7 +803,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.editError = null;
     this.editing = true;
     this.detailRequestSequence += 1;
-    this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id);
     const requestStartedAt = performance.now();
     try {
       const updated = await updateOutcome(client, id, expectedRevision, { criteria, objective, title });
@@ -817,7 +826,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.editError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
-      this.endOutcomeMutation(id);
+      this.endOutcomeMutation(mutationLock);
       if (
         sequence === this.editRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -932,7 +941,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.linkError = null;
     this.linking = true;
     this.detailRequestSequence += 1;
-    this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id);
     const requestStartedAt = performance.now();
     try {
       const linked = await linkOutcomeWorkboard(client, { cardId, criterionId, expectedRevision, id });
@@ -955,7 +964,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.linkError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
-      this.endOutcomeMutation(id);
+      this.endOutcomeMutation(mutationLock);
       if (
         sequence === this.linkRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -992,7 +1001,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     const sequence = ++this.linkRequestSequence;
     this.mutationError = null;
     this.detailRequestSequence += 1;
-    this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id);
     const requestStartedAt = performance.now();
     try {
       const unlinked = await unlinkOutcomeWorkboard(client, {
@@ -1019,7 +1028,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
-      this.endOutcomeMutation(id);
+      this.endOutcomeMutation(mutationLock);
     }
   }
 
@@ -1067,7 +1076,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRequestSequence += 1;
     this.cancelError = null;
     this.cancelling = true;
-    this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id);
     const requestStartedAt = performance.now();
     try {
       const cancelled = await cancelOutcome(client, id, detail.revision);
@@ -1090,7 +1099,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.cancelError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
-      this.endOutcomeMutation(id);
+      this.endOutcomeMutation(mutationLock);
       if (
         sequence === this.mutationSequence &&
         id === this.selectedOutcomeId &&
@@ -1124,7 +1133,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detailRequestSequence += 1;
     this.mutationError = null;
     this.refreshing = true;
-    this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id);
     const requestStartedAt = performance.now();
     try {
       const refreshed = await refreshOutcome(client, id, detail.revision);
@@ -1146,7 +1155,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
-      this.endOutcomeMutation(id);
+      this.endOutcomeMutation(mutationLock);
       if (
         sequence === this.mutationSequence &&
         id === this.selectedOutcomeId &&
@@ -1178,7 +1187,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     const sequence = ++this.mutationSequence;
     this.detailRequestSequence += 1;
     this.mutationError = null;
-    this.beginOutcomeMutation(id);
+    const mutationLock = this.beginOutcomeMutation(id);
     const requestStartedAt = performance.now();
     try {
       const activated = await activateOutcome(client, id, detail.revision);
@@ -1200,7 +1209,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
-      this.endOutcomeMutation(id);
+      this.endOutcomeMutation(mutationLock);
     }
   }
 
