@@ -151,11 +151,7 @@ function p02Guidance(
   const attention: OutcomeDetail["attention"] = [];
   const nextActions: OutcomeNextAction[] = [];
   const addAttention = (code: OutcomeAttentionCode, criterionId?: string) => {
-    if (
-      !attention.some(
-        (item) => item.code === code && item.criterionId === criterionId,
-      )
-    ) {
+    if (!attention.some((item) => item.code === code && item.criterionId === criterionId)) {
       attention.push(criterionId === undefined ? { code } : { code, criterionId });
     }
   };
@@ -208,7 +204,9 @@ function p02Guidance(
   if (hasLinkedWork) addAction("unlink-work");
   if (
     record.phase === "draft" &&
-    record.criteria.filter((criterion) => criterion.required).every((criterion) => criterion.workRefs.length > 0)
+    record.criteria
+      .filter((criterion) => criterion.required)
+      .every((criterion) => criterion.workRefs.length > 0)
   ) {
     addAction("activate");
   }
