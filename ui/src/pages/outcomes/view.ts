@@ -13,14 +13,28 @@ import { t } from "../../i18n/index.ts";
 import "../../styles/outcomes.css";
 
 export type OutcomesListViewData = {
+  canCreate: boolean;
   disconnected: boolean;
   error: string | null;
   loaded: boolean;
   loading: boolean;
+  onRequestCreate: () => void;
   onSelect: (id: string) => void;
   outcomes: readonly OutcomeSummary[];
   selectedOutcomeId: string | null;
   unauthorized: boolean;
+};
+
+export type CreateOutcomeDialogViewData = {
+  criterion: string;
+  creating: boolean;
+  error: string | null;
+  objective: string;
+  onDismiss: (event: Event) => void;
+  onInput: (field: "title" | "objective" | "criterion", value: string) => void;
+  onSubmit: (event: SubmitEvent) => void;
+  open: boolean;
+  title: string;
 };
 
 export type OutcomeDetailViewData = {
@@ -156,9 +170,20 @@ export function renderOutcomesList(data: OutcomesListViewData) {
     return nothing;
   }
   if (data.outcomes.length === 0) {
-    return html`<section class="outcomes-state" role="status">${t("outcomesPage.empty")}</section>`;
+    return html`
+      ${data.canCreate
+        ? html`<button data-outcome-action="create" type="button" @click=${data.onRequestCreate}>
+            ${t("outcomesPage.createOutcome")}
+          </button>`
+        : nothing}
+      <section class="outcomes-state" role="status">${t("outcomesPage.empty")}</section>
+    `;
   }
-  return html`<section class="outcomes-list" aria-label=${t("outcomesPage.listLabel")}>
+  return html`${data.canCreate
+      ? html`<button data-outcome-action="create" type="button" @click=${data.onRequestCreate}>
+          ${t("outcomesPage.createOutcome")}
+        </button>`
+      : nothing}<section class="outcomes-list" aria-label=${t("outcomesPage.listLabel")}>
     ${data.outcomes.map(
       (outcome) => html`
         <article class="outcome-summary" data-outcome-id=${outcome.id}>
@@ -188,6 +213,72 @@ export function renderOutcomesList(data: OutcomesListViewData) {
       `,
     )}
   </section>`;
+}
+
+export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
+  if (!data.open) {
+    return nothing;
+  }
+  return html`<openclaw-modal-dialog
+    label=${t("outcomesPage.createOutcome")}
+    description=${t("outcomesPage.createHelp")}
+    @modal-cancel=${data.onDismiss}
+  >
+    <form
+      data-outcome-create-form
+      aria-busy=${data.creating ? "true" : "false"}
+      @submit=${data.onSubmit}
+    >
+      <h2>${t("outcomesPage.createOutcome")}</h2>
+      <p>${t("outcomesPage.createHelp")}</p>
+      <label>
+        ${t("outcomesPage.title")}
+        <input
+          name="title"
+          required
+          .value=${data.title}
+          @input=${(event: InputEvent) =>
+            data.onInput("title", (event.target as HTMLInputElement).value)}
+        />
+      </label>
+      <label>
+        ${t("outcomesPage.objective")}
+        <textarea
+          name="objective"
+          required
+          .value=${data.objective}
+          @input=${(event: InputEvent) =>
+            data.onInput("objective", (event.target as HTMLTextAreaElement).value)}
+        ></textarea>
+      </label>
+      <label>
+        ${t("outcomesPage.criterion")}
+        <input
+          name="criterion"
+          required
+          .value=${data.criterion}
+          @input=${(event: InputEvent) =>
+            data.onInput("criterion", (event.target as HTMLInputElement).value)}
+        />
+      </label>
+      ${data.error
+        ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.error}</p>`
+        : nothing}
+      <div class="outcome-cancel-dialog__actions">
+        <button
+          data-outcome-dismiss-create
+          type="button"
+          ?disabled=${data.creating}
+          @click=${() => data.onDismiss(new Event("modal-cancel"))}
+        >
+          ${t("common.back")}
+        </button>
+        <button data-outcome-confirm-create type="submit" ?disabled=${data.creating}>
+          ${data.creating ? t("common.loading") : t("outcomesPage.createOutcome")}
+        </button>
+      </div>
+    </form>
+  </openclaw-modal-dialog>`;
 }
 
 export function renderOutcomeDetail(data: OutcomeDetailViewData) {

@@ -1,4 +1,6 @@
 import type {
+  OutcomeCreateParams,
+  OutcomeCreateResult,
   OutcomeDetail,
   OutcomeListResult,
   OutcomeMutationResult,
@@ -12,6 +14,14 @@ export async function listOutcomes(client: GatewayBrowserClient): Promise<Outcom
 
 export async function getOutcome(client: GatewayBrowserClient, id: string): Promise<OutcomeDetail> {
   const result = await client.request<{ outcome: OutcomeDetail }>("outcomes.get", { id });
+  return result.outcome;
+}
+
+export async function createOutcome(
+  client: GatewayBrowserClient,
+  params: OutcomeCreateParams,
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeCreateResult>("outcomes.create", params);
   return result.outcome;
 }
 

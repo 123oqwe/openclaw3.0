@@ -12,11 +12,12 @@ import { OpenClawLightDomElement } from "../../lit/openclaw-element.ts";
 import {
   activateOutcome,
   cancelOutcome,
+  createOutcome,
   getOutcome,
   listOutcomes,
   refreshOutcome,
 } from "./client.ts";
-import { renderOutcomeDetail, renderOutcomesList } from "./view.ts";
+import { renderCreateOutcomeDialog, renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
 type OutcomeGatewayIdentity = {
   authorizationKey: string;
@@ -49,6 +50,12 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private refreshing = false;
   @state() private selectedOutcomeId: string | null = null;
   @state() private mutationInFlightOutcomeIds: readonly string[] = [];
+  @state() private createDialogOpen = false;
+  @state() private creating = false;
+  @state() private createError: string | null = null;
+  @state() private createTitle = "";
+  @state() private createObjective = "";
+  @state() private createCriterion = "";
 
   private requestGeneration = 0;
   private detailRequestSequence = 0;
@@ -136,6 +143,12 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
     this.cancelling = false;
+    this.createDialogOpen = false;
+    this.creating = false;
+    this.createError = null;
+    this.createTitle = "";
+    this.createObjective = "";
+    this.createCriterion = "";
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
@@ -217,6 +230,13 @@ class OutcomesPage extends OpenClawLightDomElement {
     );
   }
 
+  private canCreateOutcome(): boolean {
+    return Boolean(
+      this.gatewayIdentity?.canRead &&
+        canCallGatewayMethod(this.gateway.snapshot, "outcomes.create", "operator.write"),
+    );
+  }
+
   private canActivateOutcome(): boolean {
     return Boolean(
       this.detail &&
@@ -251,19 +271,98 @@ class OutcomesPage extends OpenClawLightDomElement {
 
   private replaceOutcome(detail: OutcomeDetail) {
     this.detail = detail;
-    this.outcomes = this.outcomes.map((outcome) =>
-      outcome.id === detail.id
-        ? {
-            acceptanceValidity: detail.acceptanceValidity,
-            id: detail.id,
-            phase: detail.phase,
-            readiness: detail.readiness,
-            revision: detail.revision,
-            title: detail.title,
-            updatedAt: detail.updatedAt,
-          }
-        : outcome,
-    );
+    this.replaceOutcomeSummary(detail);
+  }
+
+  private replaceOutcomeSummary(detail: OutcomeDetail) {
+    const summary: OutcomeSummary = {
+      acceptanceValidity: detail.acceptanceValidity,
+      id: detail.id,
+      phase: detail.phase,
+      readiness: detail.readiness,
+      revision: detail.revision,
+      title: detail.title,
+      updatedAt: detail.updatedAt,
+    };
+    const hasOutcome = this.outcomes.some((outcome) => outcome.id === detail.id);
+    this.outcomes = hasOutcome
+      ? this.outcomes.map((outcome) => (outcome.id === detail.id ? summary : outcome))
+      : [...this.outcomes, summary];
+  }
+
+  private openCreateDialog() {
+    if (!this.canCreateOutcome() || this.creating) {
+      return;
+    }
+    this.createError = null;
+    this.createDialogOpen = true;
+  }
+
+  private dismissCreateDialog(event?: Event) {
+    if (this.creating) {
+      event?.preventDefault();
+      return;
+    }
+    this.createDialogOpen = false;
+    this.createError = null;
+  }
+
+  private updateCreateField(field: "title" | "objective" | "criterion", value: string) {
+    if (field === "title") {
+      this.createTitle = value;
+    } else if (field === "objective") {
+      this.createObjective = value;
+    } else {
+      this.createCriterion = value;
+    }
+  }
+
+  private async submitCreateOutcome(event: SubmitEvent) {
+    event.preventDefault();
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    const title = this.createTitle.trim();
+    const objective = this.createObjective.trim();
+    const criterion = this.createCriterion.trim();
+    if (
+      this.creating ||
+      !title ||
+      !objective ||
+      !criterion ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canCreateOutcome()
+    ) {
+      return;
+    }
+    const sequence = ++this.mutationSequence;
+    this.createError = null;
+    this.creating = true;
+    try {
+      const created = await createOutcome(client, {
+        criteria: [{ id: crypto.randomUUID(), required: true, text: criterion }],
+        id: crypto.randomUUID(),
+        objective,
+        title,
+      });
+      if (sequence === this.mutationSequence && this.gateway.isCurrent(scope)) {
+        this.replaceOutcomeSummary(created);
+        this.createDialogOpen = false;
+        this.createTitle = "";
+        this.createObjective = "";
+        this.createCriterion = "";
+      }
+    } catch (error) {
+      if (sequence === this.mutationSequence && this.gateway.isCurrent(scope)) {
+        this.createError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      if (sequence === this.mutationSequence && this.gateway.isCurrent(scope)) {
+        this.creating = false;
+      }
+    }
   }
 
   private openCancelConfirmation() {
@@ -507,8 +606,21 @@ class OutcomesPage extends OpenClawLightDomElement {
         loading: this.loading,
         loaded: this.loaded,
         error: this.error,
+        canCreate: this.canCreateOutcome(),
+        onRequestCreate: () => this.openCreateDialog(),
         onSelect: (id) => this.selectOutcome(id),
         selectedOutcomeId: this.selectedOutcomeId,
+      })}
+      ${renderCreateOutcomeDialog({
+        criterion: this.createCriterion,
+        creating: this.creating,
+        error: this.createError,
+        objective: this.createObjective,
+        onDismiss: (event) => this.dismissCreateDialog(event),
+        onInput: (field, value) => this.updateCreateField(field, value),
+        onSubmit: (event) => void this.submitCreateOutcome(event),
+        open: this.createDialogOpen,
+        title: this.createTitle,
       })}
       ${renderOutcomeDetail({
         detail: this.detail,
