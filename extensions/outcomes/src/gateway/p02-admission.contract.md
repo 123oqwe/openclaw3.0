@@ -67,7 +67,7 @@ method. P-04/P-05/P-06 methods remain unregistered.
 
 The Hosted test suite covers:
 
-1. Registration/admission: capture all five descriptors with `createTestPluginApi`, then
+1. Registration/admission: capture every registered P-02 descriptor with `createTestPluginApi`, then
    dispatch each through the host registry/scope helpers above. Assert unauthenticated,
    expired, revoked, and insufficient-scope requests fail with the host typed error;
    `operator.write` also reaches read methods through normal scope implication.
