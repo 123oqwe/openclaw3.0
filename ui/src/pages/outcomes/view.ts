@@ -8,6 +8,7 @@ import type {
   OutcomeSourceIssueReason,
   OutcomeSummary,
 } from "@openclaw/outcomes-contract";
+import type { WorkboardCard } from "@openclaw/workboard-contract";
 import { html, nothing } from "lit";
 import "../../components/modal-dialog.ts";
 import { t } from "../../i18n/index.ts";
@@ -48,7 +49,9 @@ export type OutcomeDetailViewData = {
   canActivate: boolean;
   canCancel: boolean;
   canEdit: boolean;
+  canLink: boolean;
   canRefresh: boolean;
+  canUnlink: boolean;
   cancelConfirmationOpen: boolean;
   cancelError: string | null;
   cancelling: boolean;
@@ -68,17 +71,30 @@ export type OutcomeDetailViewData = {
   onEditInput: (field: "title" | "objective", value: string) => void;
   onRequestAddEditCriterion: () => void;
   onRequestEdit: () => void;
+  onRequestLink: () => void;
   onRequestRemoveEditCriterion: (index: number) => void;
   onCancelConfirmationDismiss: (event: Event) => void;
   onConfirmCancel: () => void;
   onRequestCancel: () => void;
   onRefresh: () => void;
   onSubmitEdit: (event: SubmitEvent) => void;
+  onDismissLink: (event: Event) => void;
+  onLinkCardChange: (id: string) => void;
+  onLinkCriterionChange: (id: string) => void;
+  onSubmitLink: (event: SubmitEvent) => void;
+  onUnlink: (criterionId: string, cardId: string) => void;
   mutationError: string | null;
   mutationInFlight: boolean;
   revalidating: boolean;
   refreshing: boolean;
   selectedOutcomeId: string | null;
+  linkCardId: string;
+  linkCards: readonly WorkboardCard[];
+  linkCardsLoading: boolean;
+  linkCriterionId: string;
+  linkDialogOpen: boolean;
+  linkError: string | null;
+  linking: boolean;
 };
 
 function phaseLabel(phase: OutcomePhase): string {
@@ -385,8 +401,20 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               ${criterion.workRefs.length > 0
                 ? html`<ul aria-label=${t("outcomesPage.linkedCards")}>
                     ${criterion.workRefs.map(
-                      (ref) =>
-                        html`<li>${t("outcomesPage.linkedCard", { cardId: ref.cardId })}</li>`,
+                      (ref) => html`<li>
+                        ${t("outcomesPage.linkedCard", { cardId: ref.cardId })}
+                        ${data.canUnlink && data.detail?.nextActions.includes("unlink-work")
+                          ? html`<button
+                              data-outcome-unlink-card=${ref.cardId}
+                              data-outcome-unlink-criterion=${criterion.id}
+                              type="button"
+                              ?disabled=${data.mutationInFlight}
+                              @click=${() => data.onUnlink(criterion.id, ref.cardId)}
+                            >
+                              ${t("outcomesPage.unlinkWork")}
+                            </button>`
+                          : nothing}
+                      </li>`,
                     )}
                   </ul>`
                 : nothing}
@@ -422,6 +450,18 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
             @click=${data.onRequestEdit}
           >
             ${t("outcomesPage.nextAction.editContract")}
+          </button>
+        </section>`
+      : nothing}
+    ${data.canLink && data.detail.nextActions.includes("link-work")
+      ? html`<section class="outcome-detail__section outcome-detail__actions">
+          <button
+            data-outcome-action="link-work"
+            type="button"
+            ?disabled=${data.mutationInFlight}
+            @click=${data.onRequestLink}
+          >
+            ${t("outcomesPage.nextAction.linkWork")}
           </button>
         </section>`
       : nothing}
@@ -600,6 +640,79 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               </button>
               <button data-outcome-confirm-edit type="submit" ?disabled=${data.editing}>
                 ${data.editing ? t("common.loading") : t("common.confirm")}
+              </button>
+            </div>
+          </form>
+        </openclaw-modal-dialog>`
+      : nothing}
+    ${data.linkDialogOpen
+      ? html`<openclaw-modal-dialog
+          label=${t("outcomesPage.linkWork")}
+          description=${t("outcomesPage.linkWorkHelp")}
+          @modal-cancel=${data.onDismissLink}
+        >
+          <form
+            class="outcome-create-dialog"
+            data-outcome-link-form
+            aria-busy=${data.linking || data.linkCardsLoading ? "true" : "false"}
+            @submit=${data.onSubmitLink}
+          >
+            <h2>${t("outcomesPage.linkWork")}</h2>
+            <p>${t("outcomesPage.linkWorkHelp")}</p>
+            <label>
+              ${t("outcomesPage.criterion")}
+              <select
+                name="criterion"
+                required
+                ?disabled=${data.linking || data.linkCardsLoading}
+                .value=${data.linkCriterionId}
+                @change=${(event: Event) =>
+                  data.onLinkCriterionChange((event.target as HTMLSelectElement).value)}
+              >
+                ${data.detail.criteria.map(
+                  (criterion) => html`<option value=${criterion.id}>${criterion.text}</option>`,
+                )}
+              </select>
+            </label>
+            <label>
+              ${t("outcomesPage.card")}
+              <select
+                name="card"
+                required
+                ?disabled=${data.linking || data.linkCardsLoading || data.linkCards.length === 0}
+                .value=${data.linkCardId}
+                @change=${(event: Event) =>
+                  data.onLinkCardChange((event.target as HTMLSelectElement).value)}
+              >
+                <option value="">${t("outcomesPage.selectCard")}</option>
+                ${data.linkCards.map(
+                  (card) => html`<option value=${card.id}>${card.title}</option>`,
+                )}
+              </select>
+            </label>
+            ${data.linkCardsLoading
+              ? html`<p role="status">${t("common.loading")}</p>`
+              : nothing}
+            ${data.linkError
+              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                  ${data.linkError}
+                </p>`
+              : nothing}
+            <div class="outcome-cancel-dialog__actions">
+              <button
+                data-outcome-dismiss-link
+                type="button"
+                ?disabled=${data.linking}
+                @click=${() => data.onDismissLink(new Event("modal-cancel"))}
+              >
+                ${t("common.back")}
+              </button>
+              <button
+                data-outcome-confirm-link
+                type="submit"
+                ?disabled=${data.linking || data.linkCardsLoading || !data.linkCardId}
+              >
+                ${data.linking ? t("common.loading") : t("common.confirm")}
               </button>
             </div>
           </form>

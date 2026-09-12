@@ -907,6 +907,162 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("links an authorized Workboard card only after the Gateway confirms it", async () => {
+    let resolveLink: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: { ...outcomeDetail("outcome-a", "Outcome A"), nextActions: ["link-work"] },
+        });
+      }
+      if (method === "workboard.cards.list") {
+        return Promise.resolve({
+          cards: [
+            {
+              createdAt: 2,
+              id: "card-2",
+              labels: [],
+              position: 0,
+              priority: "medium",
+              status: "todo",
+              title: "Prepare the launch",
+              updatedAt: 2,
+            },
+          ],
+          statuses: ["todo"],
+        });
+      }
+      if (method === "outcomes.linkWorkboard") {
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveLink = resolve;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.linkWorkboard", "workboard.cards.list"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>("[data-outcome-action=link-work]")).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>("[data-outcome-action=link-work]")?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-link-form] select[name="card"]')).not.toBeNull();
+    });
+    const form = page.querySelector<HTMLFormElement>("[data-outcome-link-form]");
+    const card = form?.querySelector<HTMLSelectElement>('select[name="card"]');
+    if (!form || !card) {
+      throw new Error("Outcome link form fields are missing");
+    }
+    card.value = "card-2";
+    card.dispatchEvent(new Event("change", { bubbles: true }));
+    form.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.linkWorkboard", {
+        cardId: "card-2",
+        criterionId: "criterion-1",
+        expectedRevision: 1,
+        id: "outcome-a",
+      });
+    });
+    resolveLink?.({
+      outcome: {
+        ...outcomeDetail("outcome-a", "Outcome A"),
+        revision: 2,
+        work: [
+          {
+            currentBoardId: "board-1",
+            observedAt: 2,
+            ref: {
+              boardIdAtLink: "board-1",
+              cardCreatedAt: 2,
+              cardId: "card-2",
+              owner: "workboard",
+            },
+            status: "todo",
+            upstreamStale: false,
+          },
+        ],
+      },
+    });
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-link-form]")).toBeNull();
+    });
+  });
+
+  it("unlinks a card only after the Gateway confirms it", async () => {
+    let resolveUnlink: ((result: { outcome: OutcomeDetail }) => void) | undefined;
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: { ...outcomeDetail("outcome-a", "Outcome A"), nextActions: ["unlink-work"] },
+        });
+      }
+      if (method === "outcomes.unlinkWorkboard") {
+        return new Promise<{ outcome: OutcomeDetail }>((resolve) => {
+          resolveUnlink = resolve;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.unlinkWorkboard"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>("[data-outcome-select=outcome-a]")?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>("[data-outcome-unlink-card=card-1]")).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>("[data-outcome-unlink-card=card-1]")?.click();
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.unlinkWorkboard", {
+        cardId: "card-1",
+        criterionId: "criterion-1",
+        expectedRevision: 1,
+        id: "outcome-a",
+      });
+    });
+    expect(page.textContent).toContain("Card card-1");
+
+    const unlinked = outcomeDetail("outcome-a", "Outcome A");
+    unlinked.criteria = [{ ...unlinked.criteria[0]!, workRefs: [] }];
+    unlinked.work = [];
+    unlinked.revision = 2;
+    resolveUnlink?.({ outcome: unlinked });
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-unlink-card=card-1]")).toBeNull();
+    });
+  });
+
   it("requires confirmation before cancelling a selected Outcome", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {

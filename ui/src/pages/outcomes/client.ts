@@ -6,7 +6,9 @@ import type {
   OutcomeMutationResult,
   OutcomeRefreshResult,
   OutcomeUpdateParams,
+  OutcomeWorkboardLinkParams,
 } from "@openclaw/outcomes-contract";
+import type { WorkboardListResult } from "@openclaw/workboard-contract";
 import type { GatewayBrowserClient } from "../../api/gateway.ts";
 
 export async function listOutcomes(client: GatewayBrowserClient): Promise<OutcomeListResult> {
@@ -38,6 +40,28 @@ export async function updateOutcome(
     patch,
   });
   return result.outcome;
+}
+
+export async function linkOutcomeWorkboard(
+  client: GatewayBrowserClient,
+  params: OutcomeWorkboardLinkParams,
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeMutationResult>("outcomes.linkWorkboard", params);
+  return result.outcome;
+}
+
+export async function unlinkOutcomeWorkboard(
+  client: GatewayBrowserClient,
+  params: OutcomeWorkboardLinkParams,
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeMutationResult>("outcomes.unlinkWorkboard", params);
+  return result.outcome;
+}
+
+export async function listAuthorizedWorkboardCards(
+  client: GatewayBrowserClient,
+): Promise<WorkboardListResult> {
+  return client.request<WorkboardListResult>("workboard.cards.list", {});
 }
 
 export async function refreshOutcome(

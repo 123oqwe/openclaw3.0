@@ -140,6 +140,7 @@
 }
 
 .outcome-create-dialog input,
+.outcome-create-dialog select,
 .outcome-create-dialog textarea {
   box-sizing: border-box;
   width: 100%;
@@ -178,6 +179,7 @@
 
 .outcome-create-dialog__criteria > button,
 .outcome-create-dialog__criterion > button,
+.outcome-detail__section li > button,
 .outcome-create-dialog .outcome-cancel-dialog__actions button {
   min-height: 44px;
 }

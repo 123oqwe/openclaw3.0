@@ -5,6 +5,7 @@ import type {
   OutcomeDetail,
   OutcomeSummary,
 } from "@openclaw/outcomes-contract";
+import type { WorkboardCard } from "@openclaw/workboard-contract";
 import { html } from "lit";
 import { state } from "lit/decorators.js";
 import { titleForRoute, subtitleForRoute } from "../../app-navigation.ts";
@@ -19,9 +20,12 @@ import {
   cancelOutcome,
   createOutcome,
   getOutcome,
+  linkOutcomeWorkboard,
+  listAuthorizedWorkboardCards,
   listOutcomes,
   refreshOutcome,
   updateOutcome,
+  unlinkOutcomeWorkboard,
 } from "./client.ts";
 import { renderCreateOutcomeDialog, renderOutcomeDetail, renderOutcomesList } from "./view.ts";
 
@@ -68,12 +72,20 @@ class OutcomesPage extends OpenClawLightDomElement {
   @state() private editTitle = "";
   @state() private editObjective = "";
   @state() private editCriteria: readonly OutcomeCriterionInput[] = [];
+  @state() private linkDialogOpen = false;
+  @state() private linking = false;
+  @state() private linkError: string | null = null;
+  @state() private linkCards: readonly WorkboardCard[] = [];
+  @state() private linkCardsLoading = false;
+  @state() private linkCriterionId = "";
+  @state() private linkCardId = "";
 
   private requestGeneration = 0;
   private detailRequestSequence = 0;
   private mutationSequence = 0;
   private createRequestSequence = 0;
   private editRequestSequence = 0;
+  private linkRequestSequence = 0;
   private createRequest: OutcomeCreateParams | null = null;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
 
@@ -173,6 +185,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.editObjective = "";
     this.editCriteria = [];
     this.editRequestSequence += 1;
+    this.linkDialogOpen = false;
+    this.linking = false;
+    this.linkError = null;
+    this.linkCards = [];
+    this.linkCardsLoading = false;
+    this.linkCriterionId = "";
+    this.linkCardId = "";
+    this.linkRequestSequence += 1;
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
@@ -231,6 +251,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.editDialogOpen = false;
     this.editing = false;
     this.editError = null;
+    this.linkDialogOpen = false;
+    this.linking = false;
+    this.linkError = null;
+    this.linkCards = [];
+    this.linkCardsLoading = false;
+    this.linkCriterionId = "";
+    this.linkCardId = "";
+    this.linkRequestSequence += 1;
     void this.loadSelectedOutcome();
   }
 
@@ -250,6 +278,14 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.editDialogOpen = false;
     this.editing = false;
     this.editError = null;
+    this.linkDialogOpen = false;
+    this.linking = false;
+    this.linkError = null;
+    this.linkCards = [];
+    this.linkCardsLoading = false;
+    this.linkCriterionId = "";
+    this.linkCardId = "";
+    this.linkRequestSequence += 1;
     this.mutationSequence += 1;
   }
 
@@ -275,6 +311,25 @@ class OutcomesPage extends OpenClawLightDomElement {
         this.detail.nextActions.includes("edit-contract") &&
         this.gatewayIdentity?.canRead &&
         canCallGatewayMethod(this.gateway.snapshot, "outcomes.update", "operator.write"),
+    );
+  }
+
+  private canLinkOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+        this.detail.nextActions.includes("link-work") &&
+        this.gatewayIdentity?.canRead &&
+        canCallGatewayMethod(this.gateway.snapshot, "outcomes.linkWorkboard", "operator.write") &&
+        canCallGatewayMethod(this.gateway.snapshot, "workboard.cards.list", "operator.read"),
+    );
+  }
+
+  private canUnlinkOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+        this.detail.nextActions.includes("unlink-work") &&
+        this.gatewayIdentity?.canRead &&
+        canCallGatewayMethod(this.gateway.snapshot, "outcomes.unlinkWorkboard", "operator.write"),
     );
   }
 
@@ -572,6 +627,197 @@ class OutcomesPage extends OpenClawLightDomElement {
     }
   }
 
+  private async openLinkDialog() {
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    if (
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      this.linking ||
+      !client ||
+      !scope ||
+      !this.canLinkOutcome()
+    ) {
+      return;
+    }
+    const sequence = ++this.linkRequestSequence;
+    this.linkDialogOpen = true;
+    this.linkError = null;
+    this.linkCards = [];
+    this.linkCardsLoading = true;
+    this.linkCriterionId = detail.criteria[0]?.id ?? "";
+    this.linkCardId = "";
+    try {
+      const result = await listAuthorizedWorkboardCards(client);
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.linkCards = result.cards;
+      }
+    } catch (error) {
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.linkError = t("outcomesPage.loadCardsFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.linkCardsLoading = false;
+      }
+    }
+  }
+
+  private dismissLinkDialog(event?: Event) {
+    if (this.linking) {
+      event?.preventDefault();
+      return;
+    }
+    this.linkDialogOpen = false;
+    this.linkError = null;
+    this.linkCardsLoading = false;
+  }
+
+  private updateLinkCriterion(id: string) {
+    if (!this.linking) {
+      this.linkCriterionId = id;
+    }
+  }
+
+  private updateLinkCard(id: string) {
+    if (!this.linking) {
+      this.linkCardId = id;
+    }
+  }
+
+  private async submitLinkOutcome(event: SubmitEvent) {
+    event.preventDefault();
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    const criterionId = this.linkCriterionId;
+    const cardId = this.linkCardId;
+    if (
+      this.linking ||
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !criterionId ||
+      !detail.criteria.some((criterion) => criterion.id === criterionId) ||
+      !cardId ||
+      !this.linkCards.some((card) => card.id === cardId) ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canLinkOutcome() ||
+      this.outcomeMutationIsInFlight(id)
+    ) {
+      return;
+    }
+    const expectedRevision = detail.revision;
+    const sequence = ++this.linkRequestSequence;
+    this.linkError = null;
+    this.linking = true;
+    this.detailRequestSequence += 1;
+    this.beginOutcomeMutation(id);
+    try {
+      const linked = await linkOutcomeWorkboard(client, { cardId, criterionId, expectedRevision, id });
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        linked.revision >= expectedRevision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.replaceOutcome(linked);
+        this.linkDialogOpen = false;
+      }
+    } catch (error) {
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.linkError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      this.endOutcomeMutation(id);
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.linking = false;
+      }
+    }
+  }
+
+  private async unlinkWorkboardCard(criterionId: string, cardId: string) {
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    if (
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !detail.criteria.some(
+        (criterion) =>
+          criterion.id === criterionId && criterion.workRefs.some((reference) => reference.cardId === cardId),
+      ) ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canUnlinkOutcome() ||
+      this.outcomeMutationIsInFlight(id)
+    ) {
+      return;
+    }
+    const expectedRevision = detail.revision;
+    const sequence = ++this.linkRequestSequence;
+    this.mutationError = null;
+    this.detailRequestSequence += 1;
+    this.beginOutcomeMutation(id);
+    try {
+      const unlinked = await unlinkOutcomeWorkboard(client, {
+        cardId,
+        criterionId,
+        expectedRevision,
+        id,
+      });
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        unlinked.revision >= expectedRevision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.replaceOutcome(unlinked);
+      }
+    } catch (error) {
+      if (
+        sequence === this.linkRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      this.endOutcomeMutation(id);
+    }
+  }
+
   private openCancelConfirmation() {
     if (
       !this.canCancelOutcome() ||
@@ -839,7 +1085,9 @@ class OutcomesPage extends OpenClawLightDomElement {
         canActivate: this.canActivateOutcome(),
         canCancel: this.canCancelOutcome(),
         canEdit: this.canEditOutcome(),
+        canLink: this.canLinkOutcome(),
         canRefresh: this.canRefreshOutcome(),
+        canUnlink: this.canUnlinkOutcome(),
         cancelConfirmationOpen: this.cancelConfirmationOpen,
         cancelError: this.cancelError,
         cancelling: this.cancelling,
@@ -851,8 +1099,14 @@ class OutcomesPage extends OpenClawLightDomElement {
         onEditInput: (field, value) => this.updateEditField(field, value),
         onRequestAddEditCriterion: () => this.addEditCriterion(),
         onRequestEdit: () => this.openEditDialog(),
+        onRequestLink: () => void this.openLinkDialog(),
         onRequestRemoveEditCriterion: (index) => this.removeEditCriterion(index),
         onSubmitEdit: (event) => void this.submitEditOutcome(event),
+        onDismissLink: (event) => this.dismissLinkDialog(event),
+        onLinkCardChange: (id) => this.updateLinkCard(id),
+        onLinkCriterionChange: (id) => this.updateLinkCriterion(id),
+        onSubmitLink: (event) => void this.submitLinkOutcome(event),
+        onUnlink: (criterionId, cardId) => void this.unlinkWorkboardCard(criterionId, cardId),
         onCancelConfirmationDismiss: (event) => this.dismissCancelConfirmation(event),
         onConfirmCancel: () => void this.cancelSelectedOutcome(),
         onRequestCancel: () => this.openCancelConfirmation(),
@@ -867,6 +1121,13 @@ class OutcomesPage extends OpenClawLightDomElement {
         editing: this.editing,
         editObjective: this.editObjective,
         editTitle: this.editTitle,
+        linkCardId: this.linkCardId,
+        linkCards: this.linkCards,
+        linkCardsLoading: this.linkCardsLoading,
+        linkCriterionId: this.linkCriterionId,
+        linkDialogOpen: this.linkDialogOpen,
+        linkError: this.linkError,
+        linking: this.linking,
       })}
     `;
   }
