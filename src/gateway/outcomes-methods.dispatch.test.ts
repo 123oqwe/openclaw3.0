@@ -113,7 +113,7 @@ function registerHarness() {
         owner: { kind: "plugin" as const, pluginId: "outcomes" },
       })),
     );
-  return { context, registrations };
+  return { context, records, registrations };
 }
 
 async function dispatch(params: {
@@ -155,7 +155,98 @@ async function dispatch(params: {
   );
 }
 
+async function dispatchWithoutAuthenticatedRequest(params: {
+  context: GatewayRequestContext;
+  method: string;
+  request: Record<string, unknown>;
+}) {
+  return await withPluginRuntimeGatewayRequestScope(
+    {
+      context: params.context,
+      isWebchatConnect: () => false,
+    },
+    async () =>
+      await dispatchGatewayMethodInProcess(params.method, params.request, {
+        forceSyntheticClient: true,
+        requireAuthenticatedRequest: true,
+        requireScopedClient: true,
+        syntheticScopes: ["operator.read", "operator.write"],
+      }),
+  );
+}
+
 describe("P-02 Outcome Gateway admission", () => {
+  it("registers each P-02 scope and rejects insufficient authority before every handler", async () => {
+    const { context, records, registrations } = registerHarness();
+    const expectedMethods = [
+      ["outcomes.create", "operator.write"],
+      ["outcomes.get", "operator.read"],
+      ["outcomes.list", "operator.read"],
+      ["outcomes.update", "operator.write"],
+      ["outcomes.linkWorkboard", "operator.write"],
+      ["outcomes.unlinkWorkboard", "operator.write"],
+      ["outcomes.activate", "operator.write"],
+      ["outcomes.refresh", "operator.write"],
+      ["outcomes.cancel", "operator.write"],
+    ] as const;
+    expect(
+      registrations
+        .filter(({ method }) => method !== "outcomes.health")
+        .map(({ method, options }) => [method, options.scope]),
+    ).toEqual(expectedMethods);
+
+    for (const [method, scope] of expectedMethods) {
+      const registration = registrations.find((candidate) => candidate.method === method);
+      expect(registration).toBeDefined();
+      const handler = vi.fn(registration!.handler);
+      context.getGatewayMethodRegistry = () =>
+        createGatewayMethodRegistry([
+          {
+            name: method,
+            handler: handler as never,
+            scope,
+            owner: { kind: "plugin", pluginId: "outcomes" },
+          },
+        ]);
+      const insufficientScopes = scope === "operator.read" ? [] : ["operator.read"];
+      await expect(
+        dispatch({
+          client: createOperatorClient("manager-a", insufficientScopes),
+          context,
+          method,
+          request: {},
+        }),
+      ).rejects.toThrow(/scope/i);
+      expect(handler).not.toHaveBeenCalled();
+    }
+    expect(records).toEqual(new Map());
+  });
+
+  it("refuses a missing authenticated request authority before the Outcome handler", async () => {
+    const { context, records, registrations } = registerHarness();
+    const registration = registrations.find(({ method }) => method === "outcomes.get");
+    expect(registration).toBeDefined();
+    const handler = vi.fn(registration!.handler);
+    context.getGatewayMethodRegistry = () =>
+      createGatewayMethodRegistry([
+        {
+          name: "outcomes.get",
+          handler: handler as never,
+          scope: "operator.read",
+          owner: { kind: "plugin", pluginId: "outcomes" },
+        },
+      ]);
+    await expect(
+      dispatchWithoutAuthenticatedRequest({
+        context,
+        method: "outcomes.get",
+        request: { id: outcomeId },
+      }),
+    ).rejects.toThrow(/authenticated plugin request scope/i);
+    expect(handler).not.toHaveBeenCalled();
+    expect(records).toEqual(new Map());
+  });
+
   it("refuses an unscoped authenticated request before its handler runs", async () => {
     const { context, registrations } = registerHarness();
     const handler = vi.fn(registrations.find(({ method }) => method === "outcomes.get")?.handler);

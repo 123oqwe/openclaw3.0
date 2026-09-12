@@ -65,7 +65,7 @@ The current P-02 registrar registers `outcomes.create`, `outcomes.get`,
 the Workboard link/unlink/get/refresh paths call the authenticated public owner
 method. P-04/P-05/P-06 methods remain unregistered.
 
-The Hosted test suite covers:
+The test suite covers the following cases when collected by Hosted CI:
 
 1. Registration/admission: capture every registered P-02 descriptor with `createTestPluginApi`, then
    dispatch each through the host registry/scope helpers above. Assert unauthenticated,
