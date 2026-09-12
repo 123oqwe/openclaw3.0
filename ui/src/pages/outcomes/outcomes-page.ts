@@ -121,6 +121,8 @@ class OutcomesPage extends OpenClawLightDomElement {
   private readonly handleVisibilityChange = () => {
     if (document.visibilityState === "visible") {
       this.revalidateAfterPageResume();
+    } else {
+      this.stopDetailFreshnessTimer();
     }
   };
 
@@ -479,12 +481,16 @@ class OutcomesPage extends OpenClawLightDomElement {
   }
 
   private clearDetailFreshness() {
+    this.stopDetailFreshnessTimer();
+    this.detailFreshnessDeadline = null;
+    this.detailExpired = false;
+  }
+
+  private stopDetailFreshnessTimer() {
     if (this.detailFreshnessTimer !== undefined) {
       globalThis.clearTimeout(this.detailFreshnessTimer);
       this.detailFreshnessTimer = undefined;
     }
-    this.detailFreshnessDeadline = null;
-    this.detailExpired = false;
   }
 
   private setDetailFreshness(detail: OutcomeDetail, requestStartedAt: number) {

@@ -156,6 +156,8 @@ describe("OutcomesPage", () => {
 
   it("revalidates the first list page after a persisted page restore", async () => {
     let listRequests = 0;
+    let visibilityState: DocumentVisibilityState = "visible";
+    vi.spyOn(document, "visibilityState", "get").mockImplementation(() => visibilityState);
     const request = vi.fn((method: string) => {
       if (method !== "outcomes.list") {
         throw new Error(`Unexpected method: ${method}`);
@@ -178,6 +180,10 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => {
       expect(page.textContent).toContain("Outcome before restore");
     });
+    visibilityState = "hidden";
+    document.dispatchEvent(new Event("visibilitychange"));
+    expect(listRequests).toBe(1);
+    visibilityState = "visible";
     const restore = new Event("pageshow");
     Object.defineProperty(restore, "persisted", { value: true });
     globalThis.dispatchEvent(restore);
