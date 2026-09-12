@@ -111,16 +111,8 @@ function sourceIssueLabel(reason: OutcomeSourceIssueReason): string {
   switch (reason) {
     case "workboard-disabled":
       return t("outcomesPage.sourceIssue.workboardDisabled");
-    case "not-found":
-      return t("outcomesPage.sourceIssue.notFound");
-    case "forbidden":
-      return t("outcomesPage.sourceIssue.forbidden");
-    case "timeout":
-      return t("outcomesPage.sourceIssue.timeout");
-    case "invalid-response":
-      return t("outcomesPage.sourceIssue.invalidResponse");
-    case "identity-conflict":
-      return t("outcomesPage.sourceIssue.identityConflict");
+    default:
+      return t("outcomesPage.sourceIssue.unavailable");
   }
 }
 

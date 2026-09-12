@@ -2486,11 +2486,7 @@ export const en: TranslationMap & {
     sourceIssues: "Source issues",
     sourceIssue: {
       workboardDisabled: "Workboard is disabled",
-      notFound: "A linked source was not found",
-      forbidden: "A linked source is unavailable to this account",
-      timeout: "A linked source timed out",
-      invalidResponse: "A linked source returned an invalid response",
-      identityConflict: "A linked source belongs to a different identity",
+      unavailable: "A linked source is unavailable",
     },
     attentionLabel: "Attention",
     nextActionsLabel: "Next actions",
