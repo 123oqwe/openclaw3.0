@@ -115,6 +115,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   private linkRequestSequence = 0;
   private createRequest: OutcomeCreateParams | null = null;
   private gatewayIdentity: OutcomeGatewayIdentity | null = null;
+  private pendingListFocusId: string | null = null;
   private detailFreshnessDeadline: number | null = null;
   private detailFreshnessTimer: ReturnType<typeof globalThis.setTimeout> | undefined;
 
@@ -256,6 +257,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
+    this.pendingListFocusId = null;
     if (!preserveSelection) {
       this.selectedOutcomeId = null;
     }
@@ -370,6 +372,7 @@ class OutcomesPage extends OpenClawLightDomElement {
   }
 
   private clearSelectedOutcome() {
+    const focusId = this.selectedOutcomeId;
     this.detailRequestSequence += 1;
     this.editRequestSequence += 1;
     this.selectedOutcomeId = null;
@@ -395,6 +398,27 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.linkCardId = "";
     this.linkRequestSequence += 1;
     this.mutationSequence += 1;
+    if (focusId) {
+      this.restoreListFocus(focusId);
+    }
+  }
+
+  private restoreListFocus(id: string) {
+    // Identity and connection resets clear this page-local intent before the
+    // next render, so a detail from another authority cannot steal focus.
+    this.pendingListFocusId = id;
+    void this.updateComplete.then(() => {
+      if (this.pendingListFocusId !== id || this.selectedOutcomeId !== null) {
+        return;
+      }
+      this.pendingListFocusId = null;
+      for (const button of this.querySelectorAll<HTMLButtonElement>("[data-outcome-select]")) {
+        if (button.getAttribute("data-outcome-select") === id) {
+          button.focus({ preventScroll: true });
+          return;
+        }
+      }
+    });
   }
 
   private canRefreshOutcome(): boolean {
