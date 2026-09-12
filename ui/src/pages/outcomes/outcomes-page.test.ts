@@ -1067,9 +1067,15 @@ describe("OutcomesPage", () => {
     await vi.waitFor(() => expect(createParams).toHaveLength(2));
     expect(createParams[1]).toEqual(createParams[0]);
 
-    page
-      .querySelector<HTMLButtonElement>("[data-outcome-abandon-pending-create]")
-      ?.click();
+    const abandonPendingCreate = page.querySelector<HTMLButtonElement>(
+      "[data-outcome-abandon-pending-create]",
+    );
+    if (!abandonPendingCreate) {
+      throw new Error("Pending Outcome create abandonment control is missing");
+    }
+    await vi.waitFor(() => expect(abandonPendingCreate.disabled).toBe(false));
+
+    abandonPendingCreate.click();
     const editableForm = page.querySelector<HTMLFormElement>("[data-outcome-create-form]");
     const editableTitle = editableForm?.querySelector<HTMLInputElement>('input[name="title"]');
     if (!editableForm || !editableTitle) {
