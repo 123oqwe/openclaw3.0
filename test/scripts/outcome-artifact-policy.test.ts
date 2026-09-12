@@ -63,6 +63,8 @@ describe("outcome artifact policy", () => {
         "ui/src/e2e/outcomes.real-gateway.e2e.test.ts",
         "ui/src/i18n/locales/en.ts",
         "ui/src/pages/outcomes/client.ts",
+        "ui/src/pages/outcomes/freshness.test.ts",
+        "ui/src/pages/outcomes/freshness.ts",
         "ui/src/pages/outcomes/outcomes-page.test.ts",
         "ui/src/pages/outcomes/outcomes-page.ts",
         "ui/src/pages/outcomes/view.ts",
