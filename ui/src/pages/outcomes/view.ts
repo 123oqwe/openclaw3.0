@@ -1,5 +1,7 @@
 import type {
   OutcomeDetail,
+  OutcomeAttentionCode,
+  OutcomeNextAction,
   OutcomePhase,
   OutcomeReadiness,
   OutcomeSummary,
@@ -52,6 +54,54 @@ function readinessLabel(readiness: OutcomeReadiness): string {
       return t("outcomesPage.readiness.stale");
     case "unavailable":
       return t("outcomesPage.readiness.unavailable");
+  }
+}
+
+function attentionLabel(code: OutcomeAttentionCode): string {
+  switch (code) {
+    case "owner-unavailable":
+      return t("outcomesPage.attention.ownerUnavailable");
+    case "stale":
+      return t("outcomesPage.attention.stale");
+    case "blocked":
+      return t("outcomesPage.attention.blocked");
+    case "contract-incomplete":
+      return t("outcomesPage.attention.contractIncomplete");
+    case "evidence-missing":
+      return t("outcomesPage.attention.evidenceMissing");
+    case "verification-required":
+      return t("outcomesPage.attention.verificationRequired");
+    case "rejected":
+      return t("outcomesPage.attention.rejected");
+    case "ready-for-acceptance":
+      return t("outcomesPage.attention.readyForAcceptance");
+    case "acceptance-needs-review":
+      return t("outcomesPage.attention.acceptanceNeedsReview");
+    case "unknown-operation":
+      return t("outcomesPage.attention.unknownOperation");
+  }
+}
+
+function nextActionLabel(action: OutcomeNextAction): string {
+  switch (action) {
+    case "edit-contract":
+      return t("outcomesPage.nextAction.editContract");
+    case "link-work":
+      return t("outcomesPage.nextAction.linkWork");
+    case "unlink-work":
+      return t("outcomesPage.nextAction.unlinkWork");
+    case "activate":
+      return t("outcomesPage.nextAction.activate");
+    case "refresh":
+      return t("outcomesPage.nextAction.refresh");
+    case "cancel":
+      return t("outcomesPage.nextAction.cancel");
+    case "review-evidence":
+      return t("outcomesPage.nextAction.reviewEvidence");
+    case "accept":
+      return t("outcomesPage.nextAction.accept");
+    case "observe-operation":
+      return t("outcomesPage.nextAction.observeOperation");
   }
 }
 
@@ -137,5 +187,50 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     </button>
     <h2 class="outcome-detail__title">${data.detail.title}</h2>
     <p class="outcome-detail__objective">${data.detail.objective}</p>
+    <p class="outcome-detail__readiness" data-outcome-readiness=${data.detail.readiness}>
+      ${readinessLabel(data.detail.readiness)}
+    </p>
+    <section class="outcome-detail__section" aria-label=${t("outcomesPage.criteria")}>
+      <h3>${t("outcomesPage.criteria")}</h3>
+      <ul>
+        ${data.detail.criteria.map(
+          (criterion) => html`
+            <li>
+              <strong>${criterion.text}</strong>
+              <span class="outcome-detail__criterion-kind">
+                ${criterion.required
+                  ? t("outcomesPage.requiredCriterion")
+                  : t("outcomesPage.optionalCriterion")}
+              </span>
+              ${criterion.workRefs.length > 0
+                ? html`<ul aria-label=${t("outcomesPage.linkedCards")}>
+                    ${criterion.workRefs.map(
+                      (ref) => html`<li>${t("outcomesPage.linkedCard", { cardId: ref.cardId })}</li>`,
+                    )}
+                  </ul>`
+                : nothing}
+            </li>
+          `,
+        )}
+      </ul>
+    </section>
+    ${data.detail.attention.length > 0
+      ? html`<section class="outcome-detail__section">
+          <h3>${t("outcomesPage.attentionLabel")}</h3>
+          <ul>
+            ${data.detail.attention.map(
+              (attention) => html`<li>${attentionLabel(attention.code)}</li>`,
+            )}
+          </ul>
+        </section>`
+      : nothing}
+    ${data.detail.nextActions.length > 0
+      ? html`<section class="outcome-detail__section">
+          <h3>${t("outcomesPage.nextActionsLabel")}</h3>
+          <ul>
+            ${data.detail.nextActions.map((action) => html`<li>${nextActionLabel(action)}</li>`)}
+          </ul>
+        </section>`
+      : nothing}
   </article>`;
 }

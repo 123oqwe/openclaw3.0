@@ -60,3 +60,31 @@
 .outcome-detail__objective {
   margin: var(--space-2) 0 0;
 }
+
+.outcome-detail__readiness {
+  margin: var(--space-3) 0 0;
+  color: var(--muted);
+}
+
+.outcome-detail__section {
+  margin-top: var(--space-4);
+}
+
+.outcome-detail__section h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 1rem;
+}
+
+.outcome-detail__section ul {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-5);
+  overflow-wrap: anywhere;
+}
+
+.outcome-detail__criterion-kind {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--muted);
+  font-size: 0.875rem;
+}
