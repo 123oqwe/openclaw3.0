@@ -340,6 +340,10 @@ suite.define(() => {
             path.join(suite.artifactDir, "outcomes-desktop-accessibility.yml"),
             await page.locator("body").ariaSnapshot(),
           );
+          await page.screenshot({
+            fullPage: true,
+            path: path.join(suite.artifactDir, "outcomes-desktop-current.png"),
+          });
         }
 
         await page.clock.fastForward(twentyFourHoursMs + 1);
