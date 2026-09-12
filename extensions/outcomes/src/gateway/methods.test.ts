@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import type { OpenClawPluginApi } from "../../api.js";
+import { workboardProjectionFingerprint } from "../domain/hash.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import { registerOutcomeFirstPackageMethods } from "./methods.js";
 
@@ -373,8 +374,8 @@ describe("P-02 Outcome handlers", () => {
           criteria: [{ sourcesVisibility: "complete", workRefs: [{ cardId: "card-a" }] }],
           work: [{ ref: { cardId: "card-a" }, currentBoardId: "board-b", status: "done" }],
           evidence: [
-            { sourceId: "proof-a", label: "Hosted proof", proofStatus: "passed" },
             { sourceId: "artifact-a", label: "Hosted artifact" },
+            { sourceId: "proof-a", label: "Hosted proof", proofStatus: "passed" },
           ],
         },
         refresh: { status: "available" },
@@ -602,7 +603,14 @@ describe("P-02 Outcome handlers", () => {
           status: "done",
           sourceUpdatedAt: 1,
           lastSuccessfulAt: 1,
-          sourceFingerprint: "b".repeat(64),
+          sourceFingerprint: workboardProjectionFingerprint({
+            ref,
+            proofs: [{ sourceId: "proof-a", digest: "a".repeat(64) }],
+            artifacts: [],
+            currentBoardId: "board-a",
+            status: "done",
+            sourceUpdatedAt: 1,
+          }),
         },
       ],
     });
@@ -650,7 +658,14 @@ describe("P-02 Outcome handlers", () => {
           status: "done",
           sourceUpdatedAt: 1,
           lastSuccessfulAt: 1,
-          sourceFingerprint: "b".repeat(64),
+          sourceFingerprint: workboardProjectionFingerprint({
+            ref,
+            proofs: [{ sourceId: "proof-a", digest: "a".repeat(64) }],
+            artifacts: [],
+            currentBoardId: "board-a",
+            status: "done",
+            sourceUpdatedAt: 1,
+          }),
         },
       ],
     });

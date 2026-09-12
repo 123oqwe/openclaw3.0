@@ -22,7 +22,12 @@ import {
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
-import { createRequestHash, planHash, workboardProjectionFingerprint } from "../domain/schema.js";
+import {
+  createRequestHash,
+  parseOutcomeRecord,
+  planHash,
+  workboardProjectionFingerprint,
+} from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
@@ -626,6 +631,15 @@ describe("Outcome repository host adapter", () => {
       eventLoop: { baselineMaxMs: number; maxMs: number; deltaMs: number; resolutionMs: number };
       heap: { afterBytes: number; beforeBytes: number; deltaBytes: number };
       list: ReturnType<typeof summarizeBenchmarkTimings>;
+      listDiagnostics: {
+        componentProbeScope: string;
+        hostEntries: ReturnType<typeof summarizeBenchmarkTimings>;
+        hostEntriesSamplesMs: number[];
+        schemaAndHash: ReturnType<typeof summarizeBenchmarkTimings>;
+        schemaAndHashSamplesMs: number[];
+        sort: ReturnType<typeof summarizeBenchmarkTimings>;
+        sortSamplesMs: number[];
+      };
       measurementScope: {
         eventLoop: "whole-scenario-including-validation";
         heap: "whole-scenario-including-validation";
@@ -729,9 +743,40 @@ describe("Outcome repository host adapter", () => {
           const mutation = summarizeBenchmarkTimings(mutationTimings);
           const maxMs = delay.max / 1_000_000;
           const heapAfterBytes = process.memoryUsage().heapUsed;
+          const hostEntriesSamplesMs: number[] = [];
+          const schemaAndHashSamplesMs: number[] = [];
+          const sortSamplesMs: number[] = [];
+          for (let sample = 0; sample < OUTCOME_PERFORMANCE_SAMPLES; sample += 1) {
+            const entriesStartedAt = performance.now();
+            const entries = await store.entries();
+            hostEntriesSamplesMs.push(performance.now() - entriesStartedAt);
+
+            const schemaAndHashStartedAt = performance.now();
+            const parsed = entries.map((entry) => parseOutcomeRecord(entry.value));
+            schemaAndHashSamplesMs.push(performance.now() - schemaAndHashStartedAt);
+
+            const sortStartedAt = performance.now();
+            const sorted = parsed.toSorted(
+              (left, right) =>
+                right.updatedAt - left.updatedAt ||
+                (left.id < right.id ? -1 : left.id > right.id ? 1 : 0),
+            );
+            sortSamplesMs.push(performance.now() - sortStartedAt);
+            expect(sorted).toHaveLength(scenario.recordCount);
+            expect(new Set(sorted.map((record) => record.id))).toEqual(expectedIds);
+          }
+          const hostEntries = summarizeBenchmarkTimings(hostEntriesSamplesMs);
+          const schemaAndHash = summarizeBenchmarkTimings(schemaAndHashSamplesMs);
+          const sort = summarizeBenchmarkTimings(sortSamplesMs);
           expect(list.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
           expect(mutation.count).toBe(OUTCOME_PERFORMANCE_SAMPLES);
-          for (const timing of [...listTimings, ...mutationTimings]) {
+          for (const timing of [
+            ...listTimings,
+            ...mutationTimings,
+            ...hostEntriesSamplesMs,
+            ...schemaAndHashSamplesMs,
+            ...sortSamplesMs,
+          ]) {
             expect(Number.isFinite(timing)).toBe(true);
             expect(timing).toBeGreaterThanOrEqual(0);
           }
@@ -752,6 +797,16 @@ describe("Outcome repository host adapter", () => {
             actualRecordBytes: actualRecordBytes[0] ?? 0,
             samples: OUTCOME_PERFORMANCE_SAMPLES,
             list,
+            listDiagnostics: {
+              componentProbeScope:
+                "separate exact store read, strict parse/hash, and canonical sort probes; not additive to list timing",
+              hostEntries,
+              hostEntriesSamplesMs,
+              schemaAndHash,
+              schemaAndHashSamplesMs,
+              sort,
+              sortSamplesMs,
+            },
             mutation,
             eventLoop: {
               resolutionMs: 10,

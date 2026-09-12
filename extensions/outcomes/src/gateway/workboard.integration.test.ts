@@ -98,8 +98,8 @@ describe("Outcome bundled Workboard Gateway integration", () => {
         outcome: {
           work: [{ currentBoardId: "release-board", status: "done" }],
           evidence: [
-            { sourceId: "proof-1", proofStatus: "passed", label: "Hosted test" },
             { sourceId: "artifact-1", label: "Hosted report", mimeType: "application/json" },
+            { sourceId: "proof-1", proofStatus: "passed", label: "Hosted test" },
           ],
         },
         refresh: { status: "available" },

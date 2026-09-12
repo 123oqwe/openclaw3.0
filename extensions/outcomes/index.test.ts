@@ -4,6 +4,37 @@ import { describe, expect, it, vi } from "vitest";
 import plugin from "./index.js";
 
 describe("Outcome plugin shell", () => {
+  function createRegistrationStore() {
+    const records = new Map<string, unknown>();
+    return {
+      registerIfAbsent: async (key: string, value: unknown) => {
+        if (records.has(key)) {
+          return false;
+        }
+        records.set(key, value);
+        return true;
+      },
+      lookup: async (key: string) => records.get(key),
+      entries: async () => Array.from(records, ([key, value]) => ({ key, value })),
+      update: async (key: string, decide: (current: unknown) => unknown) => {
+        const next = decide(records.get(key));
+        if (next === undefined) {
+          return false;
+        }
+        records.set(key, next);
+        return true;
+      },
+      deleteIf: async (key: string, predicate: (current: unknown) => boolean) => {
+        const current = records.get(key);
+        if (current === undefined || !predicate(current)) {
+          return false;
+        }
+        records.delete(key);
+        return true;
+      },
+    };
+  }
+
   it("declares the disabled bundled shell contract", () => {
     const manifest = JSON.parse(
       readFileSync(new URL("./openclaw.plugin.json", import.meta.url), "utf8"),
@@ -53,7 +84,7 @@ describe("Outcome plugin shell", () => {
         id: "outcomes",
         name: "Outcomes",
         runtime: {
-          state: { openKeyedStore: vi.fn(() => ({ deleteIf: vi.fn() })) },
+          state: { openKeyedStore: vi.fn(createRegistrationStore) },
         } as never,
         registerGatewayMethod,
       }),
@@ -179,7 +210,7 @@ describe("Outcome plugin shell", () => {
 
   it("rejects health parameters outside the public empty-object contract before probing", async () => {
     const registerGatewayMethod = vi.fn();
-    const openKeyedStore = vi.fn();
+    const openKeyedStore = vi.fn(createRegistrationStore);
     const isAvailable = vi.fn(async () => true);
     const request = vi.fn();
 
