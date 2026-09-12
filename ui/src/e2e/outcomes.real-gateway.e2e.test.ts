@@ -345,6 +345,14 @@ suite.define(() => {
         await expect
           .poll(() => summary.locator("[data-outcome-select]").evaluate((element) => element === document.activeElement))
           .toBe(true);
+        await create.focus();
+        await page.keyboard.press("Enter");
+        await form.waitFor({ state: "visible" });
+        await page.keyboard.press("Escape");
+        await expect.poll(() => form.count()).toBe(0);
+        await expect
+          .poll(() => create.evaluate((element) => element === document.activeElement))
+          .toBe(true);
         await page.screenshot({
           fullPage: true,
           path: path.join(suite.artifactDir, "outcomes-mobile-keyboard-create.png"),
