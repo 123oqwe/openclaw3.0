@@ -443,7 +443,7 @@ class OutcomesPage extends OpenClawLightDomElement {
     return Boolean(
         this.detail &&
         this.detail.nextActions.includes("activate") &&
-        !this.detailExpired &&
+        !this.isDetailExpired() &&
         this.gatewayIdentity?.canRead &&
         canCallGatewayMethod(this.gateway.snapshot, "outcomes.activate", "operator.write"),
     );
@@ -502,8 +502,12 @@ class OutcomesPage extends OpenClawLightDomElement {
     }, Math.max(0, deadline - performance.now()));
   }
 
+  private isDetailExpired(): boolean {
+    return !isOutcomeDetailFresh(this.detailFreshnessDeadline, performance.now());
+  }
+
   private revalidateAfterPageResume() {
-    if (!this.selectedOutcomeId || document.visibilityState !== "visible") {
+    if (document.visibilityState !== "visible") {
       return;
     }
     this.requestGeneration += 1;
@@ -511,14 +515,16 @@ class OutcomesPage extends OpenClawLightDomElement {
     this.detail = null;
     this.clearDetailFreshness();
     this.detailError = null;
-    this.detailLoading = true;
-    this.detailRevalidating = true;
+    this.detailLoading = this.selectedOutcomeId !== null;
+    this.detailRevalidating = this.detailLoading;
     this.outcomes = [];
     this.loaded = false;
     this.nextCursor = null;
     this.loading = false;
     void this.loadOutcomes();
-    void this.loadSelectedOutcome();
+    if (this.selectedOutcomeId) {
+      void this.loadSelectedOutcome();
+    }
   }
 
   private replaceOutcomeSummary(detail: OutcomeDetail) {
@@ -768,6 +774,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         updated.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
+        this.detailRequestSequence += 1;
         this.replaceOutcome(updated, requestStartedAt);
         this.editDialogOpen = false;
       }
@@ -905,6 +912,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         linked.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
+        this.detailRequestSequence += 1;
         this.replaceOutcome(linked, requestStartedAt);
         this.linkDialogOpen = false;
       }
@@ -969,6 +977,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         unlinked.revision >= expectedRevision &&
         this.gateway.isCurrent(scope)
       ) {
+        this.detailRequestSequence += 1;
         this.replaceOutcome(unlinked, requestStartedAt);
       }
     } catch (error) {
@@ -1038,6 +1047,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         cancelled.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
+        this.detailRequestSequence += 1;
         this.replaceOutcome(cancelled, requestStartedAt);
         this.cancelConfirmationOpen = false;
       }
@@ -1094,6 +1104,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         refreshed.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
+        this.detailRequestSequence += 1;
         this.replaceOutcome(refreshed, requestStartedAt);
       }
     } catch (error) {
@@ -1147,6 +1158,7 @@ class OutcomesPage extends OpenClawLightDomElement {
         activated.revision >= detail.revision &&
         this.gateway.isCurrent(scope)
       ) {
+        this.detailRequestSequence += 1;
         this.replaceOutcome(activated, requestStartedAt);
       }
     } catch (error) {
@@ -1256,7 +1268,7 @@ class OutcomesPage extends OpenClawLightDomElement {
       })}
       ${renderOutcomeDetail({
         detail: this.detail,
-        detailExpired: this.detailExpired,
+        detailExpired: this.isDetailExpired(),
         error: this.detailError,
         loading: this.detailLoading,
         canActivate: this.canActivateOutcome(),

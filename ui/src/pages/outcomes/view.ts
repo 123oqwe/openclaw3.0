@@ -435,6 +435,12 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
   if (!data.detail) {
     return nothing;
   }
+  const acceptanceValidity =
+    data.detailExpired && data.detail.acceptanceValidity !== "none"
+      ? "needs-review"
+      : data.detail.acceptanceValidity;
+  const readiness =
+    data.detailExpired && data.detail.readiness !== "unavailable" ? "stale" : data.detail.readiness;
   return html`<article class="outcome-detail" data-outcome-detail-id=${data.detail.id}>
     <button class="outcome-detail__back" type="button" @click=${data.onBack}>
       ${t("common.back")}
@@ -446,17 +452,15 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     </p>
     <p
       class="outcome-detail__acceptance"
-      data-outcome-acceptance=${data.detailExpired ? "needs-review" : data.detail.acceptanceValidity}
+      data-outcome-acceptance=${acceptanceValidity}
     >
-      ${t("outcomesPage.acceptanceLabel")}: ${acceptanceValidityLabel(
-        data.detailExpired ? "needs-review" : data.detail.acceptanceValidity,
-      )}
+      ${t("outcomesPage.acceptanceLabel")}: ${acceptanceValidityLabel(acceptanceValidity)}
     </p>
     <p
       class="outcome-detail__readiness"
-      data-outcome-readiness=${data.detailExpired ? "stale" : data.detail.readiness}
+      data-outcome-readiness=${readiness}
     >
-      ${readinessLabel(data.detailExpired ? "stale" : data.detail.readiness)}
+      ${readinessLabel(readiness)}
     </p>
     ${data.detailExpired
       ? html`<section class="outcomes-state" role="alert">${t("outcomesPage.detailsExpired")}</section>`

@@ -154,6 +154,40 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("revalidates the first list page after a persisted page restore", async () => {
+    let listRequests = 0;
+    const request = vi.fn((method: string) => {
+      if (method !== "outcomes.list") {
+        throw new Error(`Unexpected method: ${method}`);
+      }
+      listRequests += 1;
+      return Promise.resolve({
+        outcomes: [
+          outcomeSummary(
+            "outcome-a",
+            listRequests === 1 ? "Outcome before restore" : "Outcome after restore",
+          ),
+        ],
+      });
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway(client) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.textContent).toContain("Outcome before restore");
+    });
+    const restore = new Event("pageshow");
+    Object.defineProperty(restore, "persisted", { value: true });
+    globalThis.dispatchEvent(restore);
+
+    await vi.waitFor(() => {
+      expect(listRequests).toBe(2);
+      expect(page.textContent).toContain("Outcome after restore");
+    });
+  });
+
   it("does not present an authenticated list as empty while its first read is loading", async () => {
     let resolveList: ((result: { outcomes: [] }) => void) | undefined;
     const request = vi.fn(
@@ -537,6 +571,8 @@ describe("OutcomesPage", () => {
         return Promise.resolve({
           outcome: {
             ...outcomeDetail("outcome-a", "Outcome A"),
+            acceptance: { acceptanceValidity: "current", lastSuccessfulAt: 1 },
+            acceptanceValidity: "current",
             nextActions: ["activate", "refresh"],
             observedAt: 1,
             recheckAfter: 1,
@@ -583,6 +619,8 @@ describe("OutcomesPage", () => {
         return Promise.resolve({
           outcome: {
             ...outcomeDetail("outcome-a", "Outcome A"),
+            observedAt: 1,
+            recheckAfter: 1,
             readiness: "unavailable" as const,
             sourceIssues: [{ criterionId: "criterion-1", reason: "workboard-disabled" }],
           },
@@ -606,6 +644,8 @@ describe("OutcomesPage", () => {
       expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).not.toBeNull();
       expect(page.textContent).toContain("Workboard disabled");
     });
+    expect(page.querySelector('[data-outcome-readiness="unavailable"]')).not.toBeNull();
+    expect(page.querySelector('[data-outcome-acceptance="none"]')).not.toBeNull();
   });
 
   it("refreshes a selected Outcome only after the Gateway confirms the mutation", async () => {
