@@ -108,6 +108,68 @@ async function callGateway(method: string, params: Record<string, unknown>): Pro
   return parsed;
 }
 
+async function listPairedDevices(): Promise<GatewayCallResult[]> {
+  if (!instance) {
+    throw new Error("Outcome Gateway fixture was not started");
+  }
+  const result = await instance.cli([
+    "--no-color",
+    "devices",
+    "list",
+    "--url",
+    instance.url,
+    "--token",
+    instance.gatewayToken,
+    "--json",
+  ]);
+  expect(result.code, result.stderr).toBe(0);
+  const parsed: unknown = JSON.parse(result.stdout);
+  if (!isGatewayCallResult(parsed) || !Array.isArray(parsed.paired)) {
+    throw new Error("Device inventory omitted paired devices");
+  }
+  return parsed.paired.filter(isGatewayCallResult);
+}
+
+async function revokeOperatorToken(deviceId: string): Promise<void> {
+  if (!instance) {
+    throw new Error("Outcome Gateway fixture was not started");
+  }
+  const result = await instance.cli([
+    "--no-color",
+    "devices",
+    "revoke",
+    "--url",
+    instance.url,
+    "--token",
+    instance.gatewayToken,
+    "--device",
+    deviceId,
+    "--role",
+    "operator",
+    "--json",
+  ]);
+  expect(result.code, result.stderr).toBe(0);
+}
+
+function requireNewBrowserDeviceId(
+  paired: GatewayCallResult[],
+  existingDeviceIds: ReadonlySet<string>,
+): string {
+  const candidates = paired.filter(
+    (device) =>
+      typeof device.deviceId === "string" &&
+      !existingDeviceIds.has(device.deviceId) &&
+      (device.role === "operator" ||
+        (Array.isArray(device.roles) && device.roles.includes("operator"))),
+  );
+  expect(candidates).toHaveLength(1);
+  const deviceId = candidates[0]?.deviceId;
+  if (typeof deviceId !== "string") {
+    throw new Error("New browser device omitted its ID");
+  }
+  return deviceId;
+}
+
 async function outcomesUrlFor(owner: OpenClawTestInstance): Promise<string> {
   const result = await owner.cli(["--no-color", "dashboard", "--json"]);
   expect(result.code, result.stderr).toBe(0);
@@ -390,6 +452,61 @@ suite.define(() => {
           fullPage: true,
           path: path.join(suite.artifactDir, "outcomes-mobile-keyboard-create.png"),
         });
+      },
+    );
+  });
+
+  it("hides Outcome content after the browser operator token is revoked", async () => {
+    const existingDeviceIds = new Set(
+      (await listPairedDevices())
+        .map((device) => device.deviceId)
+        .filter((deviceId): deviceId is string => typeof deviceId === "string"),
+    );
+    await suite.withPage(
+      {
+        locale: "en-US",
+        serviceWorkers: "block",
+        viewport: { height: 900, width: 1280 },
+      },
+      async ({ page }) => {
+        await page.goto(await outcomesUrl());
+        await waitForControlUiGatewayReady(page);
+        await page.locator('[data-outcome-action="create"]').click();
+        const createForm = page.locator("[data-outcome-create-form]");
+        await createForm.locator('input[name="title"]').fill("Revoked browser Outcome");
+        await createForm.locator('textarea[name="objective"]').fill("This must disappear on revocation");
+        await createForm.locator('input[name="criterion"]').fill("The browser can no longer read this");
+        await createForm.locator("[data-outcome-confirm-create]").click();
+        const summary = page.locator(".outcome-summary", { hasText: "Revoked browser Outcome" });
+        await summary.waitFor({ state: "visible" });
+        await summary.locator("[data-outcome-select]").click();
+        const detail = page.locator('[data-outcome-detail-id]');
+        await detail.waitFor({ state: "visible" });
+        await detail
+          .getByText("This must disappear on revocation", { exact: true })
+          .waitFor({ state: "visible" });
+
+        const browserDeviceId = requireNewBrowserDeviceId(
+          await listPairedDevices(),
+          existingDeviceIds,
+        );
+        await revokeOperatorToken(browserDeviceId);
+
+        await expect.poll(() => detail.count()).toBe(0);
+        await expect
+          .poll(() => page.getByText("This must disappear on revocation", { exact: true }).count())
+          .toBe(0);
+        await expect.poll(() => page.locator('[data-outcome-action="create"]').count()).toBe(0);
+        await page.screenshot({
+          fullPage: true,
+          path: path.join(suite.artifactDir, "outcomes-authorization-revoked.png"),
+        });
+
+        await page.reload();
+        await expect.poll(() => detail.count()).toBe(0);
+        await expect
+          .poll(() => page.getByText("Revoked browser Outcome", { exact: true }).count())
+          .toBe(0);
       },
     );
   });
