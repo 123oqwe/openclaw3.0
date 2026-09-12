@@ -2464,6 +2464,12 @@ export const en: TranslationMap & {
     writeAccessRequiredBody: "This portal requires an operator with write access.",
     retry: "Retry",
   },
+  outcomesPage: {
+    listLabel: "Outcomes",
+    loading: "Loading outcomes",
+    empty: "No outcomes yet",
+    loadFailed: "Could not load outcomes: {error}",
+  },
   modelSetup: {
     missingAuth: "No provider credential is configured for this model. Set it up in Model Setup.",
     heading: "Connect a verified AI model",

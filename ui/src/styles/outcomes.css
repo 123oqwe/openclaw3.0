@@ -1,0 +1,27 @@
+.outcomes-list {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.outcomes-state,
+.outcome-summary {
+  padding: var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.outcomes-state {
+  color: var(--muted);
+}
+
+.outcomes-state--error {
+  color: var(--danger);
+}
+
+.outcome-summary__title {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 1rem;
+  line-height: 1.4;
+}
