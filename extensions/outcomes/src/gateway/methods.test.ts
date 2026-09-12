@@ -352,6 +352,58 @@ describe("P-02 Outcome handlers", () => {
     ).toMatchObject([true, { outcome: { revision: 3, contractRevision: 3 } }]);
   });
 
+  it("unlinks a persisted card without consulting an unavailable Workboard source", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    harness.gatewayRequest.mockClear();
+    harness.gatewayRequest.mockImplementation(async () => {
+      throw new Error("workboard source unavailable");
+    });
+
+    expect(
+      await harness.call("outcomes.unlinkWorkboard", {
+        id,
+        expectedRevision: 2,
+        criterionId,
+        cardId: "card-a",
+      }),
+    ).toMatchObject([true, { outcome: { revision: 3, contractRevision: 3 } }]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.records.get(id)?.criteria[0]?.workRefs).toEqual([]);
+  });
+
+  it("hides a foreign unlink target without a source read or record write", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[0]!;
+    await harness.call("outcomes.create", createParams(id));
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+
+    expect(
+      await harness.call(
+        "outcomes.unlinkWorkboard",
+        { id, expectedRevision: 2, criterionId, cardId: "card-a" },
+        { authenticatedUserProfile: { profileId: "manager-b" } },
+      ),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.writes()).toBe(writes);
+    expect(harness.records.get(id)?.criteria[0]?.workRefs).toHaveLength(1);
+  });
+
   it("refreshes all linked Workboard source material with one authorized owner read", async () => {
     const harness = createHarness({
       workboardCards: [

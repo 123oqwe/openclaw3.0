@@ -59,6 +59,17 @@ export type OutcomeLinkMutation = {
 };
 
 /**
+ * Unlink identifies the persisted ref by its opaque card id. Unlike linking,
+ * it must remain possible when the source card is no longer readable.
+ */
+export type OutcomeUnlinkMutation = {
+  expectedRevision: number;
+  criterionId: string;
+  cardId: string;
+  serverTime: number;
+};
+
+/**
  * The Gateway builds these values exclusively from one authorized Workboard
  * observation.  A refresh is intentionally all-or-nothing for the record's
  * current linked identities: a partial observation must not look current.
@@ -352,7 +363,7 @@ export function reduceOutcomeLink(
 /** Atomically removes one current Workboard identity without erasing history. */
 export function reduceOutcomeUnlink(
   current: OutcomeRecord,
-  mutation: OutcomeLinkMutation,
+  mutation: OutcomeUnlinkMutation,
 ): OutcomeMutationResult {
   assertServerTime(mutation.serverTime);
   if (mutation.expectedRevision !== current.revision) {
@@ -365,8 +376,14 @@ export function reduceOutcomeUnlink(
   if (!criterion) {
     return { kind: "rejected", record: current };
   }
+  const matchingRefs = criterion.workRefs.filter((ref) => ref.cardId === mutation.cardId);
+  // A persisted collision cannot be safely disambiguated from the public cardId
+  // parameter. Do not remove either identity until the record is repaired.
+  if (matchingRefs.length > 1) {
+    return { kind: "rejected", record: current };
+  }
   const workRefs = criterion.workRefs.filter(
-    (ref) => workRefIdentity(ref) !== workRefIdentity(mutation.ref),
+    (ref) => ref.cardId !== mutation.cardId,
   );
   if (workRefs.length === criterion.workRefs.length) {
     return { kind: "noop", record: current };

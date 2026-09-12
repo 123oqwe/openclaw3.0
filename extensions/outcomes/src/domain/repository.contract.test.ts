@@ -231,12 +231,7 @@ describe("Outcome repository atomic contract", () => {
     const mutation = {
       expectedRevision: 2,
       criterionId: "c-1",
-      ref: {
-        owner: "workboard" as const,
-        cardId: "card-1",
-        cardCreatedAt: 1,
-        boardIdAtLink: "board-1",
-      },
+      cardId: "card-1",
       serverTime: 43,
     };
     expect(reduceOutcomeUnlink(linked, mutation)).toMatchObject({
@@ -249,6 +244,25 @@ describe("Outcome repository atomic contract", () => {
         mutation,
       ).kind,
     ).toBe("noop");
+    const existingRef = first(linked.criteria).workRefs[0]!;
+    expect(
+      reduceOutcomeUnlink(
+        {
+          ...linked,
+          revision: 2,
+          criteria: [
+            {
+              ...first(linked.criteria),
+              workRefs: [
+                existingRef,
+                { ...existingRef, cardCreatedAt: existingRef.cardCreatedAt + 1 },
+              ],
+            },
+          ],
+        },
+        mutation,
+      ).kind,
+    ).toBe("rejected");
   });
 
   it("refreshes every linked projection atomically while retaining evidence history", () => {
@@ -434,7 +448,7 @@ describe("Outcome repository atomic contract", () => {
     const unlinked = reduceOutcomeUnlink(acceptedLinked, {
       expectedRevision: 1,
       criterionId: "c-1",
-      ref,
+      cardId: ref.cardId,
       serverTime: 43,
     });
     expect(unlinked).toMatchObject({

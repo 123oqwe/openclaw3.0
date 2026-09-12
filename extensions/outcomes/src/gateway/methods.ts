@@ -295,44 +295,13 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       if (!request || !owner) {
         return fail(respond, "INVALID_REQUEST");
       }
-      let record: OutcomeRecord | undefined;
-      try {
-        record = await repository.getOwned(owner, request.id);
-      } catch (error) {
-        respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
-        return;
-      }
-      if (!record) {
-        return fail(respond, "NOT_FOUND");
-      }
-      if (record.revision !== request.expectedRevision) {
-        return fail(respond, "REVISION_CONFLICT");
-      }
-      if (record.phase === "cancelled") {
-        return fail(respond, "INVALID_STATE");
-      }
-      let card: Awaited<ReturnType<typeof readAuthorizedWorkboardCard>>;
-      try {
-        card = await readAuthorizedWorkboardCard(api, request.cardId);
-      } catch (error) {
-        respond(false, undefined, outcomeError(outcomeOwnerError(error)));
-        return;
-      }
-      if (!card) {
-        return fail(respond, "OWNER_UNAVAILABLE");
-      }
       try {
         const now = Date.now();
         const decision = await repository.transactOwned(owner, request.id, (current) => {
           const mutation = reduceOutcomeUnlink(current, {
             expectedRevision: request.expectedRevision,
             criterionId: request.criterionId,
-            ref: {
-              owner: "workboard",
-              cardId: card.id,
-              cardCreatedAt: card.createdAt,
-              boardIdAtLink: card.boardId,
-            },
+            cardId: request.cardId,
             serverTime: now,
           });
           return {
