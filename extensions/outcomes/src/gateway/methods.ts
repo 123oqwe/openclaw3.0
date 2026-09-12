@@ -74,7 +74,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeCreateParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const request = normalizeCreate(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -125,7 +127,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeIdParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "NOT_FOUND");
@@ -204,7 +208,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeUpdateParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const request = normalizePatch(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -245,7 +251,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeWorkboardLinkParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const request = normalizeWorkboardLink(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -312,7 +320,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeWorkboardUnlinkParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const request = normalizeWorkboardLink(params);
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
@@ -348,7 +358,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeActivateParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "INVALID_REQUEST");
@@ -379,7 +391,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeRefreshParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "INVALID_REQUEST");
@@ -468,7 +482,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeCancelParamsSchema,
       });
-      if (!owner) return;
+      if (!owner) {
+        return;
+      }
       const id = normalizedUuid(params.id);
       if (!id) {
         return fail(respond, "INVALID_REQUEST");

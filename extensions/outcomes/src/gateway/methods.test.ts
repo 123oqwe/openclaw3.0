@@ -30,9 +30,11 @@ function createHarness(
   const records = new Map<string, OutcomeRecord>();
   let entryReads = 0;
   let writes = 0;
+  const storeCalls = { deleteIf: 0, entries: 0, lookup: 0, registerIfAbsent: 0, update: 0 };
   const handlers = new Map<string, RegisteredHandler>();
   const store = {
     registerIfAbsent: async (id: string, record: OutcomeRecord) => {
+      storeCalls.registerIfAbsent += 1;
       if (options.registerError !== undefined) {
         throw options.registerError;
       }
@@ -48,8 +50,12 @@ function createHarness(
       writes += 1;
       return true;
     },
-    lookup: async (id: string) => records.get(id),
+    lookup: async (id: string) => {
+      storeCalls.lookup += 1;
+      return records.get(id);
+    },
     entries: async () => {
+      storeCalls.entries += 1;
       entryReads += 1;
       return [...records].map(([key, value]) => ({ key, value, createdAt: 0 }));
     },
@@ -57,6 +63,7 @@ function createHarness(
       id: string,
       decide: (current: OutcomeRecord | undefined) => OutcomeRecord | undefined,
     ) => {
+      storeCalls.update += 1;
       const next = decide(records.get(id));
       if (!next) {
         return false;
@@ -65,7 +72,10 @@ function createHarness(
       writes += 1;
       return true;
     },
-    deleteIf: async () => false,
+    deleteIf: async () => {
+      storeCalls.deleteIf += 1;
+      return false;
+    },
   };
   const gatewayRequest = vi.fn(async () => {
     if (options.workboardError !== undefined) {
@@ -107,6 +117,7 @@ function createHarness(
     gatewayRequest,
     logger,
     records,
+    storeCalls,
     writes: () => writes,
   };
 }
@@ -149,7 +160,7 @@ describe("P-02 Outcome handlers", () => {
     ["outcomes.activate", {}],
     ["outcomes.refresh", {}],
     ["outcomes.cancel", {}],
-  ])("rejects malformed %s input before owner or store access", async (method, params) => {
+  ])("rejects malformed %s input before owner or repository access", async (method, params) => {
     const harness = createHarness();
     expect(await harness.call(method, params, null as never)).toMatchObject([
       false,
@@ -157,6 +168,14 @@ describe("P-02 Outcome handlers", () => {
       { code: "OUTCOME_INVALID_REQUEST" },
     ]);
     expect(harness.entryReads()).toBe(0);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.storeCalls).toEqual({
+      deleteIf: 0,
+      entries: 0,
+      lookup: 0,
+      registerIfAbsent: 0,
+      update: 0,
+    });
     expect(harness.writes()).toBe(0);
   });
 
