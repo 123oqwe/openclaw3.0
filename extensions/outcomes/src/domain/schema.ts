@@ -220,6 +220,53 @@ const evidenceSchema = z.strictObject({
   observedAt: z.number().finite(),
 });
 
+export type CanonicalPlan = {
+  outcomeId: string;
+  objective: string;
+  contractRevision: number;
+  planGeneration: number;
+  criteria: Criterion[];
+};
+
+/**
+ * The persisted record, decision snapshot, and acceptance snapshot all use
+ * exactly this strict plan shape. Keeping it shared prevents a historical
+ * snapshot from accepting a shape that the canonical hash would later reject.
+ */
+const canonicalPlanSchema = z
+  .strictObject({
+    outcomeId: codePointText(160),
+    objective: codePointText(4000),
+    contractRevision: z.number().int().positive(),
+    planGeneration: z.number().int().positive(),
+    criteria: z.array(criterionSchema).min(1).max(5),
+  })
+  .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
+    message: "at least one criterion must be required",
+  })
+  .superRefine((plan, ctx) => {
+    const criterionIds = new Set(plan.criteria.map((criterion) => criterion.id));
+    if (criterionIds.size !== plan.criteria.length) {
+      ctx.addIssue({ code: "custom", message: "criterion ids must be unique" });
+    }
+    const linkedRefs = new Set<string>();
+    for (const criterion of plan.criteria) {
+      const refs = new Set(criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`));
+      if (refs.size !== criterion.workRefs.length) {
+        ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });
+      }
+      if (refs.size > 10) {
+        ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
+      }
+      for (const ref of refs) {
+        linkedRefs.add(ref);
+      }
+    }
+    if (linkedRefs.size > 20) {
+      ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
+    }
+  });
+
 const decisionSchema = z.strictObject({
   id: z.string().min(1),
   criterionId: z.string().min(1),
@@ -229,17 +276,7 @@ const decisionSchema = z.strictObject({
   requestHash: z.string().regex(/^[0-9a-f]{64}$/),
   profileId: z.string().min(1),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
-  decidedPlan: z
-    .strictObject({
-      outcomeId: z.string().min(1),
-      objective: codePointText(4000),
-      contractRevision: z.number().int().positive(),
-      planGeneration: z.number().int().positive(),
-      criteria: z.array(criterionSchema).min(1).max(5),
-    })
-    .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
-      message: "at least one criterion must be required",
-    }),
+  decidedPlan: canonicalPlanSchema,
   evidenceSetHash: z.string().regex(/^[0-9a-f]{64}$/),
   note: codePointString(2000).optional(),
   decidedAt: z.number().finite(),
@@ -268,27 +305,8 @@ const acceptanceSchema = z.strictObject({
   planGeneration: z.number().int().nonnegative(),
   planHash: z.string().regex(/^[0-9a-f]{64}$/),
   closureHash: z.string().regex(/^[0-9a-f]{64}$/),
-  acceptedPlan: z
-    .strictObject({
-      outcomeId: z.string().min(1),
-      objective: codePointText(4000),
-      contractRevision: z.number().int().positive(),
-      planGeneration: z.number().int().positive(),
-      criteria: z.array(criterionSchema).min(1).max(5),
-    })
-    .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
-      message: "at least one criterion must be required",
-    }),
+  acceptedPlan: canonicalPlanSchema,
 });
-
-/** Strict persisted aggregate contract; adapters should parse before exposing records. */
-function safePlanHash(input: CanonicalPlan): string | null {
-  try {
-    return planHash(input);
-  } catch {
-    return null;
-  }
-}
 
 const outcomeRecordSchema = z
   .strictObject({
@@ -439,7 +457,7 @@ const outcomeRecordSchema = z
           message: "decision criterion is absent from its plan snapshot",
         });
       }
-      if (decision.planHash !== safePlanHash(decision.decidedPlan)) {
+      if (decision.planHash !== safeValidatedSnapshotPlanHash(decision.decidedPlan)) {
         ctx.addIssue({ code: "custom", message: "decision planHash does not match its snapshot" });
       }
     }
@@ -453,7 +471,7 @@ const outcomeRecordSchema = z
           message: "acceptance snapshot does not match its outcome/generation",
         });
       }
-      if (acceptance.planHash !== safePlanHash(acceptance.acceptedPlan)) {
+      if (acceptance.planHash !== safeValidatedSnapshotPlanHash(acceptance.acceptedPlan)) {
         ctx.addIssue({
           code: "custom",
           message: "acceptance planHash does not match its snapshot",
@@ -494,50 +512,7 @@ export function createRequestHash(input: unknown): string {
     .digest("hex");
 }
 
-export type CanonicalPlan = {
-  outcomeId: string;
-  objective: string;
-  contractRevision: number;
-  planGeneration: number;
-  criteria: Criterion[];
-};
-
-const canonicalPlanSchema = z
-  .strictObject({
-    outcomeId: codePointText(160),
-    objective: codePointText(4000),
-    contractRevision: z.number().int().positive(),
-    planGeneration: z.number().int().positive(),
-    criteria: z.array(criterionSchema).min(1).max(5),
-  })
-  .refine((plan) => plan.criteria.some((criterion) => criterion.required), {
-    message: "at least one criterion must be required",
-  })
-  .superRefine((plan, ctx) => {
-    const criterionIds = new Set(plan.criteria.map((criterion) => criterion.id));
-    if (criterionIds.size !== plan.criteria.length) {
-      ctx.addIssue({ code: "custom", message: "criterion ids must be unique" });
-    }
-    const linkedRefs = new Set<string>();
-    for (const criterion of plan.criteria) {
-      const refs = new Set(criterion.workRefs.map((ref) => `${ref.cardId}\0${ref.cardCreatedAt}`));
-      if (refs.size !== criterion.workRefs.length) {
-        ctx.addIssue({ code: "custom", message: "criterion refs must be unique" });
-      }
-      if (refs.size > 10) {
-        ctx.addIssue({ code: "custom", message: "a criterion cannot link more than 10 refs" });
-      }
-      for (const ref of refs) {
-        linkedRefs.add(ref);
-      }
-    }
-    if (linkedRefs.size > 20) {
-      ctx.addIssue({ code: "custom", message: "an outcome cannot link more than 20 refs" });
-    }
-  });
-
-export function planHash(input: CanonicalPlan): string {
-  const plan = canonicalPlanSchema.parse(input);
+function hashValidatedCanonicalPlan(plan: CanonicalPlan): string {
   const canonical = {
     outcomeId: plan.outcomeId,
     objective: plan.objective,
@@ -563,6 +538,32 @@ export function planHash(input: CanonicalPlan): string {
   return createHash("sha256")
     .update(`openclaw:outcome-plan:v1\0${stableStringify(canonical)}`, "utf8")
     .digest("hex");
+}
+
+export function planHash(input: CanonicalPlan): string {
+  return hashValidatedCanonicalPlan(canonicalPlanSchema.parse(input));
+}
+
+/**
+ * Snapshot values have already passed canonicalPlanSchema as part of the
+ * enclosing record parse. Rehash them without repeating that same Zod walk;
+ * canonicalization and SHA-256 comparison remain mandatory for every value.
+ */
+function safeValidatedSnapshotPlanHash(input: CanonicalPlan): string | null {
+  try {
+    return hashValidatedCanonicalPlan(input);
+  } catch {
+    return null;
+  }
+}
+
+/** Strict persisted aggregate contract; adapters should parse before exposing records. */
+function safePlanHash(input: CanonicalPlan): string | null {
+  try {
+    return planHash(input);
+  } catch {
+    return null;
+  }
 }
 
 export function evidenceSetHash(input: {
