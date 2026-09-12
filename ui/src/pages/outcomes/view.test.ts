@@ -19,6 +19,7 @@ describe("renderOutcomesList", () => {
         error: null,
         loaded: true,
         loading: false,
+        onSelect: () => undefined,
         outcomes: [
           {
             acceptanceValidity: "none",
@@ -30,6 +31,7 @@ describe("renderOutcomesList", () => {
             updatedAt: 1,
           },
         ],
+        selectedOutcomeId: null,
         unauthorized: false,
       }),
       container,
@@ -55,6 +57,7 @@ describe("renderOutcomesList", () => {
         error: null,
         loaded: true,
         loading: false,
+        onSelect: () => undefined,
         outcomes: [
           {
             acceptanceValidity: "none",
@@ -66,6 +69,7 @@ describe("renderOutcomesList", () => {
             updatedAt: 1,
           },
         ],
+        selectedOutcomeId: null,
         unauthorized: false,
       }),
       container,
@@ -85,6 +89,7 @@ describe("renderOutcomesList", () => {
         error: null,
         loaded: true,
         loading: false,
+        onSelect: () => undefined,
         outcomes: [
           {
             acceptanceValidity: "none",
@@ -96,6 +101,7 @@ describe("renderOutcomesList", () => {
             updatedAt: 1,
           },
         ],
+        selectedOutcomeId: null,
         unauthorized: false,
       }),
       container,
