@@ -78,7 +78,7 @@ describe("OutcomesPage", () => {
     const client = { request } as unknown as GatewayBrowserClient;
     const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
     const gateway = createGateway(client);
-    (gateway.snapshot as ApplicationGatewaySnapshot).hello!.auth = null;
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = null;
     page.context = { gateway } as ApplicationContext;
     document.body.append(page);
 
