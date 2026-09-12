@@ -8,7 +8,6 @@ import {
   criterionId,
   defaultLinkParams,
   outcomeIds,
-  owner,
 } from "./methods.test-support.js";
 
 describe("P-02 Outcome handlers", () => {
