@@ -8,7 +8,11 @@ import {
 import { extractWorkboardEvidence } from "../assurance/evidence.js";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
 import { createRequestHash, workboardProjectionFingerprint } from "../domain/hash.js";
-import { toOutcomeSummary, type AuthorizedOutcomeSource } from "../domain/read-model.js";
+import {
+  toOutcomeDetail,
+  toOutcomeSummary,
+  type AuthorizedOutcomeSource,
+} from "../domain/read-model.js";
 import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,
