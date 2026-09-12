@@ -243,6 +243,48 @@ describe("Outcome P-01 read model", () => {
     expect(first(criterion.workRefs).cardId).toBe("secret-card");
   });
 
+  it("derives draft contract repair actions without advertising P-05 or P-04 actions", () => {
+    const input = record();
+    input.phase = "draft";
+    input.planGeneration = 0;
+    input.planHash = null;
+
+    const detail = toOutcomeDetail(parseOutcomeRecord(input), 10);
+
+    expect(detail.attention).toEqual([{ code: "contract-incomplete", criterionId: "c-1" }]);
+    expect(detail.nextActions).toEqual(["edit-contract", "link-work", "cancel"]);
+    expect(detail.nextActions).not.toContain("review-evidence");
+    expect(detail.nextActions).not.toContain("accept");
+    expect(detail.nextActions).not.toContain("observe-operation");
+  });
+
+  it("derives owner recovery guidance for an identity-conflicted link", () => {
+    const input = record();
+    const criterion = first(input.criteria);
+    const ref = {
+      owner: "workboard" as const,
+      cardId: "reused-card",
+      cardCreatedAt: 4,
+      boardIdAtLink: "board",
+    };
+    criterion.workRefs = [ref];
+    input.projections = [
+      {
+        ref,
+        availability: "identity-conflict",
+        errorCode: "identity-conflict",
+        observedAt: 5,
+        proofs: [],
+        artifacts: [],
+      },
+    ];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.attention).toEqual([{ code: "owner-unavailable", criterionId: "c-1" }]);
+    expect(detail.nextActions).toEqual(["refresh", "unlink-work", "cancel"]);
+  });
+
   it.each([
     ["required", true],
     ["optional", false],
