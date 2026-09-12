@@ -112,10 +112,34 @@ function createGatewayWithSnapshotListener(client: GatewayBrowserClient) {
 
 afterEach(() => {
   document.body.replaceChildren();
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
 describe("OutcomesPage", () => {
+  it("latches expiry when a scheduled freshness timer fires without a monotonic clock advance", () => {
+    vi.useFakeTimers();
+    vi.spyOn(performance, "now").mockReturnValue(100);
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    const internalPage = page as unknown as {
+      isDetailExpired(): boolean;
+      replaceOutcome(detail: OutcomeDetail, requestStartedAt: number): void;
+    };
+
+    internalPage.replaceOutcome(
+      {
+        ...outcomeDetail("outcome-a", "Outcome A"),
+        observedAt: 1_000,
+        recheckAfter: 1_100,
+      },
+      100,
+    );
+
+    expect(internalPage.isDetailExpired()).toBe(false);
+    vi.advanceTimersByTime(100);
+    expect(internalPage.isDetailExpired()).toBe(true);
+  });
+
   it("does not treat a connected transport without an authenticated self user as Outcome access", async () => {
     const request = vi.fn(async () => ({ outcomes: [] }));
     const client = { request } as unknown as GatewayBrowserClient;
