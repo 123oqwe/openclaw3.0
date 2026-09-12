@@ -199,6 +199,10 @@ describe("Dynamic route startup bridge", () => {
     expect(routeIdFromPath("/portals")).toBe("portals");
   });
 
+  it("resolves the plugin-owned Outcomes workspace path", () => {
+    expect(routeIdFromPath("/outcomes")).toBe("outcomes");
+  });
+
   it("matches mixed-case deep links exactly like the uirouter path key", () => {
     // uirouter lowercases static path keys; a case-sensitive pre-gate would
     // rewrite /Usage to /chat before the router ever saw it.

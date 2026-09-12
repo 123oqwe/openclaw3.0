@@ -106,6 +106,28 @@ describe("Outcome plugin shell", () => {
     ]);
   });
 
+  it("registers the plugin-owned Outcomes tab", () => {
+    const registerControlUiDescriptor = vi.fn();
+
+    plugin.register(
+      createTestPluginApi({
+        id: "outcomes",
+        name: "Outcomes",
+        registerControlUiDescriptor,
+      }),
+    );
+
+    expect(registerControlUiDescriptor).toHaveBeenCalledWith({
+      surface: "tab",
+      id: "outcomes",
+      label: "Outcomes",
+      placement: "route:outcomes",
+      icon: "target",
+      group: "control",
+      requiredScopes: ["operator.read"],
+    });
+  });
+
   it("keeps the content-free operator.read health method in the first package", async () => {
     const registerGatewayMethod = vi.fn();
     const registerTool = vi.fn();
