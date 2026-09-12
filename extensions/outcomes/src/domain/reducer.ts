@@ -104,7 +104,7 @@ function canonicalRefOrder(left: WorkboardRef, right: WorkboardRef): number {
 
 function reduceWorkboardRefContract(
   current: OutcomeRecord,
-  mutation: OutcomeLinkMutation,
+  mutation: Pick<OutcomeLinkMutation, "expectedRevision" | "serverTime">,
   criteria: Criterion[],
 ): OutcomeMutationResult {
   return reduceOutcomeContract(current, {
