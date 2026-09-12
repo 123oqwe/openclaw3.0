@@ -964,6 +964,12 @@ describe("P-02 Outcome handlers", () => {
   it("samples namespace capacity only during a single owner-isolated list scan", async () => {
     const harness = createHarness();
     const { id, record: template } = await createOutcome(harness);
+    await harness.call("outcomes.create", createParams(id));
+    const noOp = { id, expectedRevision: 1, patch: { title: template.title } };
+    expect(await harness.call("outcomes.update", noOp)).toMatchObject([
+      true,
+      { outcome: { revision: 1 } },
+    ]);
     for (let index = 1; index <= 398; index += 1) {
       harness.records.set(`00000000-0000-4000-8000-${index.toString().padStart(12, "0")}`, {
         ...template,
