@@ -27,7 +27,9 @@ suite.define(() => {
         let helperCalls = 0;
         let diagnosticSequence = 0;
         let broadRequestId = 0;
-        const activeBroadRequests = new Set<number>();
+        const activeBroadRequests = new Map<number, Promise<void>>();
+        const settleBroadRequest = new Map<number, () => void>();
+        let isTearingDown = false;
         const trace = (stage: string, routePath?: string) => {
           diagnosticSequence += 1;
           console.info(
@@ -45,9 +47,21 @@ suite.define(() => {
             await page.route(`${origin}/**`, async (route) => {
               const requested = new URL(route.request().url());
               const requestId = ++broadRequestId;
-              activeBroadRequests.add(requestId);
+              let settle!: () => void;
+              activeBroadRequests.set(
+                requestId,
+                new Promise<void>((resolve) => {
+                  settle = resolve;
+                }),
+              );
+              settleBroadRequest.set(requestId, settle);
               trace("broad-enter", `${requestId}:${requested.pathname}`);
               try {
+                if (isTearingDown) {
+                  trace("broad-teardown-abort", `${requestId}:${requested.pathname}`);
+                  await route.abort("failed");
+                  return;
+                }
                 const isDiagnosticPath =
                   requested.pathname === "/avatar/main" ||
                   requested.pathname === "/.well-known/openclaw/browser-bootstrap";
@@ -79,6 +93,8 @@ suite.define(() => {
                 trace("broad-error", `${requestId}:${requested.pathname}`);
                 throw error;
               } finally {
+                settleBroadRequest.get(requestId)?.();
+                settleBroadRequest.delete(requestId);
                 activeBroadRequests.delete(requestId);
               }
             });
@@ -167,15 +183,19 @@ suite.define(() => {
           },
           () => {
             trace("cleanup-before-release", "none");
+            isTearingDown = true;
             releaseHandoff();
             trace("cleanup-after-release", "none");
           },
           // Drain active interception handlers before withPage closes the context.
           async () => {
-            trace(
-              "cleanup-before-unroute",
-              `active=${[...activeBroadRequests].join(",") || "none"}`,
-            );
+            while (activeBroadRequests.size > 0) {
+              trace(
+                "cleanup-before-unroute",
+                `active=${[...activeBroadRequests.keys()].join(",")}`,
+              );
+              await Promise.all(activeBroadRequests.values());
+            }
             await page.unrouteAll({ behavior: "wait" });
             trace("cleanup-after-unroute", "none");
           },
