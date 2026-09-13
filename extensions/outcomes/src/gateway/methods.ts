@@ -155,51 +155,6 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
     { scope: "operator.write" },
   );
   api.registerGatewayMethod(
-    "outcomes.export",
-    async ({ client, params: rawParams, respond }) => {
-      const admission = admitOutcomeOwner({
-        client,
-        missingOwnerCode: "NOT_FOUND",
-        request: rawParams,
-        respond,
-        schema: outcomeExportParamsSchema,
-      });
-      if (!admission) {
-        return;
-      }
-      const { owner, request: params } = admission;
-      const id = normalizedUuid(params.id);
-      if (!id) {
-        return fail(respond, "NOT_FOUND");
-      }
-      try {
-        const record = await repository.getOwned(owner, id);
-        if (!record) {
-          return fail(respond, "NOT_FOUND");
-        }
-        const refs = outcomeExportWorkRefs(record);
-        if (refs.length > 0) {
-          let cards: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>;
-          try {
-            cards = await readAuthorizedWorkboardCards(api);
-          } catch (error) {
-            return respond(false, undefined, outcomeError(outcomeOwnerError(error)));
-          }
-          for (const ref of refs) {
-            const matches = cards.filter((card) => card.id === ref.cardId);
-            if (matches.length !== 1 || matches[0]!.createdAt !== ref.cardCreatedAt) {
-              return fail(respond, "OWNER_UNAVAILABLE");
-            }
-          }
-        }
-        respond(true, encodeOutcomeExport(record, Date.now()));
-      } catch (error) {
-        respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
-      }
-    },
-    { scope: "operator.read" },
-  );
-  api.registerGatewayMethod(
     "outcomes.get",
     async ({ client, params: rawParams, respond }) => {
       const admission = admitOutcomeOwner({
@@ -285,6 +240,34 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ? { nextCursor: encodeOutcomeCursor(owner, page.at(-1)!) }
             : {}),
         });
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
+      }
+    },
+    { scope: "operator.read" },
+  );
+  api.registerGatewayMethod(
+    "outcomes.export",
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({ client, missingOwnerCode: "NOT_FOUND", request: rawParams, respond, schema: outcomeExportParamsSchema });
+      if (!admission) return;
+      const { owner, request: params } = admission;
+      const id = normalizedUuid(params.id);
+      if (!id) return fail(respond, "NOT_FOUND");
+      try {
+        const record = await repository.getOwned(owner, id);
+        if (!record) return fail(respond, "NOT_FOUND");
+        const refs = outcomeExportWorkRefs(record);
+        if (refs.length > 0) {
+          let cards: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>;
+          try { cards = await readAuthorizedWorkboardCards(api); } catch (error) { return respond(false, undefined, outcomeError(outcomeOwnerError(error))); }
+          for (const ref of refs) {
+            const matches = cards.filter((card) => card.id === ref.cardId);
+            if (matches.length === 0) return fail(respond, "OWNER_UNAVAILABLE");
+            if (matches.length !== 1 || matches[0]!.createdAt !== ref.cardCreatedAt) return fail(respond, "IDENTITY_CONFLICT");
+          }
+        }
+        respond(true, encodeOutcomeExport(record, Date.now()));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
       }

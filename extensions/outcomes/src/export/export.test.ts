@@ -46,6 +46,10 @@ describe("Outcome export codec", () => {
     const record = draftRecord();
 
     expect(() => parseOutcomeExport({ schemaVersion: 2, exportedAt: 42, record })).toThrow();
+    for (const exportedAt of [-1, Number.NaN, Number.POSITIVE_INFINITY]) {
+      expect(() => encodeOutcomeExport(record, exportedAt)).toThrow();
+      expect(() => parseOutcomeExport({ schemaVersion: 1, exportedAt, record })).toThrow();
+    }
     expect(() =>
       parseOutcomeExport({
         schemaVersion: 1,

@@ -4,7 +4,7 @@ import type { OutcomeRecord, WorkboardRef } from "../domain/types.js";
 
 const outcomeExportSchema = z.strictObject({
   schemaVersion: z.literal(1),
-  exportedAt: z.number().finite(),
+  exportedAt: z.number().finite().nonnegative(),
   record: z.unknown(),
 });
 
@@ -15,7 +15,7 @@ export type OutcomeExport = {
 };
 
 export function encodeOutcomeExport(record: OutcomeRecord, exportedAt: number): OutcomeExport {
-  return { schemaVersion: 1, exportedAt, record: parseOutcomeRecord(record) };
+  return parseOutcomeExport({ schemaVersion: 1, exportedAt, record });
 }
 
 /** Parses versioned lossless exports without exposing the persisted type to public callers. */
