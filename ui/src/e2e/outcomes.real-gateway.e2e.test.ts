@@ -756,7 +756,17 @@ suite.define(() => {
           state: "visible",
         });
         await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
-        await detail.locator("[data-outcome-acceptance-history]").waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-acceptance="needs-review"]').waitFor({
+          state: "visible",
+        });
+        const firstAcceptance = detail.locator("[data-outcome-acceptance-history]").first();
+        await firstAcceptance.locator("summary").click();
+        await firstAcceptance.getByText("Prove human acceptance", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await firstAcceptance.getByText("Proof is reviewed", { exact: true }).waitFor({
+          state: "visible",
+        });
 
         if (!instance) {
           throw new Error("Outcome Gateway fixture was not started");
@@ -800,7 +810,7 @@ suite.define(() => {
           .click();
         const restoredDetail = page.locator("[data-outcome-detail-id]");
         await restoredDetail
-          .locator('[data-outcome-acceptance="current"]')
+          .locator('[data-outcome-acceptance="needs-review"]')
           .waitFor({ state: "visible" });
       },
     );
