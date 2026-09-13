@@ -30,7 +30,9 @@ export type OutcomeDetailViewData = {
   canActivate: boolean;
   canAccept: boolean;
   canCancel: boolean;
+  canDelete: boolean;
   canEdit: boolean;
+  canExport: boolean;
   canLink: boolean;
   canRefresh: boolean;
   canUnlink: boolean;
@@ -38,6 +40,9 @@ export type OutcomeDetailViewData = {
   cancelConfirmationOpen: boolean;
   cancelError: string | null;
   cancelling: boolean;
+  deleteConfirmationOpen: boolean;
+  deleteError: string | null;
+  deleting: boolean;
   detail: OutcomeDetail | null;
   detailExpired?: boolean;
   editCriteria: readonly OutcomeCriterionInput[];
@@ -51,6 +56,7 @@ export type OutcomeDetailViewData = {
   onBack: () => void;
   onActivate: () => void;
   onAccept: () => void;
+  onExport: () => void;
   onDismissEdit: (event: Event) => void;
   onEditCriterionInput: (index: number, value: string) => void;
   onEditInput: (field: "title" | "objective", value: string) => void;
@@ -62,6 +68,9 @@ export type OutcomeDetailViewData = {
   onCancelConfirmationDismiss: (event: Event) => void;
   onConfirmCancel: () => void;
   onRequestCancel: () => void;
+  onDeleteConfirmationDismiss: (event: Event) => void;
+  onConfirmDelete: () => void;
+  onRequestDelete: () => void;
   onRefresh: () => void;
   onDismissVerification: (event: Event) => void;
   onSubmitVerification: (event: SubmitEvent) => void;
@@ -474,6 +483,27 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           ${t("common.cancel")}
         </button>`
       : nothing}
+    ${data.canExport
+      ? html`<button
+          data-outcome-action="export"
+          type="button"
+          ?disabled=${data.mutationInFlight}
+          @click=${data.onExport}
+        >
+          ${t("outcomesPage.exportOutcome")}
+        </button>`
+      : nothing}
+    ${data.canDelete && data.detail.nextActions.includes("delete")
+      ? html`<button
+          class="outcome-detail__cancel"
+          data-outcome-action="delete"
+          type="button"
+          ?disabled=${data.deleting || data.mutationInFlight}
+          @click=${data.onRequestDelete}
+        >
+          ${t("outcomesPage.deleteOutcome")}
+        </button>`
+      : nothing}
     ${data.cancelConfirmationOpen
       ? html`<openclaw-modal-dialog
           label=${t("outcomesPage.cancelOutcome")}
@@ -504,6 +534,41 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 @click=${data.onConfirmCancel}
               >
                 ${data.cancelling ? t("outcomesPage.cancelling") : t("common.confirm")}
+              </button>
+            </div>
+          </section>
+        </openclaw-modal-dialog>`
+      : nothing}
+    ${data.deleteConfirmationOpen
+      ? html`<openclaw-modal-dialog
+          label=${t("outcomesPage.deleteOutcome")}
+          description=${t("outcomesPage.deleteHelp")}
+          @modal-cancel=${data.onDeleteConfirmationDismiss}
+        >
+          <section class="outcome-cancel-dialog" aria-busy=${data.deleting ? "true" : "false"}>
+            <h2>${t("outcomesPage.deleteOutcome")}</h2>
+            <p>${t("outcomesPage.deleteHelp")}</p>
+            ${data.deleteError
+              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                  ${data.deleteError}
+                </p>`
+              : nothing}
+            <div class="outcome-cancel-dialog__actions">
+              <button
+                data-outcome-dismiss-delete
+                type="button"
+                ?disabled=${data.deleting}
+                @click=${() => data.onDeleteConfirmationDismiss(new Event("modal-cancel"))}
+              >
+                ${t("common.back")}
+              </button>
+              <button
+                data-outcome-confirm-delete
+                type="button"
+                ?disabled=${data.deleting}
+                @click=${data.onConfirmDelete}
+              >
+                ${data.deleting ? t("outcomesPage.deleting") : t("common.confirm")}
               </button>
             </div>
           </section>

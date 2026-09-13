@@ -36,6 +36,7 @@ export const OUTCOME_NEXT_ACTIONS = [
   "activate",
   "refresh",
   "cancel",
+  "delete",
   "review-evidence",
   "accept",
   "observe-operation",

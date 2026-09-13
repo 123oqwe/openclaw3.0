@@ -2,6 +2,8 @@ import type {
   OutcomeCreateParams,
   OutcomeCreateResult,
   OutcomeDetail,
+  OutcomeDeleteResult,
+  OutcomeExportResult,
   OutcomeAcceptParams,
   OutcomeAssuranceMutationResult,
   OutcomeListResult,
@@ -25,6 +27,21 @@ export async function listOutcomes(
 export async function getOutcome(client: GatewayBrowserClient, id: string): Promise<OutcomeDetail> {
   const result = await client.request<{ outcome: OutcomeDetail }>("outcomes.get", { id });
   return result.outcome;
+}
+
+export async function exportOutcome(
+  client: GatewayBrowserClient,
+  id: string,
+): Promise<OutcomeExportResult> {
+  return client.request<OutcomeExportResult>("outcomes.export", { id });
+}
+
+export async function deleteOutcome(
+  client: GatewayBrowserClient,
+  id: string,
+  expectedRevision: number,
+): Promise<OutcomeDeleteResult> {
+  return client.request<OutcomeDeleteResult>("outcomes.delete", { expectedRevision, id });
 }
 
 export async function createOutcome(
