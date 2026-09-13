@@ -1,11 +1,7 @@
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
 import { describe, expect, it } from "vitest";
 import { evidenceSetHash } from "./hash.js";
-import {
-  toOutcomeDetail,
-  toOutcomeSummary,
-  type AuthorizedOutcomeSource,
-} from "./read-model.js";
+import { toOutcomeDetail, toOutcomeSummary, type AuthorizedOutcomeSource } from "./read-model.js";
 import { parseOutcomeRecord, planHash, workboardProjectionFingerprint } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
 
@@ -977,5 +973,4 @@ describe("Outcome P-01 read model", () => {
     ];
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
-
 });

@@ -507,59 +507,50 @@ describe("Outcome repository host adapter", () => {
           planGeneration: initial.planGeneration,
           sourceDigests: ["proof-digest-1"],
         });
-        const verified = await repository.transact<OutcomeDecisionResult>(
-          initial.id,
-          (current) => {
-            const decision = reduceOutcomeDecision(current!, {
-              expectedRevision: current!.revision,
-              id: "decision-only",
-              requestHash: "d".repeat(64),
-              criterionId: "c-1",
-              status: "verified",
-              planHash: current!.planHash!,
-              evidenceSetHash: evidenceHash,
-              profileId: "alice",
-              serverTime: 42,
-            });
-            return decision.kind === "updated"
-              ? { result: decision, next: decision.record }
-              : { result: decision };
-          },
-        );
+        const verified = await repository.transact<OutcomeDecisionResult>(initial.id, (current) => {
+          const decision = reduceOutcomeDecision(current!, {
+            expectedRevision: current!.revision,
+            id: "decision-only",
+            requestHash: "d".repeat(64),
+            criterionId: "c-1",
+            status: "verified",
+            planHash: current!.planHash!,
+            evidenceSetHash: evidenceHash,
+            profileId: "alice",
+            serverTime: 42,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
         expect(verified).toMatchObject({ kind: "updated", record: { acceptances: [] } });
         if (verified.kind !== "updated") {
           return;
         }
         const decidedPlan = structuredClone(verified.record.decisions[0]?.decidedPlan);
-        const changed = await repository.transact<OutcomeMutationResult>(
-          initial.id,
-          (current) => {
-            const decision = reduceOutcomeContract(current!, {
-              expectedRevision: current!.revision,
-              objective: "changed after the original decision",
-              criteria: current!.criteria,
-              serverTime: 43,
-            });
-            return decision.kind === "updated"
-              ? { result: decision, next: decision.record }
-              : { result: decision };
-          },
-        );
+        const changed = await repository.transact<OutcomeMutationResult>(initial.id, (current) => {
+          const decision = reduceOutcomeContract(current!, {
+            expectedRevision: current!.revision,
+            objective: "changed after the original decision",
+            criteria: current!.criteria,
+            serverTime: 43,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
         expect(changed.kind).toBe("updated");
-        const unlinked = await repository.transact<OutcomeMutationResult>(
-          initial.id,
-          (current) => {
-            const decision = reduceOutcomeUnlink(current!, {
-              expectedRevision: current!.revision,
-              criterionId: "c-1",
-              cardId: "card-1",
-              serverTime: 44,
-            });
-            return decision.kind === "updated"
-              ? { result: decision, next: decision.record }
-              : { result: decision };
-          },
-        );
+        const unlinked = await repository.transact<OutcomeMutationResult>(initial.id, (current) => {
+          const decision = reduceOutcomeUnlink(current!, {
+            expectedRevision: current!.revision,
+            criterionId: "c-1",
+            cardId: "card-1",
+            serverTime: 44,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
         expect(unlinked.kind).toBe("updated");
 
         const child = spawnSync(
@@ -628,19 +619,16 @@ describe("Outcome repository host adapter", () => {
           }),
         };
         await repository.create(record);
-        const result = await repository.transact<OutcomeMutationResult>(
-          record.id,
-          (current) => {
-            const decision = reduceOutcomeTitle(current!, {
-              expectedRevision: 2,
-              title: "same",
-              serverTime: 42,
-            });
-            return decision.kind === "updated"
-              ? { result: decision, next: decision.record }
-              : { result: decision };
-          },
-        );
+        const result = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
+          const decision = reduceOutcomeTitle(current!, {
+            expectedRevision: 2,
+            title: "same",
+            serverTime: 42,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
         expect(result.kind).toBe("rejected");
         await expect(repository.get(record.id)).resolves.toEqual(record);
         expect(updates).toEqual([undefined]);
@@ -662,19 +650,16 @@ describe("Outcome repository host adapter", () => {
           }),
         };
         await repository.create(active);
-        const noop = await repository.transact<OutcomeMutationResult>(
-          active.id,
-          (current) => {
-            const decision = reduceOutcomeTitle(current!, {
-              expectedRevision: 2,
-              title: "same",
-              serverTime: 42,
-            });
-            return decision.kind === "updated"
-              ? { result: decision, next: decision.record }
-              : { result: decision };
-          },
-        );
+        const noop = await repository.transact<OutcomeMutationResult>(active.id, (current) => {
+          const decision = reduceOutcomeTitle(current!, {
+            expectedRevision: 2,
+            title: "same",
+            serverTime: 42,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
         expect(noop.kind).toBe("noop");
         expect(updates).toEqual([undefined, undefined]);
         await expect(repository.get(active.id)).resolves.toEqual(active);
@@ -816,5 +801,4 @@ describe("Outcome repository host adapter", () => {
       },
     );
   });
-
 });

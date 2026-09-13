@@ -286,7 +286,7 @@ describe("OutcomesPage mutations", () => {
     });
     const gateway = createGateway({ request } as unknown as GatewayBrowserClient);
     (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
-      ["outcomes.list", "outcomes.get", "outcomes.verifyCriterion"],
+      ["outcomes.list", "outcomes.get", "outcomes.refresh", "outcomes.verifyCriterion"],
       ["operator.read", "operator.write"],
     );
     const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
