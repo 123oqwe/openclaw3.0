@@ -610,6 +610,10 @@ describe("Outcome P-01 read model", () => {
 
     const detail = toOutcomeDetail(valid(input), 10);
 
+    expect(detail.acceptance).toEqual({
+      acceptanceValidity: "current",
+      lastSuccessfulAt: 10,
+    });
     expect(detail.attention).not.toContainEqual({
       code: "verification-required",
       criterionId: "c-1",

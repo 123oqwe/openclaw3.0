@@ -121,6 +121,40 @@ describe("OutcomesPage", () => {
     });
   });
 
+  it("states when a current acceptance was last successfully checked", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        const detail = outcomeDetail("outcome-a", "Outcome A");
+        return Promise.resolve({
+          outcome: {
+            ...detail,
+            acceptance: { acceptanceValidity: "current" as const, lastSuccessfulAt: 42 },
+            acceptanceValidity: "current" as const,
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = {
+      gateway: createGateway({ request } as unknown as GatewayBrowserClient),
+    } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      const acceptance = page.querySelector<HTMLElement>(".outcome-detail__acceptance");
+      expect(acceptance?.textContent).toContain("Last checked at 42");
+    });
+  });
+
   it("renders a Workboard-disabled source issue as an explicit unavailable state", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {
