@@ -42,6 +42,9 @@ export abstract class OutcomesPageState extends OpenClawLightDomElement {
   @state() protected verificationCriterionId = "";
   @state() protected verificationStatus: "verified" | "rejected" = "verified";
   @state() protected verificationNote = "";
+  @state() protected verificationReplayPending = false;
+  @state() protected acceptanceReplayPending = false;
+  @state() protected assuranceRefreshRequired = false;
   @state() protected selectedOutcomeId: string | null = null;
   @state() protected mutationInFlightOutcomeLocks: readonly OutcomeMutationLock[] = [];
   @state() protected createDialogOpen = false;

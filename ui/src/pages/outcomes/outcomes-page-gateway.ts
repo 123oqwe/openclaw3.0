@@ -25,6 +25,9 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.verificationNote = "";
     this.verificationRequest = null;
     this.acceptanceRequest = null;
+    this.verificationReplayPending = false;
+    this.acceptanceReplayPending = false;
+    this.assuranceRefreshRequired = false;
   }
 
   protected readonly handleVisibilityChange = () => {
@@ -367,6 +370,16 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     );
   }
 
+  protected canReplayOutcomeAssurance(
+    method: "outcomes.verifyCriterion" | "outcomes.accept",
+  ): boolean {
+    return Boolean(
+      this.detail &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, method, "operator.write"),
+    );
+  }
+
   protected canCreateOutcome(): boolean {
     return Boolean(
       this.gatewayIdentity?.canRead &&
@@ -419,6 +432,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
 
   protected replaceOutcome(detail: OutcomeDetail, requestStartedAt = performance.now()) {
     this.detail = detail;
+    this.assuranceRefreshRequired = false;
     this.setDetailFreshness(detail, requestStartedAt);
     this.outcomes = replaceOutcomeSummary(this.outcomes, detail);
   }

@@ -16,13 +16,36 @@ import {
 import { OutcomesPageGateway } from "./outcomes-page-gateway.ts";
 import { replaceOutcomeSummary } from "./outcomes-page-model.ts";
 
+const DETERMINISTIC_ASSURANCE_REJECTION_CODES = new Set([
+  "OUTCOME_CAPACITY_EXCEEDED",
+  "OUTCOME_CLOSURE_INCOMPLETE",
+  "OUTCOME_INVALID_REQUEST",
+  "OUTCOME_INVALID_STATE",
+  "OUTCOME_NOT_FOUND",
+  "OUTCOME_OPERATION_CONFLICT",
+  "OUTCOME_REVISION_CONFLICT",
+]);
+
+function isDeterministicAssuranceRejection(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string" &&
+    DETERMINISTIC_ASSURANCE_REJECTION_CODES.has(error.code)
+  );
+}
+
 export abstract class OutcomesPageMutations extends OutcomesPageGateway {
   protected openVerificationDialog() {
     const detail = this.detail;
     if (
       !detail ||
       this.verifying ||
-      !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion")
+      (!this.verificationReplayPending &&
+        !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion")) ||
+      (this.verificationReplayPending &&
+        !this.canReplayOutcomeAssurance("outcomes.verifyCriterion"))
     ) {
       return;
     }
@@ -53,19 +76,19 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
   }
 
   protected updateVerificationCriterion(id: string) {
-    if (!this.verifying) {
+    if (!this.verifying && !this.verificationReplayPending) {
       this.verificationCriterionId = id;
     }
   }
 
   protected updateVerificationStatus(status: "verified" | "rejected") {
-    if (!this.verifying) {
+    if (!this.verifying && !this.verificationReplayPending) {
       this.verificationStatus = status;
     }
   }
 
   protected updateVerificationNote(note: string) {
-    if (!this.verifying) {
+    if (!this.verifying && !this.verificationReplayPending) {
       this.verificationNote = note;
     }
   }
@@ -82,6 +105,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
     const note = this.verificationNote.trim();
     if (
       this.verifying ||
+      (pendingRequest === null && this.assuranceRefreshRequired) ||
       !detail ||
       !id ||
       detail.id !== id ||
@@ -92,7 +116,9 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
-      !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion") ||
+      (pendingRequest === null
+        ? !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion")
+        : !this.canReplayOutcomeAssurance("outcomes.verifyCriterion")) ||
       this.outcomeMutationIsInFlight(id)
     ) {
       return;
@@ -111,6 +137,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         ...(note ? { note } : {}),
       } satisfies OutcomeVerifyCriterionParams);
     this.verificationRequest = request;
+    this.verificationReplayPending = false;
     const sequence = ++this.assuranceRequestSequence;
     const expectedRevision = request.expectedRevision;
     this.verificationError = null;
@@ -132,6 +159,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         this.replaceOutcome(outcome, requestStartedAt);
         this.verificationDialogOpen = false;
         this.verificationRequest = null;
+        this.verificationReplayPending = false;
       }
     } catch (error) {
       if (
@@ -140,6 +168,14 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         this.gateway.isCurrent(scope)
       ) {
         mutationResultWasCurrent = true;
+        const deterministic = isDeterministicAssuranceRejection(error);
+        if (deterministic) {
+          this.verificationRequest = null;
+          this.verificationReplayPending = false;
+          this.assuranceRefreshRequired = true;
+        } else {
+          this.verificationReplayPending = true;
+        }
         this.verificationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {
@@ -167,11 +203,14 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       !detail ||
       !id ||
       detail.id !== id ||
+      (this.acceptanceRequest === null && this.assuranceRefreshRequired) ||
       (this.acceptanceRequest === null && (!detail.planHash || !detail.closureHash)) ||
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
-      !this.canOutcomeAction("accept", "outcomes.accept") ||
+      (this.acceptanceRequest === null
+        ? !this.canOutcomeAction("accept", "outcomes.accept")
+        : !this.canReplayOutcomeAssurance("outcomes.accept")) ||
       this.outcomeMutationIsInFlight(id)
     ) {
       return;
@@ -187,6 +226,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         closureHash: detail.closureHash!,
       } satisfies OutcomeAcceptParams);
     this.acceptanceRequest = request;
+    this.acceptanceReplayPending = false;
     const sequence = ++this.assuranceRequestSequence;
     const expectedRevision = request.expectedRevision;
     this.mutationError = null;
@@ -206,6 +246,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         this.detailRequestSequence += 1;
         this.replaceOutcome(outcome, requestStartedAt);
         this.acceptanceRequest = null;
+        this.acceptanceReplayPending = false;
       }
     } catch (error) {
       if (
@@ -214,6 +255,14 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         this.gateway.isCurrent(scope)
       ) {
         mutationResultWasCurrent = true;
+        const deterministic = isDeterministicAssuranceRejection(error);
+        if (deterministic) {
+          this.acceptanceRequest = null;
+          this.acceptanceReplayPending = false;
+          this.assuranceRefreshRequired = true;
+        } else {
+          this.acceptanceReplayPending = true;
+        }
         this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }
     } finally {

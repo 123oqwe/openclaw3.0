@@ -91,8 +91,19 @@ export function deriveOutcomeAttention(
     if (sourceDigests.length === 0) {
       addAttention("evidence-missing", criterion.id);
       addAction("refresh");
-    } else if (record.phase === "active" || record.phase === "accepted") {
+      if (record.phase === "active" || record.phase === "accepted") {
+        addAction("review-evidence");
+      }
+      continue;
+    }
+    if (record.phase !== "active" && record.phase !== "accepted") {
+      continue;
+    }
+    const currentDecision = currentOutcomeDecision(record, criterion, projections, observedAt)?.decision;
+    if (currentDecision === undefined) {
       addAttention("verification-required", criterion.id);
+      addAction("review-evidence");
+    } else if (currentDecision.status === "rejected") {
       addAction("review-evidence");
     }
   }

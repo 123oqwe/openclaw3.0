@@ -78,6 +78,10 @@ describe("OutcomesPage mutations", () => {
     await vi.waitFor(() => expect(verificationParams).toHaveLength(1));
     rejectVerification?.(new Error("response lost"));
     await vi.waitFor(() => expect(page.textContent).toContain("Request failed"));
+    expect(
+      page.querySelector<HTMLSelectElement>('[data-outcome-verification-form] select[name="status"]')
+        ?.disabled,
+    ).toBe(true);
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(2));
     expect(verificationParams[1]).toEqual(verificationParams[0]);

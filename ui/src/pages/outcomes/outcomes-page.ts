@@ -106,8 +106,12 @@ class OutcomesPage extends OutcomesPageMutations {
         canLink: this.canLinkOutcome(),
         canRefresh: this.canOutcomeAction("refresh", "outcomes.refresh"),
         canUnlink: this.canOutcomeAction("unlink-work", "outcomes.unlinkWorkboard"),
-        canVerify: this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion"),
-        canAccept: this.canOutcomeAction("accept", "outcomes.accept"),
+        canVerify:
+          this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion") ||
+          (this.verificationReplayPending && this.canReplayOutcomeAssurance("outcomes.verifyCriterion")),
+        canAccept:
+          this.canOutcomeAction("accept", "outcomes.accept") ||
+          (this.acceptanceReplayPending && this.canReplayOutcomeAssurance("outcomes.accept")),
         cancelConfirmationOpen: this.cancelConfirmationOpen,
         cancelError: this.cancelError,
         cancelling: this.cancelling,
@@ -159,6 +163,8 @@ class OutcomesPage extends OutcomesPageMutations {
         verificationDialogOpen: this.verificationDialogOpen,
         verificationError: this.verificationError,
         verificationNote: this.verificationNote,
+        verificationReplayPending: this.verificationReplayPending,
+        acceptanceReplayPending: this.acceptanceReplayPending,
         verificationStatus: this.verificationStatus,
         verifying: this.verifying,
       })}

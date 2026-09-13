@@ -88,6 +88,8 @@ export type OutcomeDetailViewData = {
   verificationDialogOpen: boolean;
   verificationError: string | null;
   verificationNote: string;
+  verificationReplayPending: boolean;
+  acceptanceReplayPending: boolean;
   verificationStatus: "verified" | "rejected";
   verifying: boolean;
 };
@@ -344,7 +346,8 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
             : nothing}
         </section>`
       : nothing}
-    ${data.canVerify && data.detail.nextActions.includes("review-evidence")
+    ${data.canVerify &&
+    (data.detail.nextActions.includes("review-evidence") || data.verificationReplayPending)
       ? html`<section class="outcome-detail__section outcome-detail__actions">
           <button
             data-outcome-action="review-evidence"
@@ -356,7 +359,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           </button>
         </section>`
       : nothing}
-    ${data.canAccept && data.detail.nextActions.includes("accept")
+    ${data.canAccept && (data.detail.nextActions.includes("accept") || data.acceptanceReplayPending)
       ? html`<section class="outcome-detail__section outcome-detail__actions" aria-live="polite">
           <button
             data-outcome-action="accept"
@@ -603,7 +606,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               <select
                 name="criterion"
                 required
-                ?disabled=${data.verifying}
+                ?disabled=${data.verifying || data.verificationReplayPending}
                 .value=${data.verificationCriterionId}
                 @change=${(event: Event) =>
                   data.onVerificationCriterionChange(formControlValue(event))}
@@ -618,7 +621,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               <select
                 name="status"
                 required
-                ?disabled=${data.verifying}
+                ?disabled=${data.verifying || data.verificationReplayPending}
                 .value=${data.verificationStatus}
                 @change=${(event: Event) =>
                   data.onVerificationStatusChange(
@@ -635,7 +638,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                   <textarea
                     name="note"
                     required
-                    ?disabled=${data.verifying}
+                    ?disabled=${data.verifying || data.verificationReplayPending}
                     .value=${data.verificationNote}
                     @input=${(event: InputEvent) =>
                       data.onVerificationNoteChange(formControlValue(event))}
