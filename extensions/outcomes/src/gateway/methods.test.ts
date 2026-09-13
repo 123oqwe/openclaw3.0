@@ -452,13 +452,15 @@ describe("P-02 Outcome handlers", () => {
     const outcome = (
       response[1] as {
         outcome: {
+          phase: "draft";
           criteria: Array<{ evidenceSetHash: string | null }>;
           evidence: Array<{ sourceDigest: string }>;
         };
       }
     ).outcome;
+    expect(outcome.phase).toBe("draft");
     expect(outcome.evidence[0]!.sourceDigest).not.toBe(persistedDigest);
-    expect(outcome.criteria[0]!.evidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(outcome.criteria[0]!.evidenceSetHash).toBeNull();
     expect(harness.gatewayRequest).toHaveBeenCalledOnce();
     expect(harness.writes()).toBe(writes);
     expect(harness.records.get(id)!.evidence).toHaveLength(1);
