@@ -387,6 +387,11 @@ suite.define(() => {
         }
         await page.goto(handoffUrl);
         await waitForControlUiGatewayReady(page);
+        await expect
+          .poll(() =>
+            gatewayHelloMethods.some((methods) => methods.includes("workboard.cards.list")),
+          )
+          .toBe(true);
         expect(
           await page.evaluate(
             (secret) => ({
@@ -533,6 +538,7 @@ suite.define(() => {
           path: path.join(suite.artifactDir, "outcomes-blocked-linked-work.png"),
         });
 
+        const gatewayHelloCountBeforeWorkboardDisabled = gatewayHelloMethods.length;
         if (!instance) {
           throw new Error("Outcome Gateway fixture was not started");
         }
@@ -592,6 +598,13 @@ suite.define(() => {
         await waitForControlUiGatewayReady(page);
         await page.reload();
         await waitForControlUiGatewayReady(page);
+        await expect
+          .poll(() =>
+            gatewayHelloMethods
+              .slice(gatewayHelloCountBeforeWorkboardDisabled)
+              .some((methods) => methods.includes("workboard.cards.list")),
+          )
+          .toBe(true);
         await page
           .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
           .waitFor({ state: "visible" });
