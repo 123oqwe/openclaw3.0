@@ -560,6 +560,63 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("rejects an acceptance bound to evidence that changed after verification without writing", async () => {
+    const cards = [
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 2,
+        metadata: {
+          automation: { boardId: "board-a" },
+          proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
+          artifacts: [],
+        },
+      },
+    ];
+    const harness = createHarness({ workboardCards: cards });
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const refreshedOutcome = (
+      refreshed[1] as {
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
+      }
+    ).outcome;
+    const verified = await harness.call("outcomes.verifyCriterion", {
+      id,
+      expectedRevision: refreshedOutcome.revision,
+      decisionId: "123e4567-e89b-42d3-a456-426614174049",
+      criterionId,
+      status: "verified",
+      planHash: refreshedOutcome.planHash,
+      evidenceSetHash: refreshedOutcome.criteria[0]!.evidenceSetHash,
+    });
+    expect(verified).toMatchObject([true, { outcome: { revision: refreshedOutcome.revision + 1 } }]);
+    const verifiedOutcome = (
+      verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }
+    ).outcome;
+    cards[0]!.metadata.proof[0]!.label = "Evidence changed after the human decision";
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+
+    expect(
+      await harness.call("outcomes.accept", {
+        id,
+        expectedRevision: verifiedOutcome.revision,
+        acceptanceId: "123e4567-e89b-42d3-a456-426614174050",
+        planHash: verifiedOutcome.planHash,
+        closureHash: verifiedOutcome.closureHash,
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("keeps a competing owner mutation when an assurance write loses its CAS", async () => {
     const cards = [
       {
