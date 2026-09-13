@@ -86,6 +86,8 @@ const ALLOWED_PATHS = new Set([
   "ui/src/pages/outcomes/outcomes-page-model.ts",
   "ui/src/pages/outcomes/outcomes-page-mutations.test.ts",
   "ui/src/pages/outcomes/outcomes-page-mutations.ts",
+  "ui/src/pages/outcomes/outcomes-page-assurance-mutations.test.ts",
+  "ui/src/pages/outcomes/outcomes-page-assurance-mutations.ts",
   "ui/src/pages/outcomes/outcomes-page-state.ts",
   "ui/src/pages/outcomes/outcomes-page.test-support.ts",
   "ui/src/pages/outcomes/outcomes-page.test.ts",

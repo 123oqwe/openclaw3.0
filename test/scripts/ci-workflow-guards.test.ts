@@ -16406,6 +16406,8 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
     "ui/src/pages/outcomes/outcomes-page-model.ts",
     "ui/src/pages/outcomes/outcomes-page-mutations.test.ts",
     "ui/src/pages/outcomes/outcomes-page-mutations.ts",
+    "ui/src/pages/outcomes/outcomes-page-assurance-mutations.test.ts",
+    "ui/src/pages/outcomes/outcomes-page-assurance-mutations.ts",
     "ui/src/pages/outcomes/outcomes-page-state.ts",
     "ui/src/pages/outcomes/outcomes-page.test-support.ts",
     "ui/src/pages/outcomes/outcomes-view-support.ts",
