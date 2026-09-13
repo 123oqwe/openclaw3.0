@@ -16394,6 +16394,8 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs admission");
   expect(bodies).toContain("pnpm install --frozen-lockfile --ignore-scripts");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
+  expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.test.ts");
+  expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.ts");
   expect(bodies).toContain(
     "git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'",
   );

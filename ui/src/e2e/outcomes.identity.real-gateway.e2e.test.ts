@@ -9,6 +9,7 @@ import { expect, it } from "vitest";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { HelloOk } from "../../../packages/gateway-protocol/src/index.js";
 import { PROTOCOL_VERSION } from "../../../packages/gateway-protocol/src/index.js";
+import { redactSensitiveText } from "../../../src/logging/redact.js";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
@@ -110,6 +111,15 @@ function helloSelfUserId(payload: JsonRecord, instanceId: string | null): string
     }
   }
   return null;
+}
+
+function proxyAdmissionErrorDetail(frame: JsonRecord): string {
+  const error = asOptionalRecord(frame.error);
+  const details = [
+    stringValue(error?.code),
+    stringValue(error?.message),
+  ].flatMap((value) => (value ? [redactSensitiveText(value, { mode: "tools" })] : []));
+  return details.length > 0 ? ` (${details.join("; ")})` : "";
 }
 
 function startProxyConnection(
@@ -358,7 +368,9 @@ async function proxyGatewayCall(
       }
       if (frame.id === connectId) {
         if (frame.ok !== true || !asOptionalRecord(frame.payload)) {
-          finish({ error: new Error("trusted-proxy probe was not admitted") });
+          finish({
+            error: new Error(`trusted-proxy probe was not admitted${proxyAdmissionErrorDetail(frame)}`),
+          });
           return;
         }
         hello = frame.payload as unknown as HelloOk;

@@ -307,7 +307,11 @@ suite.define(() => {
         await page.clock.install();
         const refreshRequestIds = new Set<string>();
         const refreshReplies = new Map<string, boolean>();
+        let gatewayWebSocketCloseCount = 0;
         page.on("websocket", (socket) => {
+          socket.on("close", () => {
+            gatewayWebSocketCloseCount += 1;
+          });
           socket.on("framesent", ({ payload }) => {
             const frame = gatewayFrame(payload);
             if (
@@ -429,6 +433,17 @@ suite.define(() => {
         }
 
         const freshnessClockBeforeExpiry = await page.evaluate(() => performance.now());
+        const gatewayConnectionRevisionBeforeExpiry = await page.evaluate(() => {
+          const app = document.querySelector("openclaw-app") as
+            | (HTMLElement & {
+                runtime?: { context?: { gateway?: { connectionRevision?: number } } };
+              })
+            | null;
+          return app?.runtime?.context?.gateway?.connectionRevision ?? null;
+        });
+        // Keep Gateway's wall-clock silence checks at the current time while
+        // still advancing the page's monotonic freshness timer.
+        await page.clock.setFixedTime(await page.evaluate(() => Date.now()));
         await page.clock.fastForward(twentyFourHoursMs + 1);
         // Playwright advances due timers during fastForward, then a short run
         // lets the reactive render scheduled by the freshness callback settle.
@@ -437,6 +452,19 @@ suite.define(() => {
         expect(freshnessClockAfterExpiry - freshnessClockBeforeExpiry).toBeGreaterThanOrEqual(
           twentyFourHoursMs,
         );
+        expect(gatewayWebSocketCloseCount).toBe(0);
+        await expect
+          .poll(() =>
+            page.evaluate(() => {
+              const app = document.querySelector("openclaw-app") as
+                | (HTMLElement & {
+                    runtime?: { context?: { gateway?: { connectionRevision?: number } } };
+                  })
+                | null;
+              return app?.runtime?.context?.gateway?.connectionRevision ?? null;
+            }),
+          )
+          .toBe(gatewayConnectionRevisionBeforeExpiry);
         await detail.locator('[data-outcome-readiness="stale"]').waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,

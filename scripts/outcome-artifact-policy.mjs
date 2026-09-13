@@ -61,6 +61,8 @@ const ALLOWED_PATHS = new Set([
   "src/plugins/contracts/plugin-sdk-runtime-api-guardrails.test.ts",
   "test/scripts/ci-workflow-guards.test.ts",
   "test/scripts/outcome-artifact-policy.test.ts",
+  "ui/src/test-helpers/control-ui-e2e.test.ts",
+  "ui/src/test-helpers/control-ui-e2e.ts",
   "ui/src/e2e/browser-bootstrap.e2e.test.ts",
   "ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts",
   "ui/src/e2e/outcomes.real-gateway.e2e.test.ts",

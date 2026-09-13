@@ -59,6 +59,8 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
         "extensions/outcomes/src/store/outcome-repository.ts",
         "pnpm-lock.yaml",
+        "ui/src/test-helpers/control-ui-e2e.test.ts",
+        "ui/src/test-helpers/control-ui-e2e.ts",
         "ui/src/e2e/browser-bootstrap.e2e.test.ts",
         "ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts",
         "ui/src/e2e/outcomes.real-gateway.e2e.test.ts",
