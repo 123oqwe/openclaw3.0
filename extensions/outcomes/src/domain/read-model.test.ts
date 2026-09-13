@@ -561,6 +561,48 @@ describe("Outcome P-01 read model", () => {
     expect(detail.nextActions).toContain("review-evidence");
   });
 
+  it("returns an accepted outcome to review when current evidence is rejected", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const acceptedClosure = toOutcomeDetail(input, 10).closureHash;
+    if (acceptedClosure === null || input.planHash === null) {
+      throw new Error("fixture closure must be current");
+    }
+    const verified = first(input.decisions);
+    input.phase = "accepted";
+    input.acceptances = [
+      {
+        id: "acceptance-current",
+        requestHash: "a".repeat(64),
+        acceptedRevision: input.revision,
+        profileId: "manager-1",
+        acceptedAt: 10,
+        planGeneration: input.planGeneration,
+        planHash: input.planHash,
+        closureHash: acceptedClosure,
+        acceptedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: input.contractRevision,
+          planGeneration: input.planGeneration,
+          criteria: input.criteria,
+        },
+      },
+    ];
+    input.decisions = [{ ...verified, id: "decision-current-rejected", status: "rejected" }];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.acceptanceValidity).toBe("needs-review");
+    expect(detail.attention).toEqual(
+      expect.arrayContaining([
+        { code: "acceptance-needs-review" },
+        { code: "rejected" },
+        { code: "verification-required", criterionId: "c-1" },
+      ]),
+    );
+    expect(detail.nextActions).toContain("review-evidence");
+  });
+
   it("includes a human decision note in the public detail history", () => {
     const input = withCurrentVerifiedEvidence(record());
     first(input.decisions).note = "private reviewer rationale";
