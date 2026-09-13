@@ -4,18 +4,18 @@ import { createHarness, createLinkedOutcome, criterionId } from "./methods.test-
 describe("P-05 Outcome assurance Gateway handlers", () => {
   it("records a verified criterion and then accepts the exact current closure", async () => {
     const cards = [
-        {
-          id: "card-a",
-          status: "done",
-          createdAt: 1,
-          updatedAt: 2,
-          metadata: {
-            automation: { boardId: "board-a" },
-            proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
-            artifacts: [],
-          },
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 2,
+        metadata: {
+          automation: { boardId: "board-a" },
+          proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
+          artifacts: [],
         },
-      ];
+      },
+    ];
     const harness = createHarness({ workboardCards: cards });
     const id = await createLinkedOutcome(harness);
     await harness.call("outcomes.activate", { id, expectedRevision: 2 });

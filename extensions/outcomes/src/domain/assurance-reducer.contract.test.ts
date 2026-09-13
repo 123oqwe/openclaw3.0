@@ -3,11 +3,7 @@ import { deriveOutcomeClosure } from "../assurance/closure.js";
 import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "./assurance-reducer.js";
 import { planHash } from "./canonical-plan.js";
 import { createRequestHash, evidenceSetHash } from "./hash.js";
-import {
-  reduceOutcomeContract,
-  reduceOutcomeTitle,
-  reduceOutcomeUnlink,
-} from "./reducer.js";
+import { reduceOutcomeContract, reduceOutcomeTitle, reduceOutcomeUnlink } from "./reducer.js";
 import { parseOutcomeRecord } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
 
@@ -51,27 +47,31 @@ function assuredActiveRecord(id = "assured-1"): OutcomeRecord {
       criteria,
     }),
     criteria,
-    projections: [{
-      ref,
-      availability: "available",
-      currentBoardId: "board-current",
-      status: "done",
-      observedAt: 10,
-      lastSuccessfulAt: 10,
-      sourceUpdatedAt: 10,
-      proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
-      artifacts: [],
-    }],
-    evidence: [{
-      id: "evidence-1",
-      criterionId: "c-1",
-      planGeneration: 1,
-      workRef: ref,
-      kind: "workboard-proof",
-      sourceId: "proof-1",
-      sourceDigest: "proof-digest-1",
-      observedAt: 10,
-    }],
+    projections: [
+      {
+        ref,
+        availability: "available",
+        currentBoardId: "board-current",
+        status: "done",
+        observedAt: 10,
+        lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
+        proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+        artifacts: [],
+      },
+    ],
+    evidence: [
+      {
+        id: "evidence-1",
+        criterionId: "c-1",
+        planGeneration: 1,
+        workRef: ref,
+        kind: "workboard-proof",
+        sourceId: "proof-1",
+        sourceDigest: "proof-digest-1",
+        observedAt: 10,
+      },
+    ],
     decisions: [],
     operations: [],
     acceptances: [],

@@ -821,7 +821,6 @@ describe("Outcome repository atomic contract", () => {
     await expect(repository.get(record.id)).resolves.toMatchObject({ title: "new", revision: 3 });
   });
 
-
   it("rejects title updates for cancelled outcomes", () => {
     const record = {
       ...validRecord(),
