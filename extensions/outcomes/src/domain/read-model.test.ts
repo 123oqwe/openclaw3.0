@@ -376,6 +376,37 @@ describe("Outcome P-01 read model", () => {
     },
   );
 
+  it("does not offer contract mutation actions for an uncertain operation with a missing link", () => {
+    const input = record();
+    input.operations = [
+      {
+        id: "op-missing-link",
+        kind: "workboard-card-start",
+        criterionId: "c-1",
+        planGeneration: 1,
+        createdRevision: 2,
+        requestHash: "b".repeat(64),
+        state: "unknown",
+        target: {
+          owner: "workboard",
+          cardId: "card",
+          cardCreatedAt: 1,
+          boardIdAtLink: "board",
+        },
+      },
+    ];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.attention).toEqual(
+      expect.arrayContaining([
+        { code: "contract-incomplete", criterionId: "c-1" },
+        { code: "unknown-operation" },
+      ]),
+    );
+    expect(detail.nextActions).not.toEqual(expect.arrayContaining(["edit-contract", "link-work"]));
+  });
+
   it("keeps unavailable and stale ahead of blocked", () => {
     const input = record();
     input.criteria = [

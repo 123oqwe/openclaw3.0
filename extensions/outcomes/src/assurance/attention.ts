@@ -52,8 +52,6 @@ export function deriveOutcomeAttention(
     const missingRequiredLink = criterion.required && criterion.workRefs.length === 0;
     if (record.phase === "draft" || missingRequiredLink) {
       addAttention("contract-incomplete", criterion.id);
-      addAction("edit-contract");
-      addAction("link-work");
     }
     if (criterion.workRefs.length > 0) {
       hasLinkedWork = true;
