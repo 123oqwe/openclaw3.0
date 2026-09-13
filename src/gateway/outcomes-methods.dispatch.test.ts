@@ -420,6 +420,7 @@ describe("P-02 Outcome Gateway admission", () => {
       ["outcomes.create", "operator.write"],
       ["outcomes.get", "operator.read"],
       ["outcomes.list", "operator.read"],
+      ["outcomes.export", "operator.read"],
       ["outcomes.update", "operator.write"],
       ["outcomes.linkWorkboard", "operator.write"],
       ["outcomes.unlinkWorkboard", "operator.write"],
