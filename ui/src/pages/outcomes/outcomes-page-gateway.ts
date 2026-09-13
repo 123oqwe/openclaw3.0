@@ -519,5 +519,4 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
       }
     }
   }
-
 }

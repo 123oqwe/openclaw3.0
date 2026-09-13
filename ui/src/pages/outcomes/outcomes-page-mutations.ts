@@ -11,8 +11,8 @@ import {
   updateOutcome,
   unlinkOutcomeWorkboard,
 } from "./client.ts";
-import { replaceOutcomeSummary } from "./outcomes-page-model.ts";
 import { OutcomesPageGateway } from "./outcomes-page-gateway.ts";
+import { replaceOutcomeSummary } from "./outcomes-page-model.ts";
 
 export abstract class OutcomesPageMutations extends OutcomesPageGateway {
   protected openCreateDialog() {
@@ -651,5 +651,4 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       }
     }
   }
-
 }

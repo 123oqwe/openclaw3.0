@@ -69,7 +69,11 @@ class OutcomesPage extends OutcomesPageMutations {
         onRemoveCriterion: (index) => {
           if (!this.creating && !this.createRequest && this.createCriteria.length > 1) {
             this.createCriteria = removeCreateDraftCriterion(
-              { criteria: this.createCriteria, objective: this.createObjective, title: this.createTitle },
+              {
+                criteria: this.createCriteria,
+                objective: this.createObjective,
+                title: this.createTitle,
+              },
               index,
             ).criteria;
           }
@@ -77,7 +81,11 @@ class OutcomesPage extends OutcomesPageMutations {
         onCriterionInput: (index, value) => {
           if (!this.creating && !this.createRequest && this.createCriteria[index] !== value) {
             this.createCriteria = updateCreateDraftCriterion(
-              { criteria: this.createCriteria, objective: this.createObjective, title: this.createTitle },
+              {
+                criteria: this.createCriteria,
+                objective: this.createObjective,
+                title: this.createTitle,
+              },
               index,
               value,
             ).criteria;

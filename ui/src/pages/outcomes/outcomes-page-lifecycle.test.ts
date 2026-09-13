@@ -649,5 +649,4 @@ describe("OutcomesPage lifecycle", () => {
     expect(page.querySelector('[data-outcome-action="activate"]')).toBeNull();
     expect(page.querySelector('[data-outcome-action="refresh"]')).not.toBeNull();
   });
-
 });

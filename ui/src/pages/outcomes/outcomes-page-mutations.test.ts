@@ -558,5 +558,4 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector("[data-outcome-edit-form]")).toBeNull();
     });
   });
-
 });
