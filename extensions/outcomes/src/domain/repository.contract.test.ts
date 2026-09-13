@@ -955,6 +955,7 @@ describe("Outcome repository atomic contract", () => {
       throw new Error("fixture title update did not commit");
     }
     expect(renamed.record.phase).toBe("accepted");
+    expect(deriveOutcomeClosure(renamed.record, renamed.record.projections, 44)).toBe(closureHash);
     expect(first(renamed.record.decisions).decidedPlan).toEqual(decisionSnapshot);
     expect(first(renamed.record.acceptances).acceptedPlan).toEqual(acceptanceSnapshot);
     const changed = reduceOutcomeContract(renamed.record, {
