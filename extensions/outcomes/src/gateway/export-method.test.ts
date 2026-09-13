@@ -79,6 +79,24 @@ describe("P-06 Outcome export Gateway handler", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("maps an owner timeout without leaking a partial export", async () => {
+    const harness = createHarness();
+    const id = await createLinkedOutcome(harness, outcomeIds[0]!);
+    const record = structuredClone(harness.records.get(id)!);
+    const writes = harness.writes();
+    harness.gatewayRequest.mockRejectedValue(Object.assign(new Error("owner timeout"), { code: "TIMEOUT" }));
+    harness.gatewayRequest.mockClear();
+
+    expect(await harness.call("outcomes.export", { id })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_OWNER_TIMEOUT", message: "Outcome request could not be completed" },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
+    expect(harness.records.get(id)).toEqual(record);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("keeps an optional no-proof accepted snapshot subject to current owner authorization", async () => {
     const harness = createHarness({
       workboardCards: [
