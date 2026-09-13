@@ -552,12 +552,10 @@ suite.define(() => {
         }
         await expect.poll(() => refreshReplies.has(disabledRefreshRequestId)).toBe(true);
         const disabledRefresh = refreshReplies.get(disabledRefreshRequestId);
-        expect(disabledRefresh).toMatchObject({
-          ok: true,
-          refreshReason: "workboard-disabled",
-          refreshStatus: "unavailable",
-          revision: expect.any(Number),
-        });
+        expect(disabledRefresh?.ok).toBe(true);
+        expect(disabledRefresh?.refreshReason).toBe("workboard-disabled");
+        expect(disabledRefresh?.refreshStatus).toBe("unavailable");
+        expect(disabledRefresh?.revision).toEqual(expect.any(Number));
         expect(disabledRefresh?.sourceIssueReasons).toContain("workboard-disabled");
         await page.getByText("Workboard disabled", { exact: true }).waitFor({ state: "visible" });
         await page.screenshot({
