@@ -1,10 +1,11 @@
 import { metrics } from "@opentelemetry/api";
 
-export type OutcomeTelemetryResult = "success" | "failure";
+export type OutcomeTelemetryMethod = "create" | "delete" | "export";
+export type OutcomeTelemetryResult = "deny" | "failure" | "success";
 
 /** Emits bounded Outcome Gateway telemetry without affecting a request result. */
 export function recordOutcomeTelemetry(
-  method: string,
+  method: OutcomeTelemetryMethod,
   result: OutcomeTelemetryResult,
   startedAt: number,
 ): void {

@@ -253,6 +253,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.export",
     async ({ client, params: rawParams, respond }) => {
+      const telemetryStartedAt = Date.now();
       const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "NOT_FOUND",
@@ -266,11 +267,13 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
       if (!id) {
+        recordOutcomeTelemetry("export", "deny", telemetryStartedAt);
         return fail(respond, "NOT_FOUND");
       }
       try {
         const record = await repository.getOwned(owner, id);
         if (!record) {
+          recordOutcomeTelemetry("export", "deny", telemetryStartedAt);
           return fail(respond, "NOT_FOUND");
         }
         const refs = outcomeExportWorkRefs(record);
@@ -279,21 +282,26 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
           try {
             cards = await readAuthorizedWorkboardCards(api);
           } catch (error) {
+            recordOutcomeTelemetry("export", "failure", telemetryStartedAt);
             return respond(false, undefined, outcomeError(outcomeOwnerError(error)));
           }
           for (const ref of refs) {
             const matches = cards.filter((card) => card.id === ref.cardId);
             if (matches.length === 0) {
+              recordOutcomeTelemetry("export", "deny", telemetryStartedAt);
               return fail(respond, "OWNER_UNAVAILABLE");
             }
             if (matches.length !== 1 || matches[0]!.createdAt !== ref.cardCreatedAt) {
+              recordOutcomeTelemetry("export", "deny", telemetryStartedAt);
               return fail(respond, "IDENTITY_CONFLICT");
             }
           }
         }
         respond(true, encodeOutcomeExport(record, Date.now()));
+        recordOutcomeTelemetry("export", "success", telemetryStartedAt);
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
+        recordOutcomeTelemetry("export", "failure", telemetryStartedAt);
       }
     },
     { scope: "operator.read" },
@@ -591,6 +599,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.delete",
     async ({ client, params: rawParams, respond }) => {
+      const telemetryStartedAt = Date.now();
       const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "NOT_FOUND",
@@ -604,6 +613,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
       if (!id) {
+        recordOutcomeTelemetry("delete", "deny", telemetryStartedAt);
         return fail(respond, "INVALID_REQUEST");
       }
       let rejection: "INVALID_STATE" | "NOT_QUIESCENT" | "REVISION_CONFLICT" | undefined;
@@ -631,11 +641,14 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
           return true;
         });
         if (!deleted) {
+          recordOutcomeTelemetry("delete", "deny", telemetryStartedAt);
           return fail(respond, rejection ?? "NOT_FOUND");
         }
         respond(true, { deleted: true, id });
+        recordOutcomeTelemetry("delete", "success", telemetryStartedAt);
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
+        recordOutcomeTelemetry("delete", "failure", telemetryStartedAt);
       }
     },
     { scope: "operator.admin" },
