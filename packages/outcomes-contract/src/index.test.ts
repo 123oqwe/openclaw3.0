@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import * as contract from "./index.js";
 import {
   OUTCOME_DEFAULT_LIST_LIMIT,
@@ -21,10 +21,12 @@ type PublicDecisionForbiddenKeys = AssertNever<
 >;
 void (undefined as unknown as PublicForbiddenKeys);
 void (undefined as unknown as PublicDecisionForbiddenKeys);
-const publicDecisionNote: OutcomeDecisionView["note"] = undefined;
-void publicDecisionNote;
 
 describe("outcomes public contract", () => {
+  it("keeps the public decision note optional", () => {
+    expectTypeOf<OutcomeDecisionView["note"]>().toEqualTypeOf<string | undefined>();
+  });
+
   it("exports only the P-01 view surface and bounded list constants", () => {
     expect(OUTCOME_PHASES).toEqual(["draft", "active", "accepted", "cancelled"]);
     expect(OUTCOME_DEFAULT_LIST_LIMIT).toBe(25);
