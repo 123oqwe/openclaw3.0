@@ -558,7 +558,16 @@ describe("Outcome P-01 read model", () => {
       phase: "draft" as const,
       planGeneration: 0,
       planHash: null,
-      evidence: active.evidence.map((evidence) => ({ ...evidence, planGeneration: 0 })),
+      evidence: active.evidence.map((evidence) => ({
+        id: evidence.id,
+        criterionId: evidence.criterionId,
+        planGeneration: 0,
+        workRef: evidence.workRef,
+        kind: evidence.kind,
+        sourceId: evidence.sourceId,
+        sourceDigest: evidence.sourceDigest,
+        observedAt: evidence.observedAt,
+      })),
       decisions: [],
     };
     const parsed = parseOutcomeRecord(input);

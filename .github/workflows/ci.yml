@@ -2038,6 +2038,7 @@ jobs:
             extensions/outcomes/src/gateway/health.ts \
             extensions/outcomes/src/gateway/input-normalizers.ts \
             extensions/outcomes/src/gateway/method-helpers.ts \
+            extensions/outcomes/src/gateway/assurance-methods.ts \
             src/gateway/outcomes-methods.dispatch.test.ts \
             src/gateway/outcomes-workboard.public-api.integration.test.ts \
             extensions/outcomes/src/gateway/workboard.integration.test.ts \
@@ -2062,6 +2063,7 @@ jobs:
             extensions/outcomes/src/domain/constants.ts \
             extensions/outcomes/src/domain/hash.ts \
             extensions/outcomes/src/domain/reducer.ts \
+            extensions/outcomes/src/domain/assurance-reducer.ts \
             extensions/outcomes/src/domain/repository.contract.test.ts \
             extensions/outcomes/src/domain/schema.test.ts \
             extensions/outcomes/src/domain/schema.ts \

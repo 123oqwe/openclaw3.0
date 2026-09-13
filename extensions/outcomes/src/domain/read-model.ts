@@ -166,8 +166,7 @@ export function toOutcomeDetail(
   const projectionsByRef = new Map(
     observedProjections.map((projection) => [workRefIdentity(projection.ref), projection]),
   );
-  const criteria = record.criteria.map((criterion) => ({
-    ...(() => {
+  const criteria = record.criteria.map((criterion) => {
       const visibleRefs = criterion.workRefs.filter((ref) =>
         sourcesByRef.has(workRefIdentity(ref)),
       );
@@ -191,26 +190,25 @@ export function toOutcomeDetail(
               .map((evidence) => evidence.sourceDigest),
           )
         : [];
-      return {
-        id: criterion.id,
-        text: criterion.text,
-        required: criterion.required,
-        workRefs: sourcesComplete ? visibleRefs : [],
-        sourcesVisibility: sourcesComplete ? ("complete" as const) : ("restricted" as const),
-        evidenceSetHash:
-          record.phase !== "draft" &&
-          record.phase !== "cancelled" &&
-          sourcesCurrent &&
-          criterion.workRefs.length > 0
-            ? evidenceSetHash({
-                criterionId: criterion.id,
-                planGeneration: record.planGeneration,
-                sourceDigests,
-              })
-            : null,
-      };
-    })(),
-  }));
+    return {
+      id: criterion.id,
+      text: criterion.text,
+      required: criterion.required,
+      workRefs: sourcesComplete ? visibleRefs : [],
+      sourcesVisibility: sourcesComplete ? ("complete" as const) : ("restricted" as const),
+      evidenceSetHash:
+        record.phase !== "draft" &&
+        record.phase !== "cancelled" &&
+        sourcesCurrent &&
+        criterion.workRefs.length > 0
+          ? evidenceSetHash({
+              criterionId: criterion.id,
+              planGeneration: record.planGeneration,
+              sourceDigests,
+            })
+          : null,
+    };
+  });
   const work: OutcomeDetail["work"] = authorizedSources
     .map((source) => ({
       ref: source.ref,

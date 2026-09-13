@@ -4,11 +4,9 @@ import { deriveOutcomeClosure } from "../assurance/closure.js";
 import { planHash } from "./canonical-plan.js";
 import { createRequestHash, evidenceSetHash } from "./hash.js";
 import {
-  reduceOutcomeAcceptance,
   reduceOutcomeActivate,
   reduceOutcomeCancel,
   reduceOutcomeContract,
-  reduceOutcomeDecision,
   reduceOutcomeLink,
   reduceOutcomeUnlink,
   reduceOutcomePatch,
@@ -16,6 +14,7 @@ import {
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "./reducer.js";
+import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "./assurance-reducer.js";
 import { parseOutcomeRecord } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
 

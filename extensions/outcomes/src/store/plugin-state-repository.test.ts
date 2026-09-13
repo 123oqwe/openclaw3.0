@@ -8,14 +8,16 @@ import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import {
-  reduceOutcomeAcceptance,
   reduceOutcomeActivate,
   reduceOutcomeContract,
-  reduceOutcomeDecision,
   reduceOutcomeTitle,
   reduceOutcomeUnlink,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
+import {
+  reduceOutcomeAcceptance,
+  reduceOutcomeDecision,
+} from "../domain/assurance-reducer.js";
 import {
   createRequestHash,
   evidenceSetHash,
@@ -665,10 +667,39 @@ describe("Outcome repository host adapter", () => {
           planHash: planHash(activePlan),
           revision: 100,
           updatedAt: 100,
-          projections: acceptanceRecord.projections.map((projection) => ({ ...projection })),
+          projections: acceptanceRecord.projections.map((projection) => ({
+            ref: projection.ref,
+            availability: projection.availability,
+            observedAt: projection.observedAt,
+            proofs: projection.proofs,
+            artifacts: projection.artifacts,
+            ...(projection.currentBoardId === undefined
+              ? {}
+              : { currentBoardId: projection.currentBoardId }),
+            ...(projection.status === undefined ? {} : { status: projection.status }),
+            ...(projection.lastSuccessfulAt === undefined
+              ? {}
+              : { lastSuccessfulAt: projection.lastSuccessfulAt }),
+            ...(projection.sourceUpdatedAt === undefined
+              ? {}
+              : { sourceUpdatedAt: projection.sourceUpdatedAt }),
+            ...(projection.upstreamStale === undefined
+              ? {}
+              : { upstreamStale: projection.upstreamStale }),
+            ...(projection.sourceFingerprint === undefined
+              ? {}
+              : { sourceFingerprint: projection.sourceFingerprint }),
+            ...(projection.errorCode === undefined ? {} : { errorCode: projection.errorCode }),
+          })),
           evidence: acceptanceRecord.evidence.map((evidence) => ({
-            ...evidence,
+            id: evidence.id,
+            criterionId: evidence.criterionId,
             planGeneration: activePlanGeneration,
+            workRef: evidence.workRef,
+            kind: evidence.kind,
+            sourceId: evidence.sourceId,
+            sourceDigest: evidence.sourceDigest,
+            observedAt: evidence.observedAt,
           })),
           acceptances: fullAcceptanceHistory,
         };

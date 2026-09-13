@@ -307,7 +307,7 @@ describe("OutcomesPage mutations", () => {
           evidenceSetHash: "e".repeat(64),
         },
       ],
-      nextActions: ["review-evidence"] as const,
+      nextActions: ["review-evidence"] satisfies OutcomeDetail["nextActions"],
       phase: "active" as const,
       planGeneration: 1,
       planHash: "a".repeat(64),
