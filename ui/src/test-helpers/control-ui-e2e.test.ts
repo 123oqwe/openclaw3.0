@@ -62,8 +62,9 @@ describe("shared proof capture", () => {
     // SAFETY: this fixture implements the Page boundary used by failure diagnostics.
     const page = {
       evaluate: async () => ({
-        hello: { bootstrapToken: secret },
-        resource: `https://example.invalid/app.js?token=${secret}`,
+        hello: { bootstrapToken: secret, phase: "ready" },
+        observedAt: 42,
+        resource: `wss://user:${secret}@example.invalid/socket?token=${secret}`,
       }),
       isClosed: () => false,
       url: () => `http://127.0.0.1/outcomes#bootstrapToken=${secret}`,
@@ -74,13 +75,20 @@ describe("shared proof capture", () => {
     } as unknown as Page;
 
     await captureControlUiE2eFailureDiagnostics(page, {
-      error: new Error(`Gateway token ${secret} failed`),
+      error: new Error(JSON.stringify({ token: secret, type: "gateway-failure" })),
       label: "outcomes.refresh",
-      pageErrors: [`secret=${secret}`],
+      pageErrors: [
+        JSON.stringify({ token: secret }),
+        `wss://user:${secret}@example.invalid/?token=${secret}`,
+      ],
       pageEvents: [
         {
           at: "2026-01-01T00:00:00.000Z",
-          details: { authorization: `Bearer ${secret}`, url: `https://example.invalid/?token=${secret}` },
+          details: {
+            authorization: `Bearer ${secret}`,
+            text: JSON.stringify({ token: secret }),
+            url: `wss://user:${secret}@example.invalid/?token=${secret}`,
+          },
           source: "console",
         },
       ],
@@ -92,7 +100,12 @@ describe("shared proof capture", () => {
       file.endsWith(".json"),
     );
     expect(reportPath).toBeDefined();
-    expect(readFileSync(path.join(parent, directory!.name, reportPath!), "utf8")).not.toContain(secret);
+    const report = readFileSync(path.join(parent, directory!.name, reportPath!), "utf8");
+    expect(report).not.toContain(secret);
+    expect(report).toContain("outcomes.refresh");
+    expect(report).toContain("ready");
+    expect(report).toContain("42");
+    expect(report).toContain("gateway-failure");
   });
 
   it("keeps shared capture disabled until its gate is enabled and uses the supplied owner", async () => {

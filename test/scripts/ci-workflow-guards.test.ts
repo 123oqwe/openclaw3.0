@@ -12666,7 +12666,7 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       uses: UPLOAD_ARTIFACT_V7,
       with: {
         name: "control-ui-real-gateway-timeout-${{ github.run_attempt }}",
-        path: ".artifacts/control-ui-e2e-timeouts/real-gateway-attempt-${{ github.run_attempt }}",
+        path: ".artifacts/control-ui-e2e-timeouts/real-gateway-attempt-${{ github.run_attempt }}/**/*.json",
         "if-no-files-found": "ignore",
         "retention-days": 7,
       },
