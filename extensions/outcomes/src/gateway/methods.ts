@@ -1,10 +1,16 @@
 import type { OpenClawPluginApi } from "../../api.js";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
+import {
+  outcomeAcceptanceRequestHash,
+  outcomeDecisionRequestHash,
+} from "../assurance/closure.js";
 import { createRequestHash } from "../domain/hash.js";
 import { toOutcomeDetail, toOutcomeSummary } from "../domain/read-model.js";
 import {
   reduceOutcomeActivate,
+  reduceOutcomeAcceptance,
   reduceOutcomeCancel,
+  reduceOutcomeDecision,
   reduceOutcomeLink,
   reduceOutcomeRefresh,
   reduceOutcomeUnlink,
@@ -21,19 +27,23 @@ import {
 } from "./errors.js";
 import {
   normalizeCreate,
+  normalizeAccept,
   normalizePatch,
+  normalizeVerifyCriterion,
   normalizeWorkboardLink,
   normalizedUuid,
   withRefs,
 } from "./input-normalizers.js";
-import { fail, reportCapacityWarning, respondMutation } from "./method-helpers.js";
+import { fail, reportCapacityWarning, respondMutation, type GatewayRespond } from "./method-helpers.js";
 import {
   outcomeCancelParamsSchema,
   outcomeActivateParamsSchema,
+  outcomeAcceptParamsSchema,
   outcomeCreateParamsSchema,
   outcomeIdParamsSchema,
   outcomeListParamsSchema,
   outcomeRefreshParamsSchema,
+  outcomeVerifyCriterionParamsSchema,
   outcomeUpdateParamsSchema,
   outcomeWorkboardLinkParamsSchema,
   outcomeWorkboardUnlinkParamsSchema,
@@ -83,6 +93,36 @@ async function mutationPresentation(
       projections: candidate.projections,
     };
   }
+}
+
+function respondAssuranceMutation(
+  respond: GatewayRespond,
+  decision: {
+    kind: "updated" | "conflict" | "rejected";
+    replayed: boolean;
+    record: OutcomeRecord;
+  },
+  now: number,
+  candidate: RefreshCandidate,
+  receipt: { kind: "verify-criterion" | "accept"; id: string; committedRevision: number },
+): void {
+  if (decision.kind === "updated") {
+    respond(true, {
+      outcome: toOutcomeDetail(decision.record, now, candidate.authorizedSources, candidate.projections),
+      replayed: decision.replayed,
+      receipt,
+    });
+    return;
+  }
+  respond(
+    false,
+    undefined,
+    outcomeError(
+      decision.kind === "conflict"
+        ? OutcomeErrorCodes.REVISION_CONFLICT
+        : OutcomeErrorCodes.CLOSURE_INCOMPLETE,
+    ),
+  );
 }
 
 /** Register the P-02 first package; every persisted access is scoped to the authenticated owner. */
@@ -510,6 +550,167 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
               : OutcomeErrorCodes.INVALID_STATE,
           ),
         );
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
+      }
+    },
+    { scope: "operator.write" },
+  );
+  api.registerGatewayMethod(
+    "outcomes.verifyCriterion",
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
+        client,
+        missingOwnerCode: "INVALID_REQUEST",
+        request: rawParams,
+        respond,
+        schema: outcomeVerifyCriterionParamsSchema,
+      });
+      if (!admission) {
+        return;
+      }
+      const { owner, request: params } = admission;
+      const request = normalizeVerifyCriterion(params);
+      if (!request) {
+        return fail(respond, "INVALID_REQUEST");
+      }
+      let record: OutcomeRecord | undefined;
+      try {
+        record = await repository.getOwned(owner, request.id);
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
+        return;
+      }
+      if (!record) {
+        return fail(respond, "NOT_FOUND");
+      }
+      const now = Date.now();
+      let candidate: RefreshCandidate;
+      try {
+        candidate = buildRefreshCandidate(record, await readAuthorizedWorkboardCards(api), now);
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeOwnerError(error)));
+        return;
+      }
+      const requestHash = outcomeDecisionRequestHash({
+        id: request.id,
+        decisionId: request.decisionId,
+        criterionId: request.criterionId,
+        status: request.status,
+        planHash: request.planHash,
+        evidenceSetHash: request.evidenceSetHash,
+        ...(request.note === undefined ? {} : { note: request.note }),
+      });
+      try {
+        const decision = await repository.transactOwned(owner, request.id, (current) => {
+          const mutation = reduceOutcomeDecision(current, {
+            expectedRevision: request.expectedRevision,
+            id: request.decisionId,
+            requestHash,
+            criterionId: request.criterionId,
+            status: request.status,
+            evidenceSetHash: request.evidenceSetHash,
+            profileId: owner,
+            ...(request.note === undefined ? {} : { note: request.note }),
+            projections: candidate.projections,
+            evidence: candidate.evidence,
+            serverTime: now,
+          });
+          return {
+            result: mutation,
+            ...(mutation.kind === "updated" && !mutation.replayed ? { next: mutation.record } : {}),
+          };
+        });
+        const committed = decision.replayed
+          ? decision.record.decisions.find((item) => item.id === request.decisionId)?.decidedRevision
+          : decision.record.revision;
+        if (committed === undefined) {
+          respond(false, undefined, outcomeError(OutcomeErrorCodes.INTERNAL));
+          return;
+        }
+        respondAssuranceMutation(respond, decision, now, candidate, {
+          kind: "verify-criterion",
+          id: request.decisionId,
+          committedRevision: committed,
+        });
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
+      }
+    },
+    { scope: "operator.write" },
+  );
+  api.registerGatewayMethod(
+    "outcomes.accept",
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
+        client,
+        missingOwnerCode: "INVALID_REQUEST",
+        request: rawParams,
+        respond,
+        schema: outcomeAcceptParamsSchema,
+      });
+      if (!admission) {
+        return;
+      }
+      const { owner, request: params } = admission;
+      const request = normalizeAccept(params);
+      if (!request) {
+        return fail(respond, "INVALID_REQUEST");
+      }
+      let record: OutcomeRecord | undefined;
+      try {
+        record = await repository.getOwned(owner, request.id);
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
+        return;
+      }
+      if (!record) {
+        return fail(respond, "NOT_FOUND");
+      }
+      const now = Date.now();
+      let candidate: RefreshCandidate;
+      try {
+        candidate = buildRefreshCandidate(record, await readAuthorizedWorkboardCards(api), now);
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeOwnerError(error)));
+        return;
+      }
+      const requestHash = outcomeAcceptanceRequestHash({
+        id: request.id,
+        acceptanceId: request.acceptanceId,
+        planHash: request.planHash,
+        closureHash: request.closureHash,
+      });
+      try {
+        const decision = await repository.transactOwned(owner, request.id, (current) => {
+          const mutation = reduceOutcomeAcceptance(current, {
+            expectedRevision: request.expectedRevision,
+            id: request.acceptanceId,
+            requestHash,
+            planHash: request.planHash,
+            closureHash: request.closureHash,
+            profileId: owner,
+            projections: candidate.projections,
+            evidence: candidate.evidence,
+            serverTime: now,
+          });
+          return {
+            result: mutation,
+            ...(mutation.kind === "updated" && !mutation.replayed ? { next: mutation.record } : {}),
+          };
+        });
+        const committed = decision.replayed
+          ? decision.record.acceptances.find((item) => item.id === request.acceptanceId)?.acceptedRevision
+          : decision.record.revision;
+        if (committed === undefined) {
+          respond(false, undefined, outcomeError(OutcomeErrorCodes.INTERNAL));
+          return;
+        }
+        respondAssuranceMutation(respond, decision, now, candidate, {
+          kind: "accept",
+          id: request.acceptanceId,
+          committedRevision: committed,
+        });
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
       }
