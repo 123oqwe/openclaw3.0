@@ -553,11 +553,11 @@ suite.define(() => {
         await expect.poll(() => refreshReplies.has(disabledRefreshRequestId)).toBe(true);
         const disabledRefresh = refreshReplies.get(disabledRefreshRequestId);
         expect(disabledRefresh?.ok).toBe(true);
-        expect(disabledRefresh?.refreshReason).toBe("workboard-disabled");
+        expect(disabledRefresh?.refreshReason).toBe("forbidden");
         expect(disabledRefresh?.refreshStatus).toBe("unavailable");
         expect(disabledRefresh?.revision).toEqual(expect.any(Number));
-        expect(disabledRefresh?.sourceIssueReasons).toContain("workboard-disabled");
-        await page.getByText("Workboard disabled", { exact: true }).waitFor({ state: "visible" });
+        expect(disabledRefresh?.sourceIssueReasons).toContain("forbidden");
+        await page.getByText("Linked source unavailable", { exact: true }).waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,
           path: path.join(suite.artifactDir, "outcomes-workboard-disabled.png"),
