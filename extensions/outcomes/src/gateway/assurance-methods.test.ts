@@ -185,7 +185,16 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     };
     expect(await harness.call("outcomes.accept", acceptanceParams)).toMatchObject([
       true,
-      { replayed: false, outcome: { phase: "accepted", revision: 6 }, receipt: { kind: "accept" } },
+      {
+        replayed: false,
+        outcome: {
+          phase: "accepted",
+          revision: 6,
+          planHash: acceptanceParams.planHash,
+          closureHash: acceptanceParams.closureHash,
+        },
+        receipt: { kind: "accept", committedRevision: 6 },
+      },
     ]);
     const writesBeforeAcceptanceReplay = harness.writes();
     expect(
