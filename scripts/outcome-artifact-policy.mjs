@@ -26,6 +26,7 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/src/gateway/method-helpers.ts",
   "extensions/outcomes/src/gateway/assurance-methods.ts",
   "extensions/outcomes/src/gateway/assurance-methods.test.ts",
+  "extensions/outcomes/src/gateway/delete-method.test.ts",
   "src/gateway/outcomes-methods.dispatch.test.ts",
   "src/gateway/outcomes-workboard.public-api.integration.test.ts",
   "extensions/outcomes/src/gateway/workboard.integration.test.ts",
