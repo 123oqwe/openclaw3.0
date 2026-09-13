@@ -3043,9 +3043,8 @@ function sanitizeControlUiE2eDiagnosticUrl(value: string): string {
 }
 
 function sanitizeControlUiE2eDiagnosticString(value: string): string {
-  return redactControlUiE2eDiagnosticText(value).replaceAll(
-    controlUiE2eUrlLike,
-    (candidate) => sanitizeControlUiE2eDiagnosticUrl(candidate),
+  return redactControlUiE2eDiagnosticText(value).replaceAll(controlUiE2eUrlLike, (candidate) =>
+    sanitizeControlUiE2eDiagnosticUrl(candidate),
   );
 }
 
@@ -3170,8 +3169,7 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
           })
         | null;
       const outcomeDetail = outcomesPage?.detail ?? null;
-      const outcomeDetailElement =
-        outcomesPage?.querySelector("[data-outcome-detail-id]") ?? null;
+      const outcomeDetailElement = outcomesPage?.querySelector("[data-outcome-detail-id]") ?? null;
       return {
         app: {
           gateway: {
@@ -3231,8 +3229,7 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
           readiness:
             outcomeDetailElement
               ?.querySelector("[data-outcome-readiness]")
-              ?.getAttribute("data-outcome-readiness") ??
-            null,
+              ?.getAttribute("data-outcome-readiness") ?? null,
           recheckAfter: finiteNumberOrNull(outcomeDetail?.recheckAfter),
         },
         unhandledRejections: copy(

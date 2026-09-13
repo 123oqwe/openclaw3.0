@@ -115,10 +115,9 @@ function helloSelfUserId(payload: JsonRecord, instanceId: string | null): string
 
 function proxyAdmissionErrorDetail(frame: JsonRecord): string {
   const error = asOptionalRecord(frame.error);
-  const details = [
-    stringValue(error?.code),
-    stringValue(error?.message),
-  ].flatMap((value) => (value ? [redactSensitiveText(value, { mode: "tools" })] : []));
+  const details = [stringValue(error?.code), stringValue(error?.message)].flatMap((value) =>
+    value ? [redactSensitiveText(value, { mode: "tools" })] : [],
+  );
   return details.length > 0 ? ` (${details.join("; ")})` : "";
 }
 
@@ -369,7 +368,9 @@ async function proxyGatewayCall(
       if (frame.id === connectId) {
         if (frame.ok !== true || !asOptionalRecord(frame.payload)) {
           finish({
-            error: new Error(`trusted-proxy probe was not admitted${proxyAdmissionErrorDetail(frame)}`),
+            error: new Error(
+              `trusted-proxy probe was not admitted${proxyAdmissionErrorDetail(frame)}`,
+            ),
           });
           return;
         }

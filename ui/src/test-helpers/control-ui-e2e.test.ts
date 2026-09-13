@@ -94,7 +94,9 @@ describe("shared proof capture", () => {
       ],
     });
 
-    const directory = readdirSync(parent, { withFileTypes: true }).find((entry) => entry.isDirectory());
+    const directory = readdirSync(parent, { withFileTypes: true }).find((entry) =>
+      entry.isDirectory(),
+    );
     expect(directory).toBeDefined();
     const reportPath = readdirSync(path.join(parent, directory!.name)).find((file) =>
       file.endsWith(".json"),
