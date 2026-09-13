@@ -312,7 +312,9 @@ describe("OutcomesPage mutations", () => {
       expect(page.textContent).toContain("Request failed");
       expect(getCount).toBeGreaterThanOrEqual(2);
     });
-    expect(page.querySelector('[data-outcome-action="refresh"]')).not.toBeNull();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-action="refresh"]')).not.toBeNull();
+    });
     expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
     await vi.waitFor(() => {
       expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
