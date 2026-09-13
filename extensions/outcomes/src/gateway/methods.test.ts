@@ -15,6 +15,7 @@ describe("P-02 Outcome handlers", () => {
     ["outcomes.create", {}],
     ["outcomes.get", {}],
     ["outcomes.list", { limit: 0 }],
+    ["outcomes.export", {}],
     ["outcomes.update", {}],
     ["outcomes.linkWorkboard", {}],
     ["outcomes.unlinkWorkboard", {}],
