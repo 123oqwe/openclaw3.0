@@ -16,6 +16,8 @@ describe("P-02 Outcome handlers", () => {
     ["outcomes.get", {}],
     ["outcomes.list", { limit: 0 }],
     ["outcomes.export", {}],
+    ["outcomes.export", { id: "not-an-outcome-id" }],
+    ["outcomes.export", { id: outcomeIds[0]!, unexpected: true }],
     ["outcomes.update", {}],
     ["outcomes.linkWorkboard", {}],
     ["outcomes.unlinkWorkboard", {}],
