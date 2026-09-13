@@ -241,6 +241,32 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           </ul>
         </section>`
       : nothing}
+    ${data.detail.decisions.length > 0
+      ? html`<section class="outcome-detail__section" aria-label=${t("outcomesPage.decisionHistoryLabel")}>
+          <h3>${t("outcomesPage.decisionHistoryLabel")}</h3>
+          <ul>
+            ${data.detail.decisions.map(
+              (decision) => html`<li data-outcome-decision=${decision.id}>
+                ${decision.status === "verified"
+                  ? t("outcomesPage.verified")
+                  : t("outcomesPage.rejected")}
+              </li>`,
+            )}
+          </ul>
+        </section>`
+      : nothing}
+    ${data.detail.acceptances.length > 0
+      ? html`<section class="outcome-detail__section" aria-label=${t("outcomesPage.acceptanceHistoryLabel")}>
+          <h3>${t("outcomesPage.acceptanceHistoryLabel")}</h3>
+          <ul>
+            ${data.detail.acceptances.map(
+              (acceptance) => html`<li data-outcome-acceptance-history=${acceptance.id}>
+                ${t("outcomesPage.acceptedAt", { time: String(acceptance.acceptedAt) })}
+              </li>`,
+            )}
+          </ul>
+        </section>`
+      : nothing}
     ${data.detail.attention.length > 0
       ? html`<section class="outcome-detail__section">
           <h3>${t("outcomesPage.attentionLabel")}</h3>

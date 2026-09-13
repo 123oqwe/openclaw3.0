@@ -652,6 +652,64 @@ suite.define(() => {
     );
   });
 
+  it("records a verified decision and accepts its current closure through the real Gateway", async () => {
+    const cardId = requireCardId(
+      await callGateway("workboard.cards.create", {
+        priority: "normal",
+        title: "Accept real Outcome evidence",
+      }),
+    );
+    const proofId = requireProofId(
+      await callGateway("workboard.cards.proof", {
+        id: cardId,
+        label: "Outcome acceptance verification",
+        status: "passed",
+      }),
+    );
+    await suite.withPage(
+      {
+        locale: "en-US",
+        serviceWorkers: "block",
+        viewport: { height: 900, width: 1280 },
+      },
+      async ({ page }) => {
+        await page.goto(await outcomesUrl());
+        await waitForControlUiGatewayReady(page);
+        await page.locator('[data-outcome-action="create"]').click();
+        const createForm = page.locator("[data-outcome-create-form]");
+        await createForm.locator('input[name="title"]').fill("Accept Outcome E2E");
+        await createForm.locator('textarea[name="objective"]').fill("Prove human acceptance");
+        await createForm.locator('input[name="criterion"]').fill("Proof is reviewed");
+        await createForm.locator("[data-outcome-confirm-create]").click();
+
+        const summary = page.locator(".outcome-summary", { hasText: "Accept Outcome E2E" });
+        await summary.locator("[data-outcome-select]").click();
+        const detail = page.locator("[data-outcome-detail-id]");
+        await detail.waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-action="link-work"]').click();
+        const linkForm = page.locator("[data-outcome-link-form]");
+        await linkForm.locator('select[name="card"]').selectOption(cardId);
+        await linkForm.locator("[data-outcome-confirm-link]").click();
+        await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-action="activate"]').click();
+        await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-action="refresh"]').click();
+        await detail.locator(`[data-outcome-evidence="${proofId}"]`).waitFor({ state: "visible" });
+
+        await detail.locator('[data-outcome-action="review-evidence"]').click();
+        const verificationForm = page.locator("[data-outcome-verification-form]");
+        await verificationForm.waitFor({ state: "visible" });
+        await verificationForm.locator("[data-outcome-confirm-verification]").click();
+        await detail.locator("[data-outcome-decision]").getByText("Verified", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await detail.locator('[data-outcome-action="accept"]').click();
+        await detail.locator('[data-outcome-phase="accepted"]').waitFor({ state: "visible" });
+        await detail.locator("[data-outcome-acceptance-history]").waitFor({ state: "visible" });
+      },
+    );
+  });
+
   it("keeps the keyboard create flow usable without horizontal overflow on a narrow screen", async () => {
     await suite.withPage(
       {
