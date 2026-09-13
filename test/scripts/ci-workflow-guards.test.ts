@@ -16396,6 +16396,21 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
   expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.test.ts");
   expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.ts");
+  for (const path of [
+    "ui/src/pages/outcomes/outcomes-page-freshness.test.ts",
+    "ui/src/pages/outcomes/outcomes-page-gateway.ts",
+    "ui/src/pages/outcomes/outcomes-page-lifecycle.test.ts",
+    "ui/src/pages/outcomes/outcomes-page-model.ts",
+    "ui/src/pages/outcomes/outcomes-page-mutations.test.ts",
+    "ui/src/pages/outcomes/outcomes-page-mutations.ts",
+    "ui/src/pages/outcomes/outcomes-page-state.ts",
+    "ui/src/pages/outcomes/outcomes-page.test-support.ts",
+    "ui/src/pages/outcomes/outcomes-view-support.ts",
+    "ui/src/pages/outcomes/route.ts",
+    "ui/src/pages/outcomes/view.test.ts",
+  ]) {
+    expect(bodies).toContain(path);
+  }
   expect(bodies).toContain(
     "git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'",
   );
