@@ -13,6 +13,17 @@ import type { OutcomeRecord } from "./types.js";
 
 type CurrentProjection = OutcomeRecord["projections"][number];
 
+function workRefIdentity(ref: OutcomeRecord["criteria"][number]["workRefs"][number]): string {
+  return `${ref.cardId}\0${ref.cardCreatedAt}`;
+}
+
+function withObservedEvidence(
+  record: OutcomeRecord,
+  evidence: OutcomeRecord["evidence"],
+): OutcomeRecord {
+  return evidence === record.evidence ? record : { ...record, evidence };
+}
+
 /**
  * Ephemeral data from one authorized Workboard read. It is deliberately not a
  * persisted DTO: callers that have no current owner read pass no material and
@@ -54,8 +65,10 @@ export function toOutcomeSummary(
   record: OutcomeRecord,
   observedAt: number,
   projections: CurrentProjection[] = currentOutcomeProjections(record),
+  observedEvidence: OutcomeRecord["evidence"] = record.evidence,
 ): OutcomeSummary {
-  const closureHash = deriveOutcomeClosure(record, projections, observedAt);
+  const observedRecord = withObservedEvidence(record, observedEvidence);
+  const closureHash = deriveOutcomeClosure(observedRecord, projections, observedAt);
   const hasUnavailableSource = projections.some(
     (projection) =>
       projection.availability !== "available" ||
@@ -67,12 +80,12 @@ export function toOutcomeSummary(
     isStaleOutcomeProjection(projection, observedAt),
   );
   const hasBlockedSource = projections.some((projection) => projection.status === "blocked");
-  const hasUncertainOperation = record.operations.some((operation) =>
+  const hasUncertainOperation = observedRecord.operations.some((operation) =>
     ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
   );
-  const hasCurrentRejectedDecision = record.criteria.some(
+  const hasCurrentRejectedDecision = observedRecord.criteria.some(
     (criterion) =>
-      currentOutcomeDecision(record, criterion, projections, observedAt)?.decision.status === "rejected",
+      currentOutcomeDecision(observedRecord, criterion, projections, observedAt)?.decision.status === "rejected",
   );
   const readiness = hasUnavailableSource
     ? "unavailable"
@@ -81,29 +94,29 @@ export function toOutcomeSummary(
       : hasBlockedSource ||
           hasUncertainOperation ||
           hasCurrentRejectedDecision ||
-          record.phase === "cancelled"
+          observedRecord.phase === "cancelled"
         ? "blocked"
         : closureHash === null
           ? "incomplete"
           : "ready";
-  const latestAcceptance = record.acceptances.toSorted(
+  const latestAcceptance = observedRecord.acceptances.toSorted(
     (left, right) => right.acceptedRevision - left.acceptedRevision,
   )[0];
   const acceptanceValidity =
     latestAcceptance === undefined
       ? "none"
       : closureHash !== null &&
-          latestAcceptance.planGeneration === record.planGeneration &&
-          latestAcceptance.planHash === record.planHash &&
+          latestAcceptance.planGeneration === observedRecord.planGeneration &&
+          latestAcceptance.planHash === observedRecord.planHash &&
           latestAcceptance.closureHash === closureHash
         ? "current"
         : "needs-review";
   return {
-    id: record.id,
-    title: record.title,
-    phase: record.phase,
-    revision: record.revision,
-    updatedAt: record.updatedAt,
+    id: observedRecord.id,
+    title: observedRecord.title,
+    phase: observedRecord.phase,
+    revision: observedRecord.revision,
+    updatedAt: observedRecord.updatedAt,
     readiness,
     acceptanceValidity,
   };
@@ -115,8 +128,10 @@ export function toOutcomeDetail(
   observedAt: number,
   authorizedSources: AuthorizedOutcomeSource[] = [],
   observedProjections: CurrentProjection[] = currentOutcomeProjections(record),
+  observedEvidence: OutcomeRecord["evidence"] = record.evidence,
 ): OutcomeDetail {
-  const summary = toOutcomeSummary(record, observedAt, observedProjections);
+  const observedRecord = withObservedEvidence(record, observedEvidence);
+  const summary = toOutcomeSummary(record, observedAt, observedProjections, observedEvidence);
   const sourcesByRef = new Map(
     authorizedSources.map((source) => [workRefIdentity(source.ref), source]),
   );
@@ -129,6 +144,14 @@ export function toOutcomeDetail(
         sourcesByRef.has(workRefIdentity(ref)),
       );
       const sourcesComplete = visibleRefs.length === criterion.workRefs.length;
+      const sourcesCurrent = sourcesComplete && visibleRefs.every((ref) => {
+        const projection = projectionsByRef.get(workRefIdentity(ref));
+        return (
+          projection !== undefined &&
+          projection.availability === "available" &&
+          !isStaleOutcomeProjection(projection, observedAt)
+        );
+      });
       const sourceDigests = sourcesComplete
         ? visibleRefs.flatMap((ref) =>
             (sourcesByRef.get(workRefIdentity(ref))?.evidence ?? [])
@@ -147,7 +170,10 @@ export function toOutcomeDetail(
         workRefs: sourcesComplete ? visibleRefs : [],
         sourcesVisibility: sourcesComplete ? ("complete" as const) : ("restricted" as const),
         evidenceSetHash:
-          sourcesComplete && criterion.workRefs.length > 0
+          record.phase !== "draft" &&
+          record.phase !== "cancelled" &&
+          sourcesCurrent &&
+          criterion.workRefs.length > 0
             ? evidenceSetHash({
                 criterionId: criterion.id,
                 planGeneration: record.planGeneration,
@@ -239,7 +265,7 @@ export function toOutcomeDetail(
       (earliest, candidate) => (earliest === null || candidate < earliest ? candidate : earliest),
       null,
     );
-  const closureHash = deriveOutcomeClosure(record, observedProjections, observedAt);
+  const closureHash = deriveOutcomeClosure(observedRecord, observedProjections, observedAt);
   return {
     ...summary,
     objective: record.objective,
@@ -264,6 +290,6 @@ export function toOutcomeDetail(
     observedAt,
     recheckAfter,
     closureHash,
-    ...deriveOutcomeAttention(record, observedProjections, observedAt, closureHash),
+    ...deriveOutcomeAttention(observedRecord, observedProjections, observedAt, closureHash),
   };
 }

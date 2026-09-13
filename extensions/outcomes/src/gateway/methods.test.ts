@@ -812,6 +812,40 @@ describe("P-02 Outcome handlers", () => {
     ]);
     const verifiedOutcome = (verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }).outcome;
 
+    cards[0]!.metadata.proof.push({
+      id: "proof-added-after-verification",
+      status: "passed",
+      createdAt: 3,
+      label: "Added after the verification response was lost",
+    });
+    const afterAddedProof = await harness.call("outcomes.get", { id });
+    expect(afterAddedProof).toMatchObject([true, { outcome: { closureHash: null } }]);
+    const addedProofOutcome = (
+      afterAddedProof[1] as { outcome: { criteria: Array<{ evidenceSetHash: string | null }> } }
+    ).outcome;
+    expect(addedProofOutcome.criteria[0]?.evidenceSetHash).not.toBe(criterion.evidenceSetHash);
+    const writesBeforeAddedProofReplay = harness.writes();
+    expect(
+      await harness.call("outcomes.verifyCriterion", {
+        id,
+        expectedRevision: refreshedOutcome.revision,
+        decisionId: "123e4567-e89b-42d3-a456-426614174020",
+        criterionId,
+        status: "verified",
+        planHash: refreshedOutcome.planHash,
+        evidenceSetHash: criterion.evidenceSetHash,
+      }),
+    ).toMatchObject([
+      true,
+      {
+        replayed: true,
+        receipt: { kind: "verify-criterion", committedRevision: 5 },
+        outcome: { closureHash: null, revision: 5 },
+      },
+    ]);
+    expect(harness.writes()).toBe(writesBeforeAddedProofReplay);
+    cards[0]!.metadata.proof.pop();
+
     const originalProofLabel = cards[0]!.metadata.proof[0]!.label;
     cards[0]!.metadata.proof[0]!.label = "Changed after the client lost its response";
     const writesBeforeChangedProofReplay = harness.writes();

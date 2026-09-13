@@ -84,12 +84,14 @@ async function mutationPresentation(
     );
     return {
       authorizedSources: candidate.authorizedSources,
+      evidence: candidate.evidence,
       projections: candidate.projections,
     };
   } catch (error) {
     const candidate = unavailableRefresh(decision.record, now, refreshReason(error));
     return {
       authorizedSources: candidate.authorizedSources,
+      evidence: candidate.evidence,
       projections: candidate.projections,
     };
   }
@@ -114,7 +116,13 @@ function respondAssuranceMutation(
 ): void {
   if (decision.kind === "updated") {
     respond(true, {
-      outcome: toOutcomeDetail(decision.record, now, candidate.authorizedSources, candidate.projections),
+      outcome: toOutcomeDetail(
+        decision.record,
+        now,
+        candidate.authorizedSources,
+        candidate.projections,
+        candidate.evidence,
+      ),
       replayed: decision.replayed,
       receipt,
     });
@@ -146,7 +154,13 @@ async function respondReplayedAssuranceMutation(
 ): Promise<void> {
   const presentation = await mutationPresentation(api, { kind: "updated", record }, now);
   respond(true, {
-    outcome: toOutcomeDetail(record, now, presentation?.authorizedSources, presentation?.projections),
+    outcome: toOutcomeDetail(
+      record,
+      now,
+      presentation?.authorizedSources,
+      presentation?.projections,
+      presentation?.evidence,
+    ),
     replayed: true,
     receipt,
   });
@@ -247,7 +261,13 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
           candidate = unavailableRefresh(record, now, refreshReason(error));
         }
         respond(true, {
-          outcome: toOutcomeDetail(record, now, candidate.authorizedSources, candidate.projections),
+          outcome: toOutcomeDetail(
+            record,
+            now,
+            candidate.authorizedSources,
+            candidate.projections,
+            candidate.evidence,
+          ),
         });
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
@@ -563,6 +583,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
               now,
               candidate.authorizedSources,
               candidate.projections,
+              candidate.evidence,
             ),
             refresh: candidate.refresh,
           });
