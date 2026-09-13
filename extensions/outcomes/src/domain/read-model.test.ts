@@ -578,8 +578,15 @@ describe("Outcome P-01 read model", () => {
       ...input.projections[0]!.ref,
       boardIdAtLink: "board-moved-after-link",
     };
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
+
+    input.projections[0]!.ref = {
+      ...input.projections[0]!.ref,
+      cardCreatedAt: 2,
+    };
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
 
+    input.projections[0]!.ref = first(first(input.criteria).workRefs);
     input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
@@ -695,6 +702,8 @@ describe("Outcome P-01 read model", () => {
       workRefs: [secondRef],
     };
     input.criteria = [firstCriterion, secondCriterion];
+    input.revision = 3;
+    input.updatedAt = 3;
     input.planHash = planHash({
       outcomeId: input.id,
       objective: input.objective,
@@ -736,6 +745,7 @@ describe("Outcome P-01 read model", () => {
       ...firstDecision,
       id: "decision-verified-second",
       criterionId: secondCriterion.id,
+      decidedRevision: input.revision,
       evidenceSetHash: evidenceSetHash({
         criterionId: secondCriterion.id,
         planGeneration: input.planGeneration,
@@ -893,11 +903,20 @@ describe("Outcome P-01 read model", () => {
         ...verified,
         id: "decision-optional-rejected",
         criterionId: optional.id,
+        decidedRevision: input.revision + 1,
         status: "rejected",
         planHash: input.planHash,
         decidedPlan,
+        evidenceSetHash: evidenceSetHash({
+          criterionId: optional.id,
+          planGeneration: input.planGeneration,
+          sourceDigests: [first(input.evidence).sourceDigest],
+        }),
+        note: "optional criterion requires follow-up",
       },
     ];
+    input.revision += 1;
+    input.updatedAt += 1;
     input.evidence.push({
       ...first(input.evidence),
       id: "evidence-optional",
@@ -915,7 +934,6 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeDetail(valid(input), 10)).toMatchObject({
       attention: expect.arrayContaining([
         { code: "rejected" },
-        { code: "verification-required", criterionId: "c-1" },
       ]),
       nextActions: expect.arrayContaining(["review-evidence"]),
     });
@@ -971,6 +989,6 @@ describe("Outcome P-01 read model", () => {
       { ...current, id: "decision-old-rejected", decidedRevision: 1, status: "rejected" },
       current,
     ];
-    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
   });
 });

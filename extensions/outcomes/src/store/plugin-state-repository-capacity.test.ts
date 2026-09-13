@@ -111,6 +111,14 @@ function assuredActiveRecord(id: string): OutcomeRecord {
         sourceUpdatedAt: 10,
         proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
         artifacts: [],
+        sourceFingerprint: workboardProjectionFingerprint({
+          ref,
+          proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+          artifacts: [],
+          currentBoardId: "board-current",
+          status: "done",
+          sourceUpdatedAt: 10,
+        }),
       },
     ],
     evidence: [

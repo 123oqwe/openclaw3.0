@@ -21,7 +21,12 @@ import {
   reduceOutcomeUnlink,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
-import { createRequestHash, evidenceSetHash, planHash } from "../domain/schema.js";
+import {
+  createRequestHash,
+  evidenceSetHash,
+  planHash,
+  workboardProjectionFingerprint,
+} from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
@@ -94,6 +99,14 @@ function assuredActiveRecord(id: string): OutcomeRecord {
         sourceUpdatedAt: 10,
         proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
         artifacts: [],
+        sourceFingerprint: workboardProjectionFingerprint({
+          ref,
+          proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+          artifacts: [],
+          currentBoardId: "board-current",
+          status: "done",
+          sourceUpdatedAt: 10,
+        }),
       },
     ],
     evidence: [
