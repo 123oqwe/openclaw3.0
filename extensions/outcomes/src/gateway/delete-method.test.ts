@@ -29,15 +29,26 @@ async function createAcceptedOutcome(harness: ReturnType<typeof createHarness>, 
     planHash: refreshedOutcome.planHash,
     evidenceSetHash: refreshedOutcome.criteria[0]!.evidenceSetHash,
   });
+  expect(verified).toMatchObject([true, { outcome: { closureHash: expect.any(String) } }]);
   const verifiedOutcome = (verified[1] as { outcome: { closureHash: string; revision: number } })
     .outcome;
-  await harness.call("outcomes.accept", {
-    id: linkedId,
-    expectedRevision: verifiedOutcome.revision,
-    acceptanceId: "123e4567-e89b-42d3-a456-426614174091",
-    planHash: refreshedOutcome.planHash,
-    closureHash: verifiedOutcome.closureHash,
-  });
+  expect(
+    await harness.call("outcomes.accept", {
+      id: linkedId,
+      expectedRevision: verifiedOutcome.revision,
+      acceptanceId: "123e4567-e89b-42d3-a456-426614174091",
+      planHash: refreshedOutcome.planHash,
+      closureHash: verifiedOutcome.closureHash,
+    }),
+  ).toMatchObject([
+    true,
+    {
+      outcome: {
+        phase: "accepted",
+        acceptances: [{ id: "123e4567-e89b-42d3-a456-426614174091" }],
+      },
+    },
+  ]);
   return linkedId;
 }
 
@@ -102,13 +113,23 @@ describe("P-06 Outcome delete Gateway handler", () => {
     });
     const acceptedId = await createAcceptedOutcome(harness, outcomeIds[0]!);
     const accepted = harness.records.get(acceptedId)!;
-    await harness.call("outcomes.update", {
-      id: acceptedId,
-      expectedRevision: accepted.revision,
-      patch: { title: "Contract changed after acceptance" },
-    });
+    expect(
+      await harness.call("outcomes.update", {
+        id: acceptedId,
+        expectedRevision: accepted.revision,
+        patch: { objective: "Contract changed after acceptance" },
+      }),
+    ).toMatchObject([
+      true,
+      { outcome: { phase: "active", acceptances: [{ id: expect.any(String) }] } },
+    ]);
     const active = harness.records.get(acceptedId)!;
-    await harness.call("outcomes.cancel", { id: acceptedId, expectedRevision: active.revision });
+    expect(
+      await harness.call("outcomes.cancel", { id: acceptedId, expectedRevision: active.revision }),
+    ).toMatchObject([
+      true,
+      { outcome: { phase: "cancelled", acceptances: [{ id: expect.any(String) }] } },
+    ]);
     const cancelled = harness.records.get(acceptedId)!;
     const writesBeforeAcceptedDelete = harness.writes();
 
