@@ -306,7 +306,13 @@ describe("Outcome P-01 read model", () => {
     const detail = toOutcomeDetail(valid(input), 10);
 
     expect(detail.attention).toEqual([{ code: "owner-unavailable", criterionId: "c-1" }]);
-    expect(detail.nextActions).toEqual(["refresh", "unlink-work", "cancel"]);
+    expect(detail.nextActions).toEqual([
+      "refresh",
+      "unlink-work",
+      "edit-contract",
+      "link-work",
+      "cancel",
+    ]);
   });
 
   it("keeps refresh available for a fresh linked Outcome", () => {
@@ -649,6 +655,8 @@ describe("Outcome P-01 read model", () => {
     if (current.closureHash === null || input.planHash === null) {
       throw new Error("fixture closure must be current");
     }
+    input.revision = 4;
+    input.updatedAt = 20;
     input.phase = "accepted";
     input.acceptances = [
       {
@@ -923,7 +931,7 @@ describe("Outcome P-01 read model", () => {
       criterionId: optional.id,
     });
 
-    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+    expect(toOutcomeDetail(valid(input), 10).closureHash).toBeNull();
   });
 
   it("blocks only a current rejected decision whose evidence still matches", () => {
