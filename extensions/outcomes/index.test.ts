@@ -69,6 +69,7 @@ describe("Outcome plugin shell", () => {
       peerDependenciesMeta: { openclaw: { optional: true } },
     });
     expect(packageManifest.dependencies).toEqual({
+      "@opentelemetry/api": "1.9.1",
       "@openclaw/outcomes-contract": "workspace:*",
       "@openclaw/workboard-contract": "workspace:*",
       typebox: "1.3.18",
