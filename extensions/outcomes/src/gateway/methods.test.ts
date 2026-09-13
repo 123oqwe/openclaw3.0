@@ -1001,6 +1001,12 @@ describe("P-02 Outcome handlers", () => {
     ]);
     expect(harness.writes()).toBe(writesBeforeTitleUpdate + 1);
     expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.records.get(id)).toMatchObject({
+      title: "Accepted Outcome with a changed source",
+      revision: 7,
+      evidence: [{ sourceId: "proof-a" }],
+    });
+    expect(harness.records.get(id)?.evidence).toHaveLength(1);
   });
 
   it("does not treat an empty-evidence rejection as current after new proof arrives", async () => {
