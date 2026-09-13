@@ -201,6 +201,7 @@ describe("OutcomesPage mutations", () => {
     if (!title || !objective || !criterion || !form) {
       throw new Error("Outcome create form fields are missing");
     }
+    expect(title.autofocus).toBe(true);
     title.value = "Launch the release";
     title.dispatchEvent(new InputEvent("input", { bubbles: true }));
     objective.value = "Confirm the release is ready";

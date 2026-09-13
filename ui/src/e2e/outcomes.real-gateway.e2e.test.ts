@@ -682,16 +682,64 @@ suite.define(() => {
         const form = page.locator("[data-outcome-create-form]");
         await form.waitFor({ state: "visible" });
         const title = form.locator('input[name="title"]');
-        await title.focus();
+        await expect
+          .poll(() =>
+            title.evaluate(
+              (element) => element === document.activeElement && element.matches(":focus-visible"),
+            ),
+          )
+          .toBe(true);
         await page.keyboard.type(titleText);
         const objective = form.locator('textarea[name="objective"]');
-        await objective.focus();
+        await page.keyboard.press("Tab");
+        await expect
+          .poll(() =>
+            objective.evaluate(
+              (element) => element === document.activeElement && element.matches(":focus-visible"),
+            ),
+          )
+          .toBe(true);
+        await page.keyboard.press("Shift+Tab");
+        await expect
+          .poll(() =>
+            title.evaluate(
+              (element) => element === document.activeElement && element.matches(":focus-visible"),
+            ),
+          )
+          .toBe(true);
+        await page.keyboard.press("Tab");
+        await expect
+          .poll(() =>
+            objective.evaluate(
+              (element) => element === document.activeElement && element.matches(":focus-visible"),
+            ),
+          )
+          .toBe(true);
         await page.keyboard.type("Prove the narrow-screen keyboard flow");
         const criterion = form.locator('input[name="criterion"]');
-        await criterion.focus();
+        await page.keyboard.press("Tab");
+        await expect
+          .poll(() =>
+            criterion.evaluate(
+              (element) => element === document.activeElement && element.matches(":focus-visible"),
+            ),
+          )
+          .toBe(true);
         await page.keyboard.type("A required criterion is recorded");
         const confirm = form.locator("[data-outcome-confirm-create]");
-        await confirm.focus();
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Tab");
+        await page.keyboard.press("Tab");
+        await expect
+          .poll(() =>
+            confirm.evaluate(
+              (element) => element === document.activeElement && element.matches(":focus-visible"),
+            ),
+          )
+          .toBe(true);
+        expect(
+          await confirm.evaluate((element) => element.getBoundingClientRect().height),
+        ).toBeGreaterThanOrEqual(44);
         await page.keyboard.press("Enter");
 
         await page

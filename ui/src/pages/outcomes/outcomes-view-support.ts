@@ -266,6 +266,7 @@ export function renderCreateOutcomeDialog(data: CreateOutcomeDialogViewData) {
       <label>
         ${t("outcomesPage.title")}
         <input
+          autofocus
           name="title"
           required
           ?disabled=${data.creating || data.pendingRequest}
