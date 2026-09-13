@@ -905,7 +905,12 @@ describe("Outcome repository atomic contract", () => {
     });
     expect(
       reduceOutcomeDecision(committed.record, { ...mutation, requestHash: "e".repeat(64) }),
-    ).toMatchObject({ kind: "conflict", replayed: false, record: committed.record });
+    ).toMatchObject({
+      kind: "conflict",
+      reason: "operation-conflict",
+      replayed: false,
+      record: committed.record,
+    });
   });
 
   it("preserves actual decision and acceptance snapshots across later contract changes and unlink", () => {
@@ -1001,7 +1006,12 @@ describe("Outcome repository atomic contract", () => {
       serverTime: 42,
     });
 
-    expect(result).toEqual({ kind: "rejected", replayed: false, record });
+    expect(result).toEqual({
+      kind: "rejected",
+      reason: "revision-conflict",
+      replayed: false,
+      record,
+    });
   });
 
   it("rejects title updates for cancelled outcomes", () => {

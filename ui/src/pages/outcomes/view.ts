@@ -250,6 +250,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 ${decision.status === "verified"
                   ? t("outcomesPage.verified")
                   : t("outcomesPage.rejected")}
+                ${decision.note === undefined ? nothing : html`<p>${decision.note}</p>`}
               </li>`,
             )}
           </ul>

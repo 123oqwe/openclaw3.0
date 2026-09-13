@@ -21,6 +21,62 @@ afterEach(() => {
 });
 
 describe("OutcomesPage", () => {
+  it("renders an Outcome decision's own review note", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        const detail = outcomeDetail("outcome-a", "Outcome A");
+        return Promise.resolve({
+          outcome: {
+            ...detail,
+            decisions: [
+              {
+                criterionId: "criterion-1",
+                decidedAt: 2,
+                decidedPlan: {
+                  contractRevision: 1,
+                  criteria: detail.criteria.map((criterion) => ({
+                    id: criterion.id,
+                    required: criterion.required,
+                    text: criterion.text,
+                    workRefs: criterion.workRefs,
+                  })),
+                  objective: detail.objective,
+                  outcomeId: detail.id,
+                  planGeneration: 0,
+                },
+                decidedRevision: 2,
+                evidenceSetHash: "e".repeat(64),
+                id: "decision-a",
+                note: "The reviewer found a release blocker.",
+                planGeneration: 0,
+                planHash: "p".repeat(64),
+                status: "rejected" as const,
+              },
+            ],
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway: createGateway({ request } as unknown as GatewayBrowserClient) } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-decision="decision-a"]')?.textContent).toContain(
+        "The reviewer found a release blocker.",
+      );
+    });
+  });
+
   it("renders a Workboard-disabled source issue as an explicit unavailable state", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {

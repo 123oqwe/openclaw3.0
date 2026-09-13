@@ -525,15 +525,15 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
 
-  it("redacts a human decision note from the public detail history", () => {
+  it("includes a human decision note in the public detail history", () => {
     const input = withCurrentVerifiedEvidence(record());
     first(input.decisions).note = "private reviewer rationale";
 
     const detail = toOutcomeDetail(input, 10);
 
     expect(detail.decisions).toHaveLength(1);
-    expect(detail.decisions[0]).not.toHaveProperty("note");
-    expect(JSON.stringify(detail)).not.toContain("private reviewer rationale");
+    expect(detail.decisions[0]).toMatchObject({ note: "private reviewer rationale" });
+    expect(JSON.stringify(detail)).toContain("private reviewer rationale");
   });
 
   it("does not restore an older verified decision after evidence changes back", () => {

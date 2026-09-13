@@ -794,7 +794,7 @@ describe("P-02 Outcome handlers", () => {
         planHash: "f".repeat(64),
         evidenceSetHash: criterion.evidenceSetHash,
       }),
-    ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
+    ).toMatchObject([false, undefined, { code: "OUTCOME_REVISION_CONFLICT" }]);
     expect(harness.writes()).toBe(writesBeforeRejectedGuard);
 
     const verified = await harness.call("outcomes.verifyCriterion", {
@@ -848,6 +848,23 @@ describe("P-02 Outcome handlers", () => {
       { replayed: false, outcome: { phase: "accepted", revision: 6 }, receipt: { kind: "accept" } },
     ]);
     const writesBeforeAcceptanceReplay = harness.writes();
+    expect(
+      await harness.call("outcomes.accept", {
+        ...acceptanceParams,
+        acceptanceId: "123e4567-e89b-42d3-a456-426614174022",
+        expectedRevision: 6,
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_INVALID_STATE" }]);
+    expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
+    expect(
+      await harness.call("outcomes.accept", {
+        ...acceptanceParams,
+        acceptanceId: "123e4567-e89b-42d3-a456-426614174023",
+        closureHash: "f".repeat(64),
+        expectedRevision: 6,
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_REVISION_CONFLICT" }]);
+    expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
     harness.gatewayRequest.mockRejectedValueOnce(
       Object.assign(new Error("owner unavailable"), { code: "GATEWAY_TIMEOUT" }),
     );
@@ -866,7 +883,7 @@ describe("P-02 Outcome handlers", () => {
         ...acceptanceParams,
         closureHash: "f".repeat(64),
       }),
-    ).toMatchObject([false, undefined, { code: "OUTCOME_REVISION_CONFLICT" }]);
+    ).toMatchObject([false, undefined, { code: "OUTCOME_OPERATION_CONFLICT" }]);
     expect(harness.gatewayRequest).not.toHaveBeenCalled();
     expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
   });

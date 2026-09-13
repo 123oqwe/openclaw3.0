@@ -150,6 +150,7 @@ export type OutcomeDecisionView = {
   planGeneration: number;
   planHash: string;
   decidedPlan: OutcomePlanSnapshotView;
+  note?: string;
 };
 
 export type OutcomeAcceptanceHistoryView = {

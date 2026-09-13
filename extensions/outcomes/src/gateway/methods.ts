@@ -99,6 +99,12 @@ function respondAssuranceMutation(
   respond: GatewayRespond,
   decision: {
     kind: "updated" | "conflict" | "rejected";
+    reason?:
+      | "operation-conflict"
+      | "revision-conflict"
+      | "invalid-state"
+      | "closure-incomplete"
+      | "capacity-exceeded";
     replayed: boolean;
     record: OutcomeRecord;
   },
@@ -118,9 +124,15 @@ function respondAssuranceMutation(
     false,
     undefined,
     outcomeError(
-      decision.kind === "conflict"
-        ? OutcomeErrorCodes.REVISION_CONFLICT
-        : OutcomeErrorCodes.CLOSURE_INCOMPLETE,
+      decision.reason === "operation-conflict"
+        ? OutcomeErrorCodes.OPERATION_CONFLICT
+        : decision.reason === "revision-conflict" || decision.kind === "conflict"
+          ? OutcomeErrorCodes.REVISION_CONFLICT
+          : decision.reason === "invalid-state"
+            ? OutcomeErrorCodes.INVALID_STATE
+            : decision.reason === "capacity-exceeded"
+              ? OutcomeErrorCodes.CAPACITY_EXCEEDED
+              : OutcomeErrorCodes.CLOSURE_INCOMPLETE,
     ),
   );
 }
@@ -612,7 +624,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       const existing = record.decisions.find((decision) => decision.id === request.decisionId);
       if (existing !== undefined) {
         if (existing.requestHash !== requestHash) {
-          return fail(respond, "REVISION_CONFLICT");
+          return fail(respond, "OPERATION_CONFLICT");
         }
         await respondReplayedAssuranceMutation(api, respond, record, now, {
           kind: "verify-criterion",
@@ -705,7 +717,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       const existing = record.acceptances.find((acceptance) => acceptance.id === request.acceptanceId);
       if (existing !== undefined) {
         if (existing.requestHash !== requestHash) {
-          return fail(respond, "REVISION_CONFLICT");
+          return fail(respond, "OPERATION_CONFLICT");
         }
         await respondReplayedAssuranceMutation(api, respond, record, now, {
           kind: "accept",

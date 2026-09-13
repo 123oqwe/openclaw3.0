@@ -115,11 +115,30 @@ export type OutcomeAcceptanceMutation = {
   serverTime: number;
 };
 
+export type OutcomeAssuranceFailureReason =
+  | "operation-conflict"
+  | "revision-conflict"
+  | "invalid-state"
+  | "closure-incomplete"
+  | "capacity-exceeded";
+
 export type OutcomeDecisionResult =
-  | { kind: "conflict" | "rejected" | "updated"; record: OutcomeRecord; replayed: boolean };
+  | { kind: "updated"; record: OutcomeRecord; replayed: boolean }
+  | {
+      kind: "conflict" | "rejected";
+      reason: OutcomeAssuranceFailureReason;
+      record: OutcomeRecord;
+      replayed: boolean;
+    };
 
 export type OutcomeAcceptanceResult =
-  | { kind: "conflict" | "rejected" | "updated"; record: OutcomeRecord; replayed: boolean };
+  | { kind: "updated"; record: OutcomeRecord; replayed: boolean }
+  | {
+      kind: "conflict" | "rejected";
+      reason: OutcomeAssuranceFailureReason;
+      record: OutcomeRecord;
+      replayed: boolean;
+    };
 
 function workRefIdentity(ref: WorkboardRef): string {
   return `${ref.cardId}\0${ref.cardCreatedAt}`;
@@ -581,17 +600,21 @@ export function reduceOutcomeDecision(
   assertServerTime(mutation.serverTime);
   const previous = current.decisions.find((decision) => decision.id === mutation.id);
   if (previous !== undefined) {
+    if (previous.requestHash === mutation.requestHash) {
+      return { kind: "updated", record: current, replayed: true };
+    }
     return {
-      kind: previous.requestHash === mutation.requestHash ? "updated" : "conflict",
+      kind: "conflict",
+      reason: "operation-conflict",
       record: current,
-      replayed: previous.requestHash === mutation.requestHash,
+      replayed: false,
     };
   }
   if (mutation.expectedRevision !== current.revision) {
-    return { kind: "conflict", record: current, replayed: false };
+    return { kind: "conflict", reason: "revision-conflict", record: current, replayed: false };
   }
   if ((mutation.projections === undefined) !== (mutation.evidence === undefined)) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "closure-incomplete", record: current, replayed: false };
   }
   const refreshed =
     mutation.projections === undefined || mutation.evidence === undefined
@@ -603,18 +626,18 @@ export function reduceOutcomeDecision(
           serverTime: mutation.serverTime,
         });
   if (refreshed !== undefined && refreshed.kind !== "updated") {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "revision-conflict", record: current, replayed: false };
   }
   const observed =
     refreshed === undefined
       ? current
       : { ...refreshed.record, revision: current.revision, updatedAt: current.updatedAt };
   if (observed.phase !== "active" && observed.phase !== "accepted") {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "invalid-state", record: current, replayed: false };
   }
   const criterion = observed.criteria.find((item) => item.id === mutation.criterionId);
   if (criterion === undefined || observed.planHash === null) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "invalid-state", record: current, replayed: false };
   }
   const sourceDigests = currentOutcomeEvidenceSourceDigests(
     observed,
@@ -623,23 +646,24 @@ export function reduceOutcomeDecision(
     mutation.serverTime,
   );
   if (sourceDigests === undefined) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "closure-incomplete", record: current, replayed: false };
   }
   const currentEvidenceSetHash = evidenceSetHash({
     criterionId: criterion.id,
     planGeneration: observed.planGeneration,
     sourceDigests,
   });
+  if (mutation.planHash !== observed.planHash || mutation.evidenceSetHash !== currentEvidenceSetHash) {
+    return { kind: "rejected", reason: "revision-conflict", record: current, replayed: false };
+  }
   if (
-    mutation.planHash !== observed.planHash ||
-    mutation.evidenceSetHash !== currentEvidenceSetHash ||
     (mutation.status === "verified" && sourceDigests.length === 0) ||
     (mutation.status === "rejected" && mutation.note === undefined)
   ) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "closure-incomplete", record: current, replayed: false };
   }
   if (observed.decisions.length >= 100) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "capacity-exceeded", record: current, replayed: false };
   }
   const decidedRevision = current.revision + 1;
   const decision = {
@@ -676,17 +700,21 @@ export function reduceOutcomeAcceptance(
   assertServerTime(mutation.serverTime);
   const previous = current.acceptances.find((acceptance) => acceptance.id === mutation.id);
   if (previous !== undefined) {
+    if (previous.requestHash === mutation.requestHash) {
+      return { kind: "updated", record: current, replayed: true };
+    }
     return {
-      kind: previous.requestHash === mutation.requestHash ? "updated" : "conflict",
+      kind: "conflict",
+      reason: "operation-conflict",
       record: current,
-      replayed: previous.requestHash === mutation.requestHash,
+      replayed: false,
     };
   }
   if (mutation.expectedRevision !== current.revision) {
-    return { kind: "conflict", record: current, replayed: false };
+    return { kind: "conflict", reason: "revision-conflict", record: current, replayed: false };
   }
   if ((mutation.projections === undefined) !== (mutation.evidence === undefined)) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "closure-incomplete", record: current, replayed: false };
   }
   const refreshed =
     mutation.projections === undefined || mutation.evidence === undefined
@@ -698,29 +726,34 @@ export function reduceOutcomeAcceptance(
           serverTime: mutation.serverTime,
         });
   if (refreshed !== undefined && refreshed.kind !== "updated") {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "revision-conflict", record: current, replayed: false };
   }
   const observed =
     refreshed === undefined
       ? current
       : { ...refreshed.record, revision: current.revision, updatedAt: current.updatedAt };
   if ((observed.phase !== "active" && observed.phase !== "accepted") || observed.planHash === null) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "invalid-state", record: current, replayed: false };
   }
   const closureHash = deriveOutcomeClosure(observed, observed.projections, mutation.serverTime);
+  if (closureHash === null) {
+    return { kind: "rejected", reason: "closure-incomplete", record: current, replayed: false };
+  }
+  if (mutation.planHash !== observed.planHash || mutation.closureHash !== closureHash) {
+    return { kind: "rejected", reason: "revision-conflict", record: current, replayed: false };
+  }
   if (
-    closureHash === null ||
-    mutation.planHash !== observed.planHash ||
-    mutation.closureHash !== closureHash ||
     observed.acceptances.some(
       (acceptance) =>
         acceptance.planGeneration === observed.planGeneration &&
         acceptance.planHash === observed.planHash &&
         acceptance.closureHash === closureHash,
-    ) ||
-    observed.acceptances.length >= 20
+    )
   ) {
-    return { kind: "rejected", record: current, replayed: false };
+    return { kind: "rejected", reason: "invalid-state", record: current, replayed: false };
+  }
+  if (observed.acceptances.length >= 20) {
+    return { kind: "rejected", reason: "capacity-exceeded", record: current, replayed: false };
   }
   const acceptedRevision = current.revision + 1;
   const acceptance = {

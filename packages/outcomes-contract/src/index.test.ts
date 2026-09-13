@@ -13,12 +13,14 @@ import {
 } from "./index.js";
 
 type Forbidden = "managerProfileId" | "requestHash" | "operations";
-type DecisionForbidden = "note" | "profileId" | "requestHash";
+type DecisionForbidden = "profileId" | "requestHash";
 type AssertNever<T extends never> = T;
 type PublicForbiddenKeys = AssertNever<Extract<keyof OutcomeDetail, Forbidden>>;
 type PublicDecisionForbiddenKeys = AssertNever<Extract<keyof OutcomeDecisionView, DecisionForbidden>>;
 void (undefined as unknown as PublicForbiddenKeys);
 void (undefined as unknown as PublicDecisionForbiddenKeys);
+const publicDecisionNote: OutcomeDecisionView["note"] = undefined;
+void publicDecisionNote;
 
 describe("outcomes public contract", () => {
   it("exports only the P-01 view surface and bounded list constants", () => {
