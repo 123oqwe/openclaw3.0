@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { parseOutcomeRecord } from "../domain/schema.js";
 import { createHarness, createLinkedOutcome, criterionId } from "./methods.test-support.js";
 
 describe("P-05 Outcome assurance Gateway handlers", () => {
@@ -563,6 +564,10 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
       const verifiedOutcome = (
         verified[1] as { outcome: { closureHash: string; planHash: string } }
       ).outcome;
+      expect(verifiedOutcome).toMatchObject({
+        planHash: outcome.planHash,
+        closureHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+      });
       closureHash = verifiedOutcome.closureHash;
       const record = harness.records.get(id);
       if (record === undefined) {
@@ -589,6 +594,7 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     if (current?.planHash === null || current === undefined) {
       throw new Error("fixture Outcome must have an active plan");
     }
+    expect(parseOutcomeRecord(current)).toEqual(current);
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
 
