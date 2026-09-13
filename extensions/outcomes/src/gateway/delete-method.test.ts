@@ -65,9 +65,9 @@ describe("P-06 Outcome delete Gateway handler", () => {
 
     const { id: cancelledId } = await createOutcome(harness, outcomeIds[1]!);
     await harness.call("outcomes.cancel", { id: cancelledId, expectedRevision: 1 });
-    expect(
-      await harness.call("outcomes.delete", { id: cancelledId, expectedRevision: 2 }),
-    ).toEqual([true, { deleted: true, id: cancelledId }]);
+    expect(await harness.call("outcomes.delete", { id: cancelledId, expectedRevision: 2 })).toEqual(
+      [true, { deleted: true, id: cancelledId }],
+    );
     expect(harness.records.has(cancelledId)).toBe(false);
   });
 

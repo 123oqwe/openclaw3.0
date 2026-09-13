@@ -332,7 +332,9 @@ function registerHarness(
       registrations.push({
         method,
         handler: handler as never,
-        options: registrationOptions as { scope: "operator.read" | "operator.write" | "operator.admin" },
+        options: registrationOptions as {
+          scope: "operator.read" | "operator.write" | "operator.admin";
+        },
       });
     },
   });
