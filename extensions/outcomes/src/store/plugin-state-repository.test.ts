@@ -442,6 +442,101 @@ describe("Outcome repository host adapter", () => {
     );
   });
 
+  it("keeps a decision-only historical plan readable from a fresh process", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-decision-history-process", applyEnv: false },
+      async (state) => {
+        const namespace = `outcomes-v1-${randomUUID()}`;
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const repository = createOutcomeRepository(store);
+        const initial = assuredActiveRecord("decision-history-process");
+        await repository.create(initial);
+        const evidenceHash = evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: initial.planGeneration,
+          sourceDigests: ["proof-digest-1"],
+        });
+        const verified = await repository.transact(initial.id, (current) => {
+          const decision = reduceOutcomeDecision(current!, {
+            expectedRevision: current!.revision,
+            id: "decision-only",
+            requestHash: "d".repeat(64),
+            criterionId: "c-1",
+            status: "verified",
+            planHash: current!.planHash!,
+            evidenceSetHash: evidenceHash,
+            profileId: "alice",
+            serverTime: 42,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(verified).toMatchObject({ kind: "updated", record: { acceptances: [] } });
+        if (verified.kind !== "updated") {
+          return;
+        }
+        const decidedPlan = structuredClone(verified.record.decisions[0]?.decidedPlan);
+        const changed = await repository.transact(initial.id, (current) => {
+          const decision = reduceOutcomeContract(current!, {
+            expectedRevision: current!.revision,
+            objective: "changed after the original decision",
+            criteria: current!.criteria,
+            serverTime: 43,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(changed.kind).toBe("updated");
+        const unlinked = await repository.transact(initial.id, (current) => {
+          const decision = reduceOutcomeUnlink(current!, {
+            expectedRevision: current!.revision,
+            criterionId: "c-1",
+            cardId: "card-1",
+            serverTime: 44,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(unlinked.kind).toBe("updated");
+
+        const child = spawnSync(
+          process.execPath,
+          [
+            "--import",
+            "tsx",
+            "--input-type=module",
+            "--eval",
+            `
+          import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
+          const store = createPluginStateKeyedStoreForTests("outcomes", {
+            namespace: ${JSON.stringify(namespace)},
+            maxEntries: ${OUTCOME_MAX_ENTRIES},
+            overflowPolicy: "reject-new",
+          });
+          const value = await store.lookup(${JSON.stringify(initial.id)});
+          process.stdout.write(JSON.stringify(value));
+        `,
+          ],
+          { cwd: process.cwd(), encoding: "utf8", env: { ...process.env, ...state.env } },
+        );
+        expect(child.status, child.stderr).toBe(0);
+        const restored = JSON.parse(child.stdout) as OutcomeRecord;
+        expect(restored.acceptances).toEqual([]);
+        expect(restored.planGeneration).toBe(3);
+        expect(restored.criteria[0]?.workRefs).toEqual([]);
+        expect(restored.decisions[0]?.decidedPlan).toEqual(decidedPlan);
+      },
+    );
+  });
+
   it("performs zero host writes when decision or acceptance history is full", async () => {
     await withOpenClawTestState(
       { label: "outcome-repository-assurance-capacity", applyEnv: false },
