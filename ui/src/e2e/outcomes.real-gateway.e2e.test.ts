@@ -811,7 +811,7 @@ unavailableSuite.define(() => {
     if (!unavailableInstance) {
       throw new Error("Unavailable Outcome Gateway fixture was not started");
     }
-    const instance = unavailableInstance;
+    const unavailableGatewayInstance = unavailableInstance;
     await unavailableSuite.withPage(
       {
         locale: "en-US",
@@ -819,7 +819,7 @@ unavailableSuite.define(() => {
         viewport: { height: 900, width: 1280 },
       },
       async ({ page }) => {
-        await page.goto(await outcomesUrlFor(instance));
+        await page.goto(await outcomesUrlFor(unavailableGatewayInstance));
         await waitForControlUiGatewayReady(page);
         await page
           .getByText("Outcome access unavailable", { exact: true })
