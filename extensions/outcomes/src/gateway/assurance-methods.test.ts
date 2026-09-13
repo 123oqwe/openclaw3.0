@@ -477,6 +477,89 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it.each([
+    ["rejected", "123e4567-e89b-42d3-a456-426614174045"],
+    ["unknown operation", "123e4567-e89b-42d3-a456-426614174046"],
+  ] as const)("rejects a new acceptance with a current %s without writing", async (state, acceptanceId) => {
+    const cards = [
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 2,
+        metadata: {
+          automation: { boardId: "board-a" },
+          proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
+          artifacts: [],
+        },
+      },
+    ];
+    const harness = createHarness({ workboardCards: cards });
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const outcome = (
+      refreshed[1] as {
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
+      }
+    ).outcome;
+    if (state === "rejected") {
+      expect(
+        await harness.call("outcomes.verifyCriterion", {
+          id,
+          expectedRevision: outcome.revision,
+          decisionId: "123e4567-e89b-42d3-a456-426614174047",
+          criterionId,
+          status: "rejected",
+          planHash: outcome.planHash,
+          evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+        }),
+      ).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
+    } else {
+      const record = harness.records.get(id);
+      if (record === undefined) {
+        throw new Error("fixture Outcome must exist");
+      }
+      harness.records.set(id, {
+        ...record,
+        operations: [
+          {
+            id: "123e4567-e89b-42d3-a456-426614174048",
+            kind: "workboard-card-start",
+            criterionId,
+            planGeneration: record.planGeneration,
+            createdRevision: record.revision,
+            requestHash: "a".repeat(64),
+            state: "unknown",
+            target: record.criteria[0]!.workRefs[0]!,
+          },
+        ],
+      });
+    }
+    const current = harness.records.get(id);
+    if (current?.planHash === null || current === undefined) {
+      throw new Error("fixture Outcome must have an active plan");
+    }
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+
+    expect(
+      await harness.call("outcomes.accept", {
+        id,
+        expectedRevision: current.revision,
+        acceptanceId,
+        planHash: current.planHash,
+        closureHash: "c".repeat(64),
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("keeps a competing owner mutation when an assurance write loses its CAS", async () => {
     const cards = [
       {
