@@ -836,18 +836,30 @@ describe("P-02 Outcome handlers", () => {
     ]);
     expect(harness.writes()).toBe(writesBeforeReplay);
 
-    expect(
-      await harness.call("outcomes.accept", {
-        id,
-        expectedRevision: verifiedOutcome.revision,
-        acceptanceId: "123e4567-e89b-42d3-a456-426614174021",
-        planHash: verifiedOutcome.planHash,
-        closureHash: verifiedOutcome.closureHash,
-      }),
-    ).toMatchObject([
+    const acceptanceParams = {
+      id,
+      expectedRevision: verifiedOutcome.revision,
+      acceptanceId: "123e4567-e89b-42d3-a456-426614174021",
+      planHash: verifiedOutcome.planHash,
+      closureHash: verifiedOutcome.closureHash,
+    };
+    expect(await harness.call("outcomes.accept", acceptanceParams)).toMatchObject([
       true,
       { replayed: false, outcome: { phase: "accepted", revision: 6 }, receipt: { kind: "accept" } },
     ]);
+    const writesBeforeAcceptanceReplay = harness.writes();
+    harness.gatewayRequest.mockRejectedValueOnce(
+      Object.assign(new Error("owner unavailable"), { code: "GATEWAY_TIMEOUT" }),
+    );
+    expect(await harness.call("outcomes.accept", acceptanceParams)).toMatchObject([
+      true,
+      {
+        replayed: true,
+        receipt: { kind: "accept", committedRevision: 6 },
+        outcome: { revision: 6, work: [], evidence: [] },
+      },
+    ]);
+    expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
   });
 
   it("does not write when cancellation is terminal or an operation is in flight", async () => {
