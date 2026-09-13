@@ -30,6 +30,7 @@ import {
 import { fail, reportCapacityWarning, respondMutation } from "./method-helpers.js";
 import {
   outcomeCancelParamsSchema,
+  outcomeDeleteParamsSchema,
   outcomeActivateParamsSchema,
   outcomeCreateParamsSchema,
   outcomeIdParamsSchema,
@@ -533,6 +534,62 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
     { scope: "operator.write" },
   );
   registerOutcomeAssuranceMethods(api, repository);
+  api.registerGatewayMethod(
+    "outcomes.delete",
+    async ({ client, params: rawParams, respond }) => {
+      const admission = admitOutcomeOwner({
+        client,
+        missingOwnerCode: "NOT_FOUND",
+        request: rawParams,
+        respond,
+        schema: outcomeDeleteParamsSchema,
+      });
+      if (!admission) {
+        return;
+      }
+      const { owner, request: params } = admission;
+      const id = normalizedUuid(params.id);
+      if (!id) {
+        return fail(respond, "INVALID_REQUEST");
+      }
+      let rejection:
+        | "INVALID_STATE"
+        | "NOT_QUIESCENT"
+        | "REVISION_CONFLICT"
+        | undefined;
+      try {
+        const deleted = await repository.deleteOwnedIf(owner, id, (current) => {
+          if (current.revision !== params.expectedRevision) {
+            rejection = "REVISION_CONFLICT";
+            return false;
+          }
+          if (
+            (current.phase !== "draft" && current.phase !== "cancelled") ||
+            current.acceptances.length > 0
+          ) {
+            rejection = "INVALID_STATE";
+            return false;
+          }
+          if (
+            current.operations.some((operation) =>
+              ["prepared", "unknown", "may-have-crossed"].includes(operation.state),
+            )
+          ) {
+            rejection = "NOT_QUIESCENT";
+            return false;
+          }
+          return true;
+        });
+        if (!deleted) {
+          return fail(respond, rejection ?? "NOT_FOUND");
+        }
+        respond(true, { deleted: true, id });
+      } catch (error) {
+        respond(false, undefined, outcomeError(outcomeStorageError(error, "mutation")));
+      }
+    },
+    { scope: "operator.admin" },
+  );
   api.registerGatewayMethod(
     "outcomes.cancel",
     async ({ client, params: rawParams, respond }) => {

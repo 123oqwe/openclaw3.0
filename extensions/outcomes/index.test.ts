@@ -104,8 +104,8 @@ describe("Outcome plugin shell", () => {
       { method: "outcomes.refresh", options: { scope: "operator.write" } },
       { method: "outcomes.verifyCriterion", options: { scope: "operator.write" } },
       { method: "outcomes.accept", options: { scope: "operator.write" } },
-      { method: "outcomes.cancel", options: { scope: "operator.write" } },
       { method: "outcomes.delete", options: { scope: "operator.admin" } },
+      { method: "outcomes.cancel", options: { scope: "operator.write" } },
     ]);
   });
 

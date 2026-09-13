@@ -71,6 +71,14 @@ export const outcomeCancelParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const outcomeDeleteParamsSchema = Type.Object(
+  {
+    id: outcomeId,
+    expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+  },
+  { additionalProperties: false },
+);
+
 export const outcomeActivateParamsSchema = Type.Object(
   {
     id: outcomeId,

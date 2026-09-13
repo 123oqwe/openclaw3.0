@@ -754,6 +754,40 @@ describe("Outcome repository host adapter", () => {
     );
   });
 
+  it("evaluates an owned delete predicate against the latest atomic host record", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-delete-revision", applyEnv: false },
+      async (state) => {
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace: `outcomes-v1-${randomUUID()}`,
+          maxEntries: 500,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const repository = createOutcomeRepository(store);
+        const record = draftRecord("delete-race");
+        await repository.create(record);
+        await repository.transactOwned("alice", record.id, (current) => ({
+          result: undefined,
+          next: { ...current, revision: current.revision + 1, updatedAt: 2 },
+        }));
+
+        let predicateRevision: number | undefined;
+        await expect(
+          repository.deleteOwnedIf("alice", record.id, (current) => {
+            predicateRevision = current.revision;
+            return current.revision === record.revision;
+          }),
+        ).resolves.toBe(false);
+        expect(predicateRevision).toBe(2);
+        await expect(repository.getOwned("alice", record.id)).resolves.toMatchObject({
+          revision: 2,
+          updatedAt: 2,
+        });
+      },
+    );
+  });
+
   it("replays same-owner create and rejects hash conflicts", async () => {
     await withOpenClawTestState(
       { label: "outcome-repository-create-replay", applyEnv: false },

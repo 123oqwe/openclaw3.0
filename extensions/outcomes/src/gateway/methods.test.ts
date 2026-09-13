@@ -20,6 +20,7 @@ describe("P-02 Outcome handlers", () => {
     ["outcomes.unlinkWorkboard", {}],
     ["outcomes.activate", {}],
     ["outcomes.refresh", {}],
+    ["outcomes.delete", {}],
     ["outcomes.cancel", {}],
     ["outcomes.verifyCriterion", {}],
     ["outcomes.accept", {}],

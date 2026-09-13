@@ -427,8 +427,8 @@ describe("P-02 Outcome Gateway admission", () => {
       ["outcomes.refresh", "operator.write"],
       ["outcomes.verifyCriterion", "operator.write"],
       ["outcomes.accept", "operator.write"],
-      ["outcomes.cancel", "operator.write"],
       ["outcomes.delete", "operator.admin"],
+      ["outcomes.cancel", "operator.write"],
     ] as const;
     expect(
       registrations
