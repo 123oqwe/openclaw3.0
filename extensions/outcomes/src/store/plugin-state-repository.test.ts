@@ -8,11 +8,21 @@ import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import {
+  reduceOutcomeAcceptance,
   reduceOutcomeActivate,
+  reduceOutcomeContract,
+  reduceOutcomeDecision,
   reduceOutcomeTitle,
+  reduceOutcomeUnlink,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
-import { createRequestHash, planHash, workboardProjectionFingerprint } from "../domain/schema.js";
+import {
+  createRequestHash,
+  evidenceSetHash,
+  planHash,
+  workboardProjectionFingerprint,
+} from "../domain/schema.js";
+import { deriveOutcomeClosure } from "../assurance/closure.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
@@ -76,6 +86,58 @@ function oversizedAvailableProjection(digest: string): OutcomeRecord["projection
       status: "done",
       sourceUpdatedAt: 1,
     }),
+  };
+}
+
+function assuredActiveRecord(id: string): OutcomeRecord {
+  const draft = draftRecord(id);
+  const ref = {
+    owner: "workboard" as const,
+    cardId: "card-1",
+    cardCreatedAt: 1,
+    boardIdAtLink: "board-1",
+  };
+  const criteria = [{ ...draft.criteria[0]!, workRefs: [ref] }];
+  const planGeneration = 1;
+  const activePlanHash = planHash({
+    outcomeId: draft.id,
+    objective: draft.objective,
+    contractRevision: draft.contractRevision,
+    planGeneration,
+    criteria,
+  });
+  return {
+    ...draft,
+    phase: "active",
+    revision: 2,
+    planGeneration,
+    planHash: activePlanHash,
+    criteria,
+    projections: [
+      {
+        ref,
+        availability: "available",
+        currentBoardId: "board-current",
+        status: "done",
+        observedAt: 10,
+        lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
+        proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+        artifacts: [],
+      },
+    ],
+    evidence: [
+      {
+        id: "evidence-1",
+        criterionId: "c-1",
+        planGeneration,
+        workRef: ref,
+        kind: "workboard-proof",
+        sourceId: "proof-1",
+        sourceDigest: "proof-digest-1",
+        observedAt: 10,
+      },
+    ],
   };
 }
 
@@ -254,6 +316,128 @@ describe("Outcome repository host adapter", () => {
           updatedAt: 42,
           revision: 2,
         });
+      },
+    );
+  });
+
+  it("restores decision and acceptance snapshots after contract changes and unlink", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-assurance-history", applyEnv: false },
+      async (state) => {
+        const namespace = `outcomes-v1-${randomUUID()}`;
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const repository = createOutcomeRepository(store);
+        const initial = assuredActiveRecord("assurance-history");
+        await repository.create(initial);
+        const evidenceHash = evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: initial.planGeneration,
+          sourceDigests: ["proof-digest-1"],
+        });
+        const rejected = await repository.transact("assurance-history", (current) => {
+          const decision = reduceOutcomeDecision(current!, {
+            expectedRevision: current!.revision,
+            id: "decision-rejected",
+            requestHash: "d".repeat(64),
+            criterionId: "c-1",
+            status: "rejected",
+            planHash: current!.planHash!,
+            evidenceSetHash: evidenceHash,
+            profileId: "alice",
+            note: "requires reviewer follow-up",
+            serverTime: 42,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(rejected).toMatchObject({ kind: "updated", replayed: false });
+        const verified = await repository.transact("assurance-history", (current) => {
+          const decision = reduceOutcomeDecision(current!, {
+            expectedRevision: current!.revision,
+            id: "decision-verified",
+            requestHash: "e".repeat(64),
+            criterionId: "c-1",
+            status: "verified",
+            planHash: current!.planHash!,
+            evidenceSetHash: evidenceHash,
+            profileId: "alice",
+            serverTime: 43,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(verified).toMatchObject({ kind: "updated", replayed: false });
+        if (verified.kind !== "updated") {
+          return;
+        }
+        const closureHash = deriveOutcomeClosure(verified.record, verified.record.projections, 43);
+        if (closureHash === null || verified.record.planHash === null) {
+          throw new Error("fixture closure must be complete after verification");
+        }
+        const accepted = await repository.transact("assurance-history", (current) => {
+          const decision = reduceOutcomeAcceptance(current!, {
+            expectedRevision: current!.revision,
+            id: "acceptance-1",
+            requestHash: "a".repeat(64),
+            planHash: current!.planHash!,
+            closureHash,
+            profileId: "alice",
+            serverTime: 44,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(accepted).toMatchObject({ kind: "updated", replayed: false });
+        if (accepted.kind !== "updated") {
+          return;
+        }
+        const decisionSnapshots = structuredClone(accepted.record.decisions);
+        const acceptanceSnapshot = structuredClone(accepted.record.acceptances);
+        const contractChanged = await repository.transact("assurance-history", (current) => {
+          const decision = reduceOutcomeContract(current!, {
+            expectedRevision: current!.revision,
+            objective: "revised objective",
+            criteria: current!.criteria,
+            serverTime: 45,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(contractChanged.kind).toBe("updated");
+        const unlinked = await repository.transact("assurance-history", (current) => {
+          const decision = reduceOutcomeUnlink(current!, {
+            expectedRevision: current!.revision,
+            criterionId: "c-1",
+            cardId: "card-1",
+            serverTime: 46,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(unlinked.kind).toBe("updated");
+
+        resetPluginStateStoreForTests();
+        const reopenedStore = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const restored = await createOutcomeRepository(reopenedStore).get("assurance-history");
+        expect(restored).toMatchObject({ phase: "active", planGeneration: 3, revision: 7 });
+        expect(restored?.decisions).toEqual(decisionSnapshots);
+        expect(restored?.acceptances).toEqual(acceptanceSnapshot);
+        expect(restored?.criteria[0]?.workRefs).toEqual([]);
       },
     );
   });
