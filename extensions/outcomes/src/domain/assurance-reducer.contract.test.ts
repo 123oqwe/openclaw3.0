@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { deriveOutcomeClosure } from "../assurance/closure.js";
 import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "./assurance-reducer.js";
 import { planHash } from "./canonical-plan.js";
-import { createRequestHash, evidenceSetHash } from "./hash.js";
+import { createRequestHash, evidenceSetHash, workboardProjectionFingerprint } from "./hash.js";
 import { reduceOutcomeContract, reduceOutcomeTitle, reduceOutcomeUnlink } from "./reducer.js";
 import { parseOutcomeRecord } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
@@ -58,6 +58,14 @@ function assuredActiveRecord(id = "assured-1"): OutcomeRecord {
         sourceUpdatedAt: 10,
         proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
         artifacts: [],
+        sourceFingerprint: workboardProjectionFingerprint({
+          ref,
+          proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+          artifacts: [],
+          currentBoardId: "board-current",
+          status: "done",
+          sourceUpdatedAt: 10,
+        }),
       },
     ],
     evidence: [
@@ -210,12 +218,17 @@ describe("Outcome assurance history contract", () => {
     if (rejected.kind !== "updated") {
       return;
     }
-    expect(rejected.record.decisions).toEqual(
-      expect.arrayContaining([
-        { id: "decision-verified", decidedAt: 42, decidedRevision: 2, status: "verified" },
-        { id: "decision-rejected", decidedAt: 42, decidedRevision: 3, status: "rejected" },
-      ]),
-    );
+    expect(
+      rejected.record.decisions.map(({ id, decidedAt, decidedRevision, status }) => ({
+        id,
+        decidedAt,
+        decidedRevision,
+        status,
+      })),
+    ).toEqual([
+      { id: "decision-verified", decidedAt: 42, decidedRevision: 2, status: "verified" },
+      { id: "decision-rejected", decidedAt: 42, decidedRevision: 3, status: "rejected" },
+    ]);
     expect(deriveOutcomeClosure(rejected.record, rejected.record.projections, 42)).toBeNull();
   });
 
