@@ -95,11 +95,9 @@ describe("P-06 Outcome delete Gateway handler", () => {
     });
     const { id: activeId, record: draft } = await createOutcome(harness, outcomeIds[0]!);
     harness.records.set(activeId, { ...draft, phase: "active" });
-    expect(await harness.call("outcomes.delete", { id: activeId, expectedRevision: 1 })).toMatchObject([
-      false,
-      undefined,
-      { code: "OUTCOME_INVALID_STATE" },
-    ]);
+    expect(
+      await harness.call("outcomes.delete", { id: activeId, expectedRevision: 1 }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_INVALID_STATE" }]);
 
     const decisionOnlyId = await createLinkedOutcome(harness, outcomeIds[1]!);
     await harness.call("outcomes.activate", { id: decisionOnlyId, expectedRevision: 2 });
@@ -126,7 +124,10 @@ describe("P-06 Outcome delete Gateway handler", () => {
       evidenceSetHash: refreshedOutcome.criteria[0]!.evidenceSetHash,
     });
     const verified = harness.records.get(decisionOnlyId)!;
-    await harness.call("outcomes.cancel", { id: decisionOnlyId, expectedRevision: verified.revision });
+    await harness.call("outcomes.cancel", {
+      id: decisionOnlyId,
+      expectedRevision: verified.revision,
+    });
     const cancelled = harness.records.get(decisionOnlyId)!;
     expect(cancelled).toMatchObject({ phase: "cancelled", acceptances: [] });
     expect(cancelled.decisions).toHaveLength(1);

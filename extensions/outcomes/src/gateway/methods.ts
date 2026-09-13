@@ -552,11 +552,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       if (!id) {
         return fail(respond, "INVALID_REQUEST");
       }
-      let rejection:
-        | "INVALID_STATE"
-        | "NOT_QUIESCENT"
-        | "REVISION_CONFLICT"
-        | undefined;
+      let rejection: "INVALID_STATE" | "NOT_QUIESCENT" | "REVISION_CONFLICT" | undefined;
       try {
         const deleted = await repository.deleteOwnedIf(owner, id, (current) => {
           if (current.revision !== params.expectedRevision) {
