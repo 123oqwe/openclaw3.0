@@ -560,7 +560,9 @@ suite.define(() => {
         await waitForControlUiGatewayReady(page);
         await expect
           .poll(() =>
-            gatewayHelloMethods.some((methods) => !methods.includes("workboard.cards.list")),
+            gatewayHelloMethods
+              .slice(gatewayHelloCountBeforeWorkboardDisabled)
+              .some((methods) => !methods.includes("workboard.cards.list")),
           )
           .toBe(true);
         await page
@@ -589,6 +591,7 @@ suite.define(() => {
           path: path.join(suite.artifactDir, "outcomes-workboard-unavailable.png"),
         });
 
+        const gatewayHelloCountBeforeWorkboardEnabled = gatewayHelloMethods.length;
         await instance.stopGateway();
         await page
           .getByText("Outcome connection unavailable", { exact: true })
@@ -601,7 +604,7 @@ suite.define(() => {
         await expect
           .poll(() =>
             gatewayHelloMethods
-              .slice(gatewayHelloCountBeforeWorkboardDisabled)
+              .slice(gatewayHelloCountBeforeWorkboardEnabled)
               .some((methods) => methods.includes("workboard.cards.list")),
           )
           .toBe(true);

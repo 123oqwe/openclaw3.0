@@ -287,7 +287,7 @@ async function readServedControlUiBuildId(gatewayUrl: string): Promise<string> {
   controlUiUrl.pathname = "/";
   controlUiUrl.search = "";
   controlUiUrl.hash = "";
-  const response = await fetch(controlUiUrl);
+  const response = await fetch(controlUiUrl, { signal: AbortSignal.timeout(30_000) });
   if (!response.ok) {
     throw new Error(`Control UI build metadata request failed with ${response.status}`);
   }
@@ -301,6 +301,7 @@ async function readServedControlUiBuildId(gatewayUrl: string): Promise<string> {
 }
 
 async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
+  const clientBuildId = await readServedControlUiBuildId(gatewayUrl);
   let browserPrincipal: ProxyPrincipal = aliceIdentity;
   const connections: ProxyConnectionEvidence[] = [];
   const pairs = new Set<TransportPair>();
@@ -335,12 +336,6 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
     throw new Error("Outcome identity proxy did not bind a TCP port");
   }
   const baseUrl = `ws://localhost:${address.port}`;
-  const controlUiUrl = new URL(gatewayUrl);
-  controlUiUrl.protocol = controlUiUrl.protocol === "wss:" ? "https:" : "http:";
-  controlUiUrl.pathname = "/";
-  controlUiUrl.search = "";
-  controlUiUrl.hash = "";
-  const clientBuildId = await readServedControlUiBuildId(gatewayUrl);
   return {
     browserUrl: `${baseUrl}/browser`,
     clientBuildId,
