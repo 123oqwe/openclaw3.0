@@ -39,10 +39,10 @@ describe("Outcome Gateway telemetry", () => {
       method: "create",
       result: "success",
     });
-    expect(telemetry.histogram.record).toHaveBeenCalledWith(
-      expect.any(Number),
-      { method: "create", result: "success" },
-    );
+    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
+      method: "create",
+      result: "success",
+    });
   });
 
   it("preserves the Gateway response when the telemetry provider throws", async () => {
