@@ -442,6 +442,192 @@ describe("Outcome repository host adapter", () => {
     );
   });
 
+  it("performs zero host writes when decision or acceptance history is full", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-assurance-capacity", applyEnv: false },
+      async (state) => {
+        const createObservedRepository = (namespace: string) => {
+          const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+            namespace,
+            maxEntries: OUTCOME_MAX_ENTRIES,
+            overflowPolicy: "reject-new",
+            env: state.env,
+          });
+          const updates: Array<OutcomeRecord | undefined> = [];
+          return {
+            repository: createOutcomeRepository({
+              ...store,
+              update: async (id, callback) =>
+                store.update!(id, (current) => {
+                  const next = callback(current);
+                  updates.push(next);
+                  return next;
+                }),
+            }),
+            updates,
+          };
+        };
+        const decisionNamespace = `outcomes-v1-${randomUUID()}`;
+        const { repository: decisionRepository, updates: decisionUpdates } =
+          createObservedRepository(decisionNamespace);
+        const decisionRecord = assuredActiveRecord("decision-capacity");
+        const decisionPlan = {
+          outcomeId: decisionRecord.id,
+          objective: decisionRecord.objective,
+          contractRevision: decisionRecord.contractRevision,
+          planGeneration: decisionRecord.planGeneration,
+          criteria: decisionRecord.criteria,
+        };
+        const decisionEvidenceHash = evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: decisionRecord.planGeneration,
+          sourceDigests: ["proof-digest-1"],
+        });
+        const fullDecisionHistory: OutcomeRecord["decisions"] = Array.from(
+          { length: 100 },
+          (_, index) => ({
+            id: `decision-${index + 1}`,
+            criterionId: "c-1",
+            planGeneration: decisionRecord.planGeneration,
+            decidedRevision: index + 1,
+            status: "verified",
+            requestHash: `${(index + 1).toString(16).padStart(2, "0")}${"a".repeat(62)}`,
+            profileId: "alice",
+            planHash: planHash(decisionPlan),
+            decidedPlan: decisionPlan,
+            evidenceSetHash: decisionEvidenceHash,
+            decidedAt: index + 1,
+          }),
+        );
+        const fullDecisions = {
+          ...decisionRecord,
+          revision: 101,
+          updatedAt: 101,
+          decisions: fullDecisionHistory,
+        };
+        await decisionRepository.create(fullDecisions);
+        const decisionResult = await decisionRepository.transact(fullDecisions.id, (current) => {
+          const decision = reduceOutcomeDecision(current!, {
+            expectedRevision: current!.revision,
+            id: "decision-101",
+            requestHash: "b".repeat(64),
+            criterionId: "c-1",
+            status: "verified",
+            planHash: current!.planHash!,
+            evidenceSetHash: decisionEvidenceHash,
+            profileId: "alice",
+            serverTime: 102,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(decisionResult).toMatchObject({ kind: "rejected", reason: "capacity-exceeded" });
+        expect(decisionUpdates).toEqual([undefined]);
+        await expect(decisionRepository.get(fullDecisions.id)).resolves.toEqual(fullDecisions);
+
+        const acceptanceNamespace = `outcomes-v1-${randomUUID()}`;
+        const { repository: acceptanceRepository, updates: acceptanceUpdates } =
+          createObservedRepository(acceptanceNamespace);
+        const acceptanceRecord = assuredActiveRecord("acceptance-capacity");
+        const activePlanGeneration = 21;
+        const activeContractRevision = 21;
+        const activePlan = {
+          outcomeId: acceptanceRecord.id,
+          objective: acceptanceRecord.objective,
+          contractRevision: activeContractRevision,
+          planGeneration: activePlanGeneration,
+          criteria: acceptanceRecord.criteria,
+        };
+        const fullAcceptanceHistory: OutcomeRecord["acceptances"] = Array.from(
+          { length: 20 },
+          (_, index) => {
+            const planGeneration = index + 1;
+            const acceptedPlan = {
+              outcomeId: acceptanceRecord.id,
+              objective: acceptanceRecord.objective,
+              contractRevision: planGeneration,
+              planGeneration,
+              criteria: acceptanceRecord.criteria,
+            };
+            return {
+              id: `acceptance-${planGeneration}`,
+              requestHash: `${planGeneration.toString(16).padStart(2, "0")}${"c".repeat(62)}`,
+              acceptedRevision: planGeneration,
+              profileId: "alice",
+              acceptedAt: planGeneration,
+              planGeneration,
+              planHash: planHash(acceptedPlan),
+              closureHash: "d".repeat(64),
+              acceptedPlan,
+            };
+          },
+        );
+        const fullAcceptances: OutcomeRecord = {
+          ...acceptanceRecord,
+          contractRevision: activeContractRevision,
+          planGeneration: activePlanGeneration,
+          planHash: planHash(activePlan),
+          revision: 100,
+          updatedAt: 100,
+          projections: acceptanceRecord.projections.map((projection) => ({ ...projection })),
+          evidence: acceptanceRecord.evidence.map((evidence) => ({
+            ...evidence,
+            planGeneration: activePlanGeneration,
+          })),
+          acceptances: fullAcceptanceHistory,
+        };
+        await acceptanceRepository.create(fullAcceptances);
+        const currentEvidenceHash = evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: activePlanGeneration,
+          sourceDigests: ["proof-digest-1"],
+        });
+        const verified = await acceptanceRepository.transact(fullAcceptances.id, (current) => {
+          const decision = reduceOutcomeDecision(current!, {
+            expectedRevision: current!.revision,
+            id: "decision-current",
+            requestHash: "e".repeat(64),
+            criterionId: "c-1",
+            status: "verified",
+            planHash: current!.planHash!,
+            evidenceSetHash: currentEvidenceHash,
+            profileId: "alice",
+            serverTime: 101,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(verified).toMatchObject({ kind: "updated", replayed: false });
+        if (verified.kind !== "updated" || verified.record.planHash === null) {
+          throw new Error("fixture must create a current verified decision");
+        }
+        const closureHash = deriveOutcomeClosure(verified.record, verified.record.projections, 101);
+        if (closureHash === null) {
+          throw new Error("fixture closure must be complete");
+        }
+        const acceptanceResult = await acceptanceRepository.transact(fullAcceptances.id, (current) => {
+          const decision = reduceOutcomeAcceptance(current!, {
+            expectedRevision: current!.revision,
+            id: "acceptance-21",
+            requestHash: "f".repeat(64),
+            planHash: current!.planHash!,
+            closureHash,
+            profileId: "alice",
+            serverTime: 102,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(acceptanceResult).toMatchObject({ kind: "rejected", reason: "capacity-exceeded" });
+        expect(acceptanceUpdates).toEqual([verified.record, undefined]);
+        await expect(acceptanceRepository.get(fullAcceptances.id)).resolves.toEqual(verified.record);
+      },
+    );
+  });
+
   it("keeps cancelled records unchanged for rejected and no-op decisions", async () => {
     await withOpenClawTestState(
       { label: "outcome-repository-zero-write", applyEnv: false },
