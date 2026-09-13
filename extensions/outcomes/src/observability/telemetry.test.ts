@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHarness, createParams, outcomeIds } from "../gateway/methods.test-support.js";
+import { recordOutcomeTelemetry } from "./telemetry.js";
 
 const telemetry = vi.hoisted(() => {
   const counter = { add: vi.fn() };
@@ -43,6 +44,86 @@ describe("Outcome Gateway telemetry", () => {
       method: "create",
       result: "success",
     });
+  });
+
+  it("records a successful lossless export without exporting record content to telemetry", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[2]!;
+
+    expect(await harness.call("outcomes.create", createParams(id, "Private objective"))).toEqual([
+      true,
+      expect.objectContaining({ outcome: expect.objectContaining({ id }) }),
+    ]);
+    telemetry.counter.add.mockClear();
+    telemetry.histogram.record.mockClear();
+
+    expect(await harness.call("outcomes.export", { id })).toEqual([
+      true,
+      expect.objectContaining({ schemaVersion: 1, record: expect.objectContaining({ id }) }),
+    ]);
+
+    expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
+      method: "export",
+      result: "success",
+    });
+    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
+      method: "export",
+      result: "success",
+    });
+  });
+
+  it("records a denied export without putting the request identity in telemetry", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[2]!;
+
+    expect(await harness.call("outcomes.export", { id })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_NOT_FOUND" },
+    ]);
+
+    expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
+      method: "export",
+      result: "deny",
+    });
+    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
+      method: "export",
+      result: "deny",
+    });
+  });
+
+  it("records a successful confirmed delete without including its Outcome identity", async () => {
+    const harness = createHarness();
+    const id = outcomeIds[1]!;
+
+    expect(await harness.call("outcomes.create", createParams(id, "Private objective"))).toEqual([
+      true,
+      expect.objectContaining({ outcome: expect.objectContaining({ id }) }),
+    ]);
+    telemetry.counter.add.mockClear();
+    telemetry.histogram.record.mockClear();
+
+    expect(await harness.call("outcomes.delete", { id, expectedRevision: 1 })).toEqual([
+      true,
+      { deleted: true, id },
+    ]);
+
+    expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
+      method: "delete",
+      result: "success",
+    });
+    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
+      method: "delete",
+      result: "success",
+    });
+  });
+
+  it("rejects an unbounded operation label instead of leaking it to telemetry", () => {
+    recordOutcomeTelemetry("Private objective: replace credentials", "success", Date.now());
+
+    expect(telemetry.getMeter).not.toHaveBeenCalled();
+    expect(telemetry.counter.add).not.toHaveBeenCalled();
+    expect(telemetry.histogram.record).not.toHaveBeenCalled();
   });
 
   it("preserves the Gateway response when the telemetry provider throws", async () => {
