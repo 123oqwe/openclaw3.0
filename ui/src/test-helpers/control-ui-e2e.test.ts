@@ -79,7 +79,7 @@ describe("shared proof capture", () => {
       label: "outcomes.refresh",
       pageErrors: [
         JSON.stringify({ token: secret }),
-        `wss://user:${secret}@example.invalid/?token=${secret}`,
+        `wss://user:${secret}@example.invalid/?token=${secret}#bootstrapToken=${secret}`,
       ],
       pageEvents: [
         {
@@ -106,6 +106,8 @@ describe("shared proof capture", () => {
     expect(report).toContain("ready");
     expect(report).toContain("42");
     expect(report).toContain("gateway-failure");
+    expect(report).toContain('"url": "http://127.0.0.1/outcomes"');
+    expect(report).toContain("wss://example.invalid/");
   });
 
   it("keeps shared capture disabled until its gate is enabled and uses the supplied owner", async () => {

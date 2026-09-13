@@ -3020,10 +3020,32 @@ export async function captureControlUiE2eFailureDiagnostics(
 
 const controlUiE2eSecretKey =
   /(?:authorization|bootstrapToken|cookie|password|secret|token|apiKey|api_key|credential|session)$/iu;
+const controlUiE2eUrlLike = /\b(?:https?|wss?):\/\/[^\s"'<>]+/gu;
 
-function sanitizeControlUiE2eDiagnosticString(value: string): string {
+function redactControlUiE2eDiagnosticText(value: string): string {
   return stripUrlUserInfo(
     redactSensitiveUrlLikeString(redactSensitiveText(value, { mode: "tools" })),
+  );
+}
+
+function sanitizeControlUiE2eDiagnosticUrl(value: string): string {
+  const redacted = redactControlUiE2eDiagnosticText(value);
+  try {
+    const url = new URL(redacted);
+    url.hash = "";
+    url.search = "";
+    url.username = "";
+    url.password = "";
+    return url.toString();
+  } catch {
+    return redacted;
+  }
+}
+
+function sanitizeControlUiE2eDiagnosticString(value: string): string {
+  return redactControlUiE2eDiagnosticText(value).replaceAll(
+    controlUiE2eUrlLike,
+    (candidate) => sanitizeControlUiE2eDiagnosticUrl(candidate),
   );
 }
 
@@ -3245,7 +3267,7 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
     pageErrors: sanitizeControlUiE2eDiagnosticValue(pageErrors),
     page: {
       closed: page.isClosed(),
-      url: sanitizeControlUiE2eDiagnosticValue(page.url(), "url"),
+      url: sanitizeControlUiE2eDiagnosticUrl(page.url()),
     },
     screenshot: screenshotWritten ? screenshotName : null,
     failure: {
