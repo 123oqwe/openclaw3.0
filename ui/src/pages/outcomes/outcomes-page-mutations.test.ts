@@ -297,6 +297,78 @@ describe("OutcomesPage mutations", () => {
     expect(verificationParams[1]).toEqual(verificationParams[0]);
   });
 
+  it("does not let a late verification response overwrite a newly selected outcome", async () => {
+    let resolveVerification: ((value: { outcome: ReturnType<typeof outcomeDetail> }) => void) | undefined;
+    const detailFor = (id: string, title: string) => ({
+      ...outcomeDetail(id, title),
+      criteria: [
+        {
+          ...outcomeDetail(id, title).criteria[0]!,
+          evidenceSetHash: "e".repeat(64),
+        },
+      ],
+      nextActions: ["review-evidence"] as const,
+      phase: "active" as const,
+      planGeneration: 1,
+      planHash: "a".repeat(64),
+      revision: 4,
+    });
+    const detailA = detailFor("outcome-a", "Outcome A");
+    const detailB = detailFor("outcome-b", "Outcome B");
+    const request = vi.fn((method: string, params: { id?: string }) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({
+          outcomes: [outcomeSummary("outcome-a", "Outcome A"), outcomeSummary("outcome-b", "Outcome B")],
+        });
+      }
+      if (method === "outcomes.get" && params.id === "outcome-a") {
+        return Promise.resolve({ outcome: detailA });
+      }
+      if (method === "outcomes.get" && params.id === "outcome-b") {
+        return Promise.resolve({ outcome: detailB });
+      }
+      if (method === "outcomes.verifyCriterion") {
+        return new Promise((resolve) => {
+          resolveVerification = resolve as (value: { outcome: ReturnType<typeof outcomeDetail> }) => void;
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const gateway = createGateway({ request } as unknown as GatewayBrowserClient);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.verifyCriterion"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    page
+      .querySelector<HTMLFormElement>("[data-outcome-verification-form]")
+      ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(resolveVerification).toBeDefined());
+    page.querySelector<HTMLButtonElement>(".outcome-detail__back")?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-select="outcome-b"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
+    });
+    resolveVerification?.({ outcome: { ...detailA, revision: 5 } });
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
+    expect(page.querySelector('[data-outcome-detail-id="outcome-a"]')).toBeNull();
+  });
+
   it("clears a pending verification dialog and its private rejection note when selection changes", async () => {
     const detailFor = (id: string, title: string) => ({
       ...outcomeDetail(id, title),
