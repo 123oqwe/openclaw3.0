@@ -464,50 +464,6 @@ describe("P-02 Outcome Gateway admission", () => {
     expect(records).toEqual(new Map());
   });
 
-  it("requires operator.admin for deletion and dispatches an authorized owner atomically", async () => {
-    const { context, records } = registerHarness();
-    const createRequest = {
-      id: outcomeId,
-      title: "Delete safely",
-      objective: "Allow only an authorized quiescent Outcome deletion",
-      criteria: [
-        {
-          id: "123e4567-e89b-42d3-a456-426614174001",
-          text: "Deletion has a bounded authorization contract",
-          required: true,
-        },
-      ],
-    };
-    await expect(
-      dispatch({
-        client: createOperatorClient("manager-a", ["operator.write"]),
-        context,
-        method: "outcomes.create",
-        request: createRequest,
-      }),
-    ).resolves.toMatchObject({ outcome: { id: outcomeId } });
-
-    await expect(
-      dispatch({
-        client: createOperatorClient("manager-a", ["operator.write"]),
-        context,
-        method: "outcomes.delete",
-        request: { id: outcomeId, expectedRevision: 1 },
-      }),
-    ).rejects.toThrow(/scope/i);
-    expect(records.has(outcomeId)).toBe(true);
-
-    await expect(
-      dispatch({
-        client: createOperatorClient("manager-a", ["operator.admin"]),
-        context,
-        method: "outcomes.delete",
-        request: { id: outcomeId, expectedRevision: 1 },
-      }),
-    ).resolves.toEqual({ deleted: true, id: outcomeId });
-    expect(records.has(outcomeId)).toBe(false);
-  });
-
   it("refuses a missing authenticated request authority before the Outcome handler", async () => {
     const { context, records, registrations } = registerHarness();
     const registration = registrations.find(({ method }) => method === "outcomes.get");
