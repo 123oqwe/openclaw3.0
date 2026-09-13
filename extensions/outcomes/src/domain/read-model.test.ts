@@ -764,6 +764,8 @@ describe("Outcome P-01 read model", () => {
     if (current.closureHash === null || input.planHash === null) {
       throw new Error("fixture closure must be current");
     }
+    input.revision = 4;
+    input.updatedAt = 20;
     input.phase = "accepted";
     input.acceptances = [
       {
