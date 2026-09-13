@@ -942,9 +942,7 @@ describe("Outcome P-01 read model", () => {
     input.decisions = [{ ...current, id: "decision-current-rejected", status: "rejected" }];
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
     expect(toOutcomeDetail(valid(input), 10)).toMatchObject({
-      attention: expect.arrayContaining([
-        { code: "rejected" },
-      ]),
+      attention: expect.arrayContaining([{ code: "rejected" }]),
       nextActions: expect.arrayContaining(["review-evidence"]),
     });
 
