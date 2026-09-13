@@ -130,13 +130,15 @@ describe("Outcome Gateway telemetry", () => {
     expect(telemetry.histogram.record).not.toHaveBeenCalled();
   });
 
-  it("drops invalid runtime results and records finite latency", () => {
+  it("drops invalid runtime results", () => {
     recordUntrustedTelemetry("export", "Private result: credentials", Date.now());
 
     expect(telemetry.getMeter).not.toHaveBeenCalled();
     expect(telemetry.counter.add).not.toHaveBeenCalled();
     expect(telemetry.histogram.record).not.toHaveBeenCalled();
+  });
 
+  it("records finite latency when the start time is invalid", () => {
     recordOutcomeTelemetry("export", "success", Number.NaN);
 
     expect(telemetry.histogram.record).toHaveBeenCalledWith(0, {
