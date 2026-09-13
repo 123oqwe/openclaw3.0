@@ -52,6 +52,8 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/src/export/codec.ts",
         "extensions/outcomes/src/export/export.test.ts",
         "extensions/outcomes/src/export/export.ts",
+        "extensions/outcomes/src/observability/telemetry.test.ts",
+        "extensions/outcomes/src/observability/telemetry.ts",
         "extensions/outcomes/src/gateway/p02-admission.contract.md",
         "src/gateway/outcomes-workboard.public-api.integration.test.ts",
         "extensions/outcomes/src/adapters/workboard-adapter.test.ts",

@@ -21,6 +21,8 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/src/export/export.test.ts",
   "extensions/outcomes/src/export/export.ts",
   "extensions/outcomes/src/export/codec.ts",
+  "extensions/outcomes/src/observability/telemetry.test.ts",
+  "extensions/outcomes/src/observability/telemetry.ts",
   "extensions/outcomes/src/gateway/cursor.test.ts",
   "extensions/outcomes/src/gateway/cursor.ts",
   "extensions/outcomes/src/gateway/errors.ts",
