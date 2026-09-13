@@ -150,8 +150,9 @@ describe("OutcomesPage", () => {
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
     await vi.waitFor(() => {
-      const acceptance = page.querySelector<HTMLElement>(".outcome-detail__acceptance");
-      expect(acceptance?.textContent).toContain("Last checked at 42");
+      const checkedAt = page.querySelector<HTMLTimeElement>("[data-outcome-last-successful-check]");
+      expect(checkedAt?.dateTime).toBe(new Date(42).toISOString());
+      expect(checkedAt?.textContent).toContain("Last checked at");
     });
   });
 
