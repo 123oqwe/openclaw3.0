@@ -245,18 +245,20 @@ export function toOutcomeDetail(
     );
   const decisions: OutcomeDetail["decisions"] = record.decisions
     .toSorted((left, right) => right.decidedRevision - left.decidedRevision)
-    .map((decision) => ({
-      id: decision.id,
-      criterionId: decision.criterionId,
-      status: decision.status,
-      evidenceSetHash: decision.evidenceSetHash,
-      decidedAt: decision.decidedAt,
-      decidedRevision: decision.decidedRevision,
-      planGeneration: decision.planGeneration,
-      planHash: decision.planHash,
-      decidedPlan: toOutcomePlanSnapshotView(decision.decidedPlan, visibleSnapshotRefIdentities),
-      ...(decision.note === undefined ? {} : { note: decision.note }),
-    }));
+    .map((decision) => {
+      const view = {
+        id: decision.id,
+        criterionId: decision.criterionId,
+        status: decision.status,
+        evidenceSetHash: decision.evidenceSetHash,
+        decidedAt: decision.decidedAt,
+        decidedRevision: decision.decidedRevision,
+        planGeneration: decision.planGeneration,
+        planHash: decision.planHash,
+        decidedPlan: toOutcomePlanSnapshotView(decision.decidedPlan, visibleSnapshotRefIdentities),
+      };
+      return decision.note === undefined ? view : Object.assign(view, { note: decision.note });
+    });
   const acceptances: OutcomeDetail["acceptances"] = record.acceptances
     .toSorted((left, right) => right.acceptedRevision - left.acceptedRevision)
     .map((acceptance) => ({

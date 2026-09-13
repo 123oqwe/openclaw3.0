@@ -88,44 +88,6 @@ describe("Outcome repository atomic contract", () => {
     };
   };
 
-  const assuredActiveRecord = (id = "assured-1") => {
-    const record = linkedActiveRecord(id);
-    const ref = first(first(record.criteria).workRefs);
-    record.planHash = planHash({
-      outcomeId: record.id,
-      objective: record.objective,
-      contractRevision: record.contractRevision,
-      planGeneration: record.planGeneration,
-      criteria: record.criteria,
-    });
-    record.projections = [
-      {
-        ref,
-        availability: "available",
-        currentBoardId: "board-current",
-        status: "done",
-        observedAt: 10,
-        lastSuccessfulAt: 10,
-        sourceUpdatedAt: 10,
-        proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
-        artifacts: [],
-      },
-    ];
-    record.evidence = [
-      {
-        id: "evidence-1",
-        criterionId: "c-1",
-        planGeneration: 1,
-        workRef: ref,
-        kind: "workboard-proof",
-        sourceId: "proof-1",
-        sourceDigest: "proof-digest-1",
-        observedAt: 10,
-      },
-    ];
-    return record;
-  };
-
   function fixture() {
     const records = new Map<string, OutcomeRecord>();
     let writes = 0;
