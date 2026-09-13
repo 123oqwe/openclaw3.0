@@ -7,6 +7,15 @@ export default definePluginEntry({
   name: "Outcomes",
   description: "Outcome responsibility and acceptance layer.",
   register(api) {
+    api.session.controls.registerControlUiDescriptor({
+      surface: "tab",
+      id: "outcomes",
+      label: "Outcomes",
+      placement: "route:outcomes",
+      icon: "target",
+      group: "control",
+      requiredScopes: ["operator.read"],
+    });
     registerOutcomeGatewayMethods(api);
   },
 });

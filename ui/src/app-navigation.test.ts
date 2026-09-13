@@ -35,6 +35,7 @@ const ALL_ROUTES: RouteId[] = Array.from(
     "custodian",
     ...SIDEBAR_NAV_ROUTES,
     "workboard",
+    "outcomes",
     "skills",
     "skill-workshop",
     // Hub tabs and settings subpages route without their own nav entry.
@@ -101,6 +102,7 @@ describe("navigationIconForRoute", () => {
       portals: "monitor",
       approvals: "badgeCheck",
       workboard: "kanban",
+      outcomes: "target",
       dashboards: "layoutDashboard",
       worktrees: "folder",
       channels: "link",
@@ -204,6 +206,7 @@ describe("titleForRoute", () => {
       portals: "Portals",
       approvals: "Approvals",
       workboard: "Workboard",
+      outcomes: "Outcomes",
       dashboards: "Dashboards",
       worktrees: "Worktrees",
       channels: "Channels",
@@ -257,6 +260,7 @@ describe("subtitleForRoute", () => {
       portals: "Live previews from agent-run applications.",
       approvals: "Recent exec, plugin, and system-agent approvals.",
       workboard: "Agent work queue and session handoff.",
+      outcomes: "Goals, criteria, and their linked work.",
       dashboards: "Tasks with saved dashboards.",
       worktrees: "Isolated agent task checkouts and recovery snapshots.",
       channels: "Channels and settings.",
@@ -303,6 +307,7 @@ describe("pathForRoute", () => {
     expect(pathForRoute("chat")).toBe("/chat");
     expect(pathForRoute("apps")).toBe("/apps");
     expect(pathForRoute("dashboards")).toBe("/dashboards");
+    expect(pathForRoute("outcomes")).toBe("/outcomes");
     expect(pathForRoute("custodian")).toBe("/custodian");
     expect(pathForRoute("connection")).toBe("/settings/connection");
     expect(pathForRoute("debug")).toBe("/debug");

@@ -1,6 +1,7 @@
 import type { GatewayRequestHandlerOptions } from "openclaw/plugin-sdk/gateway-runtime";
 import type { OpenClawPluginApi } from "../../api.js";
 import { toOutcomeDetail } from "../domain/read-model.js";
+import type { AuthorizedOutcomeSource } from "../domain/read-model.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import type { OutcomeCapacityWarning } from "../store/outcome-repository.js";
 import { OutcomeErrorCodes, outcomeError } from "./errors.js";
@@ -32,9 +33,20 @@ export function respondMutation(
   respond: GatewayRespond,
   decision: { kind: "updated" | "noop" | "conflict" | "rejected"; record: OutcomeRecord },
   now: number,
+  presentation?: {
+    authorizedSources: AuthorizedOutcomeSource[];
+    projections: OutcomeRecord["projections"];
+  },
 ): void {
   if (decision.kind === "updated" || decision.kind === "noop") {
-    return respond(true, { outcome: toOutcomeDetail(decision.record, now) });
+    return respond(true, {
+      outcome: toOutcomeDetail(
+        decision.record,
+        now,
+        presentation?.authorizedSources,
+        presentation?.projections,
+      ),
+    });
   }
   respond(
     false,

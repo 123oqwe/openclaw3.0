@@ -2660,6 +2660,9 @@ importers:
       '@openclaw/normalization-core':
         specifier: workspace:*
         version: link:../packages/normalization-core
+      '@openclaw/outcomes-contract':
+        specifier: workspace:*
+        version: link:../packages/outcomes-contract
       '@openclaw/session-url-contract':
         specifier: workspace:*
         version: link:../packages/session-url-contract

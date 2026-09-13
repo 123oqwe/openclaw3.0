@@ -268,6 +268,7 @@ const NAVIGATION_PRESENTATION: Record<NavigationRouteId, NavigationPresentation>
   portals: ["monitor", "tabs.portals", "subtitles.portals"],
   approvals: ["badgeCheck", "tabs.approvals", "subtitles.approvals"],
   workboard: ["kanban", "tabs.workboard", "subtitles.workboard"],
+  outcomes: ["target", "tabs.outcomes", "subtitles.outcomes"],
   worktrees: ["folder", "tabs.worktrees", "subtitles.worktrees"],
   channels: ["link", "tabs.channels", "subtitles.channels"],
   connection: ["radio", "tabs.connection", "subtitles.connection"],

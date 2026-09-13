@@ -9,6 +9,8 @@ export const en: TranslationMap & {
   debug: TranslationMap & { overlay: TranslationMap };
   // Lazy en-devices.ts assigns into this namespace.
   devices: TranslationMap;
+  // Lazy en-outcomes.ts assigns into this namespace.
+  outcomesPage: TranslationMap;
   updates: TranslationMap;
 } = {
   capacityMeter: {
@@ -2295,6 +2297,7 @@ export const en: TranslationMap & {
     portals: "Portals",
     approvals: "Approvals",
     workboard: "Workboard",
+    outcomes: "Outcomes",
     worktrees: "Worktrees",
     channels: "Channels",
     connection: "Gateway",
@@ -2339,6 +2342,7 @@ export const en: TranslationMap & {
     portals: "Live previews from agent-run applications.",
     approvals: "Recent exec, plugin, and system-agent approvals.",
     workboard: "Agent work queue and session handoff.",
+    outcomes: "Goals, criteria, and their linked work.",
     worktrees: "Isolated agent task checkouts and recovery snapshots.",
     channels: "Channels and settings.",
     connection: "Gateway endpoint, credentials, and handshake status.",
@@ -2462,6 +2466,8 @@ export const en: TranslationMap & {
     writeAccessRequiredBody: "This portal requires an operator with write access.",
     retry: "Retry",
   },
+  // Lazy: en-outcomes.ts registers this subtree when the Outcomes page renders.
+  outcomesPage: {},
   modelSetup: {
     missingAuth: "No provider credential is configured for this model. Set it up in Model Setup.",
     heading: "Connect a verified AI model",

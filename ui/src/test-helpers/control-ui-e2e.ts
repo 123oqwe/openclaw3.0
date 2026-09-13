@@ -5,12 +5,15 @@ import { createRequire } from "node:module";
 import { createServer as createNetServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { redactSensitiveUrlLikeString } from "@openclaw/net-policy/redact-sensitive-url";
+import { stripUrlUserInfo } from "@openclaw/net-policy/url-userinfo";
 import { normalizeAgentId } from "@openclaw/normalization-core/agent-id";
 import { buildControlUiSessionPath } from "@openclaw/session-url-contract";
 import type { ConsoleMessage, Frame, Locator, Page, Request } from "playwright";
 import type { InlineConfig, Plugin, PreviewServer, ViteDevServer } from "vite";
 import { PROTOCOL_VERSION } from "../../../packages/gateway-protocol/src/version.js";
 import { CONTROL_UI_BOOTSTRAP_CONFIG_PATH } from "../../../src/gateway/control-ui-contract.js";
+import { redactSensitiveText } from "../../../src/logging/redact.js";
 import type { ModelCatalogEntry, UpdateAvailable, UpdateScheduleState } from "../api/types.ts";
 import type { AuthenticatedUser } from "../app/user-profile.ts";
 import { normalizeControlUiBuildInfo } from "../build-info-normalizers.ts";
@@ -3015,6 +3018,57 @@ export async function captureControlUiE2eFailureDiagnostics(
   }
 }
 
+const controlUiE2eSecretKey =
+  /(?:authorization|bootstrapToken|cookie|password|secret|token|apiKey|api_key|credential|session)$/iu;
+const controlUiE2eUrlLike = /\b(?:https?|wss?):\/\/[^\s"'<>]+/gu;
+
+function redactControlUiE2eDiagnosticText(value: string): string {
+  return stripUrlUserInfo(
+    redactSensitiveUrlLikeString(redactSensitiveText(value, { mode: "tools" })),
+  );
+}
+
+function sanitizeControlUiE2eDiagnosticUrl(value: string): string {
+  const redacted = redactControlUiE2eDiagnosticText(value);
+  try {
+    const url = new URL(redacted);
+    url.hash = "";
+    url.search = "";
+    url.username = "";
+    url.password = "";
+    return url.toString();
+  } catch {
+    return redacted;
+  }
+}
+
+function sanitizeControlUiE2eDiagnosticString(value: string): string {
+  return redactControlUiE2eDiagnosticText(value).replaceAll(controlUiE2eUrlLike, (candidate) =>
+    sanitizeControlUiE2eDiagnosticUrl(candidate),
+  );
+}
+
+function sanitizeControlUiE2eDiagnosticValue(value: unknown, key?: string): unknown {
+  if (key && controlUiE2eSecretKey.test(key)) {
+    return "[redacted]";
+  }
+  if (typeof value === "string") {
+    return sanitizeControlUiE2eDiagnosticString(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeControlUiE2eDiagnosticValue(entry));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        sanitizeControlUiE2eDiagnosticValue(entryValue, entryKey),
+      ]),
+    );
+  }
+  return value;
+}
+
 async function captureControlUiE2eFailureDiagnosticsUnsafe(
   page: Page,
   {
@@ -3088,19 +3142,18 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
       const agentsState = context?.agents?.state;
       const gatewaySnapshot = context?.gateway?.snapshot;
       const routerState = runtime?.router?.getState?.() ?? context?.router?.getState?.();
-      const summarizeMatches = (matches: unknown): unknown =>
+      const summarizeRouteIds = (matches: unknown): unknown =>
         Array.isArray(matches)
           ? matches.map((match) => {
               if (!match || typeof match !== "object") {
-                return copy(match);
+                return null;
               }
               const record = match as Record<string, unknown>;
-              return {
-                pathname: copy(record.pathname ?? record.path ?? null),
-                routeId: copy(record.routeId ?? record.id ?? null),
-              };
+              return copy(record.routeId ?? record.id ?? null);
             })
-          : copy(matches ?? []);
+          : [];
+      const finiteNumberOrNull = (value: unknown): number | null =>
+        typeof value === "number" && Number.isFinite(value) ? value : null;
       const customElementCounts: Record<string, number> = {};
       for (const element of document.querySelectorAll("*")) {
         const name = element.localName;
@@ -3109,29 +3162,34 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
         }
         customElementCounts[name] = (customElementCounts[name] ?? 0) + 1;
       }
+      const outcomesPage = document.querySelector("openclaw-outcomes-page") as
+        | (HTMLElement & {
+            detail?: { observedAt?: unknown; recheckAfter?: unknown } | null;
+            detailFreshnessDeadline?: unknown;
+          })
+        | null;
+      const outcomeDetail = outcomesPage?.detail ?? null;
+      const outcomeDetailElement = outcomesPage?.querySelector("[data-outcome-detail-id]") ?? null;
       return {
         app: {
-          agentSelection: copy(context?.agentSelection?.state ?? null),
           gateway: {
-            assistantAgentId: copy(gatewaySnapshot?.assistantAgentId ?? null),
-            hello: copy(gatewaySnapshot?.hello ?? null),
+            helloPresent: Boolean(gatewaySnapshot?.hello),
             phase: copy(gatewaySnapshot?.phase ?? null),
           },
           roster: {
-            agentsError: copy(agentsState?.agentsError ?? null),
-            agentsList: copy(agentsState?.agentsList ?? null),
-            agentsLoading: copy(agentsState?.agentsLoading ?? null),
-            connected: copy(agentsState?.connected ?? null),
+            agentsErrorPresent: Boolean(agentsState?.agentsError),
+            agentsCount: Array.isArray(agentsState?.agentsList)
+              ? agentsState.agentsList.length
+              : null,
+            agentsLoading: Boolean(agentsState?.agentsLoading),
+            connected: Boolean(agentsState?.connected),
           },
           router:
             routerState && typeof routerState === "object"
               ? {
-                  matches: summarizeMatches((routerState as { matches?: unknown }).matches),
-                  pendingMatches: summarizeMatches(
+                  matches: summarizeRouteIds((routerState as { matches?: unknown }).matches),
+                  pendingMatches: summarizeRouteIds(
                     (routerState as { pendingMatches?: unknown }).pendingMatches,
-                  ),
-                  resolvedLocation: copy(
-                    (routerState as { resolvedLocation?: unknown }).resolvedLocation ?? null,
                   ),
                   status: copy((routerState as { status?: unknown }).status ?? null),
                 }
@@ -3159,9 +3217,20 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
         },
         mockGateway: {
           installed: Boolean(windowState.openclawControlUiE2eGateway),
-          requests: copy(windowState.openclawControlUiE2eGateway?.requests ?? []),
+          requestCount: windowState.openclawControlUiE2eGateway?.requests?.length ?? 0,
           socketStates: copy(windowState.openclawControlUiE2eGateway?.socketStates?.() ?? []),
           socketUrls: copy(windowState.openclawControlUiE2eGateway?.socketUrls?.() ?? []),
+        },
+        outcomes: {
+          detailPresent: Boolean(outcomeDetail),
+          freshnessDeadline: finiteNumberOrNull(outcomesPage?.detailFreshnessDeadline),
+          monotonicNow: Math.round(performance.now()),
+          observedAt: finiteNumberOrNull(outcomeDetail?.observedAt),
+          readiness:
+            outcomeDetailElement
+              ?.querySelector("[data-outcome-readiness]")
+              ?.getAttribute("data-outcome-readiness") ?? null,
+          recheckAfter: finiteNumberOrNull(outcomeDetail?.recheckAfter),
         },
         unhandledRejections: copy(
           windowState["__OPENCLAW_CONTROL_UI_E2E_UNHANDLED_REJECTIONS__"] ?? [],
@@ -3181,8 +3250,8 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
   const report = {
     schemaVersion: 2,
     label,
-    browserState,
-    captureErrors,
+    browserState: sanitizeControlUiE2eDiagnosticValue(browserState),
+    captureErrors: sanitizeControlUiE2eDiagnosticValue(captureErrors),
     capturedAt: new Date().toISOString(),
     ci: {
       githubJob: process.env.GITHUB_JOB ?? null,
@@ -3191,17 +3260,17 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
       shardIndex: process.env.SHARD_INDEX ?? null,
       vitestShardCount: process.env.VITEST_SHARD_COUNT ?? null,
     },
-    pageEvents: [...pageEvents],
-    pageErrors: [...pageErrors],
+    pageEvents: sanitizeControlUiE2eDiagnosticValue(pageEvents),
+    pageErrors: sanitizeControlUiE2eDiagnosticValue(pageErrors),
     page: {
       closed: page.isClosed(),
-      url: page.url(),
+      url: sanitizeControlUiE2eDiagnosticUrl(page.url()),
     },
     screenshot: screenshotWritten ? screenshotName : null,
     failure: {
-      message: error.message,
+      message: sanitizeControlUiE2eDiagnosticString(error.message),
       name: error.name,
-      stack: error.stack ?? null,
+      stack: error.stack ? sanitizeControlUiE2eDiagnosticString(error.stack) : null,
     },
   };
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
