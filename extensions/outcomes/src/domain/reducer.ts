@@ -7,6 +7,7 @@ import {
 import type {
   Criterion,
   EvidenceRef,
+  OutcomePlanSnapshot,
   OutcomeRecord,
   WorkProjection,
   WorkboardRef,
@@ -82,6 +83,11 @@ export type OutcomeRefreshMutation = {
   serverTime: number;
 };
 
+export type OutcomeRefreshResult =
+  | { kind: "conflict"; record: OutcomeRecord }
+  | { kind: "rejected"; record: OutcomeRecord; reason?: "capacity-exceeded" }
+  | { kind: "updated"; record: OutcomeRecord };
+
 function workRefIdentity(ref: WorkboardRef): string {
   return `${ref.cardId}\0${ref.cardCreatedAt}`;
 }
@@ -123,10 +129,30 @@ function hasInFlightOperation(current: OutcomeRecord): boolean {
   );
 }
 
-function assertServerTime(serverTime: number): void {
+export function assertOutcomeServerTime(serverTime: number): void {
   if (!Number.isFinite(serverTime)) {
     throw new Error("serverTime must be finite");
   }
+}
+
+export function currentOutcomePlanSnapshot(record: OutcomeRecord): OutcomePlanSnapshot {
+  return {
+    outcomeId: record.id,
+    objective: record.objective,
+    contractRevision: record.contractRevision,
+    planGeneration: record.planGeneration,
+    criteria: record.criteria.map((criterion) => ({
+      id: criterion.id,
+      text: criterion.text,
+      required: criterion.required,
+      workRefs: criterion.workRefs.map((ref) => ({
+        owner: ref.owner,
+        cardId: ref.cardId,
+        cardCreatedAt: ref.cardCreatedAt,
+        boardIdAtLink: ref.boardIdAtLink,
+      })),
+    })),
+  };
 }
 
 /** Update the contract with an ABA-safe CAS and a new plan generation. */
@@ -134,7 +160,7 @@ export function reduceOutcomeContract(
   current: OutcomeRecord,
   mutation: OutcomeContractMutation,
 ): OutcomeMutationResult {
-  assertServerTime(mutation.serverTime);
+  assertOutcomeServerTime(mutation.serverTime);
   if (current.phase === "cancelled") {
     return { kind: "rejected", record: current };
   }
@@ -199,7 +225,7 @@ export function reduceOutcomeActivate(
   expectedRevision: number,
   serverTime: number,
 ): OutcomeActivateResult {
-  assertServerTime(serverTime);
+  assertOutcomeServerTime(serverTime);
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }
@@ -233,7 +259,7 @@ export function reduceOutcomeTitle(
   current: OutcomeRecord,
   mutation: OutcomeMutation,
 ): OutcomeMutationResult {
-  assertServerTime(mutation.serverTime);
+  assertOutcomeServerTime(mutation.serverTime);
   if (current.phase === "cancelled") {
     return { kind: "rejected", record: current };
   }
@@ -263,7 +289,7 @@ export function reduceOutcomePatch(
   current: OutcomeRecord,
   mutation: OutcomePatchMutation,
 ): OutcomeMutationResult {
-  assertServerTime(mutation.serverTime);
+  assertOutcomeServerTime(mutation.serverTime);
   if (current.phase === "cancelled") {
     return { kind: "rejected", record: current };
   }
@@ -325,7 +351,7 @@ export function reduceOutcomeLink(
   current: OutcomeRecord,
   mutation: OutcomeLinkMutation,
 ): OutcomeMutationResult {
-  assertServerTime(mutation.serverTime);
+  assertOutcomeServerTime(mutation.serverTime);
   if (mutation.expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }
@@ -365,7 +391,7 @@ export function reduceOutcomeUnlink(
   current: OutcomeRecord,
   mutation: OutcomeUnlinkMutation,
 ): OutcomeMutationResult {
-  assertServerTime(mutation.serverTime);
+  assertOutcomeServerTime(mutation.serverTime);
   if (mutation.expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }
@@ -404,8 +430,8 @@ export function reduceOutcomeUnlink(
 export function reduceOutcomeRefresh(
   current: OutcomeRecord,
   mutation: OutcomeRefreshMutation,
-): OutcomeMutationResult {
-  assertServerTime(mutation.serverTime);
+): OutcomeRefreshResult {
+  assertOutcomeServerTime(mutation.serverTime);
   if (mutation.expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }
@@ -449,7 +475,7 @@ export function reduceOutcomeRefresh(
     left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
   );
   if (evidence.length > 100) {
-    return { kind: "rejected", record: current };
+    return { kind: "rejected", reason: "capacity-exceeded", record: current };
   }
   const previousProjections = new Map(
     current.projections.map((projection) => [workRefIdentity(projection.ref), projection]),
@@ -519,7 +545,7 @@ export function reduceOutcomeCancel(
   expectedRevision: number,
   serverTime: number,
 ): OutcomeCancelResult {
-  assertServerTime(serverTime);
+  assertOutcomeServerTime(serverTime);
   if (expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
   }

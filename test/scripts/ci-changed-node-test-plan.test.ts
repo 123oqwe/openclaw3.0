@@ -841,6 +841,7 @@ describe("CI changed Node test plan", () => {
           "extensions/outcomes/src/domain/read-model.test.ts",
           "extensions/outcomes/src/domain/schema.test.ts",
           "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
+          "extensions/outcomes/src/store/plugin-state-repository-capacity.test.ts",
           "extensions/outcomes/src/store/plugin-state-repository.test.ts",
         ]),
       );

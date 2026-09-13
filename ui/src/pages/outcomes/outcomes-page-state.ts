@@ -1,9 +1,11 @@
 import { consume } from "@lit/context";
 import type {
   OutcomeCreateParams,
+  OutcomeAcceptParams,
   OutcomeCriterionInput,
   OutcomeDetail,
   OutcomeSummary,
+  OutcomeVerifyCriterionParams,
 } from "@openclaw/outcomes-contract";
 import type { WorkboardCard } from "@openclaw/workboard-contract";
 import { state } from "lit/decorators.js";
@@ -34,6 +36,15 @@ export abstract class OutcomesPageState extends OpenClawLightDomElement {
   @state() protected cancelling = false;
   @state() protected mutationError: string | null = null;
   @state() protected refreshing = false;
+  @state() protected verificationDialogOpen = false;
+  @state() protected verifying = false;
+  @state() protected verificationError: string | null = null;
+  @state() protected verificationCriterionId = "";
+  @state() protected verificationStatus: "verified" | "rejected" = "verified";
+  @state() protected verificationNote = "";
+  @state() protected verificationReplayPending = false;
+  @state() protected acceptanceReplayPending = false;
+  @state() protected assuranceRefreshRequired = false;
   @state() protected selectedOutcomeId: string | null = null;
   @state() protected mutationInFlightOutcomeLocks: readonly OutcomeMutationLock[] = [];
   @state() protected createDialogOpen = false;
@@ -63,7 +74,10 @@ export abstract class OutcomesPageState extends OpenClawLightDomElement {
   protected createRequestSequence = 0;
   protected editRequestSequence = 0;
   protected linkRequestSequence = 0;
+  protected assuranceRequestSequence = 0;
   protected createRequest: OutcomeCreateParams | null = null;
+  protected verificationRequest: OutcomeVerifyCriterionParams | null = null;
+  protected acceptanceRequest: OutcomeAcceptParams | null = null;
   protected gatewayIdentity: OutcomeGatewayIdentity | null = null;
   protected pendingListFocusId: string | null = null;
   protected pendingCreateFocus = false;

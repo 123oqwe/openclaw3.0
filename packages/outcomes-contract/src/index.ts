@@ -140,6 +140,29 @@ export type OutcomeCriterionView = {
   evidenceSetHash: string | null;
 };
 
+export type OutcomeDecisionView = {
+  id: string;
+  criterionId: string;
+  status: "verified" | "rejected";
+  evidenceSetHash: string;
+  decidedAt: number;
+  decidedRevision: number;
+  planGeneration: number;
+  planHash: string;
+  decidedPlan: OutcomePlanSnapshotView;
+  note?: string;
+};
+
+export type OutcomeAcceptanceHistoryView = {
+  id: string;
+  acceptedAt: number;
+  acceptedRevision: number;
+  planGeneration: number;
+  planHash: string;
+  closureHash: string;
+  acceptedPlan: OutcomePlanSnapshotView;
+};
+
 export type OutcomeWorkView = {
   ref: WorkboardRef;
   currentBoardId: string;
@@ -180,6 +203,8 @@ export type OutcomeDetail = OutcomeSummary & {
   observedAt: number;
   recheckAfter: number | null;
   closureHash: string | null;
+  decisions: OutcomeDecisionView[];
+  acceptances: OutcomeAcceptanceHistoryView[];
   attention: Array<{ code: OutcomeAttentionCode; criterionId?: string }>;
   nextActions: OutcomeNextAction[];
 };
@@ -223,6 +248,27 @@ export type OutcomeWorkboardLinkParams = OutcomeRevisionParams & {
 
 export type OutcomeWorkboardUnlinkParams = OutcomeWorkboardLinkParams;
 
+export type OutcomeVerifyCriterionParams = OutcomeRevisionParams & {
+  decisionId: string;
+  criterionId: string;
+  status: "verified" | "rejected";
+  planHash: string;
+  evidenceSetHash: string;
+  note?: string;
+};
+
+export type OutcomeAcceptParams = OutcomeRevisionParams & {
+  acceptanceId: string;
+  planHash: string;
+  closureHash: string;
+};
+
+export type OutcomeMutationReceipt = {
+  kind: "create" | "verify-criterion" | "accept";
+  id: string;
+  committedRevision: number;
+};
+
 export type OutcomeCreateResult = {
   outcome: OutcomeDetail;
   replayed: boolean;
@@ -230,6 +276,12 @@ export type OutcomeCreateResult = {
 };
 
 export type OutcomeMutationResult = { outcome: OutcomeDetail };
+
+export type OutcomeAssuranceMutationResult = {
+  outcome: OutcomeDetail;
+  replayed: boolean;
+  receipt: OutcomeMutationReceipt;
+};
 
 export type OutcomeRefreshResult = OutcomeMutationResult & {
   refresh: { status: OutcomeRefreshStatus; reason?: OutcomeSourceIssueReason };

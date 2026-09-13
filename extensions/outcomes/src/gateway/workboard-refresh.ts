@@ -50,11 +50,36 @@ export type RefreshCandidate = {
   projections: WorkProjection[];
   evidence: EvidenceRef[];
   authorizedSources: AuthorizedOutcomeSource[];
+  visibleHistoricalRefs: WorkboardRef[];
   refresh: RefreshSummary;
 };
 
 function workRefIdentity(ref: WorkboardRef): string {
   return `${ref.cardId}\0${ref.cardCreatedAt}`;
+}
+
+function uniqueWorkRefs(refs: WorkboardRef[]): WorkboardRef[] {
+  return refs.filter(
+    (ref, index) =>
+      refs.findIndex((item) => workRefIdentity(item) === workRefIdentity(ref)) === index,
+  );
+}
+
+function historicalWorkRefs(record: OutcomeRecord): WorkboardRef[] {
+  return uniqueWorkRefs(
+    [...record.decisions, ...record.acceptances].flatMap((entry) =>
+      "decidedPlan" in entry
+        ? entry.decidedPlan.criteria.flatMap((criterion) => criterion.workRefs)
+        : entry.acceptedPlan.criteria.flatMap((criterion) => criterion.workRefs),
+    ),
+  );
+}
+
+export function hasOutcomeSourcePresentationRefs(record: OutcomeRecord): boolean {
+  return (
+    record.criteria.some((criterion) => criterion.workRefs.length > 0) ||
+    historicalWorkRefs(record).length > 0
+  );
 }
 
 function uniqueSourcePairs(items: Array<{ sourceId: string; digest: string }>) {
@@ -120,6 +145,7 @@ export function unavailableRefresh(
     projections,
     evidence: [],
     authorizedSources: [],
+    visibleHistoricalRefs: [],
     refresh: { status: availability, reason },
   };
 }
@@ -133,12 +159,8 @@ export function buildRefreshCandidate(
   for (const card of cards) {
     cardsById.set(card.id, [...(cardsById.get(card.id) ?? []), card]);
   }
-  const refs = record.criteria
-    .flatMap((criterion) => criterion.workRefs)
-    .filter(
-      (ref, index, all) =>
-        all.findIndex((item) => workRefIdentity(item) === workRefIdentity(ref)) === index,
-    );
+  const refs = uniqueWorkRefs(record.criteria.flatMap((criterion) => criterion.workRefs));
+  const historicRefs = historicalWorkRefs(record);
   const matchedCards = new Map<string, (typeof cards)[number]>();
   const unavailable = new Map<string, RefreshReason>();
   for (const ref of refs) {
@@ -278,10 +300,15 @@ export function buildRefreshCandidate(
       },
     ];
   });
+  const visibleHistoricalRefs = historicRefs.filter((ref) => {
+    const candidates = cardsById.get(ref.cardId) ?? [];
+    return candidates.length === 1 && candidates[0]!.createdAt === ref.cardCreatedAt;
+  });
   return {
     projections,
     evidence,
     authorizedSources,
+    visibleHistoricalRefs,
     refresh: identityConflict
       ? { status: "identity-conflict", reason: "identity-conflict" }
       : unavailableProjection === undefined

@@ -1,7 +1,9 @@
 import type {
   OutcomeCreateParams,
   OutcomeCriterionInput,
+  OutcomeAcceptParams,
   OutcomeUpdateParams,
+  OutcomeVerifyCriterionParams,
   OutcomeWorkboardLinkParams,
 } from "@openclaw/outcomes-contract";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
@@ -13,6 +15,8 @@ type PublicCriterion = OutcomeCriterionInput;
 type PublicCreate = OutcomeCreateParams;
 type PublicPatch = OutcomeUpdateParams["patch"];
 type PublicWorkboardLink = OutcomeWorkboardLinkParams;
+type PublicVerify = OutcomeVerifyCriterionParams;
+type PublicAccept = OutcomeAcceptParams;
 
 export function normalizedUuid(value: unknown): string | undefined {
   if (typeof value !== "string") {
@@ -134,6 +138,77 @@ export function normalizeWorkboardLink(params: unknown): PublicWorkboardLink | u
     return undefined;
   }
   const result = { id, expectedRevision: input.expectedRevision, criterionId, cardId };
+  return withinBudget(result) ? result : undefined;
+}
+
+function normalizedHash(value: unknown): string | undefined {
+  return typeof value === "string" && /^[0-9a-f]{64}$/.test(value) ? value : undefined;
+}
+
+export function normalizeVerifyCriterion(params: unknown): PublicVerify | undefined {
+  if (!params || typeof params !== "object") {
+    return undefined;
+  }
+  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
+  const id = normalizedUuid(input.id);
+  const decisionId = normalizedUuid(input.decisionId);
+  const criterionId = normalizedUuid(input.criterionId);
+  const planHash = normalizedHash(input.planHash);
+  const evidenceSetHash = normalizedHash(input.evidenceSetHash);
+  const status: PublicVerify["status"] | undefined =
+    input.status === "verified" || input.status === "rejected" ? input.status : undefined;
+  const note = input.note === undefined ? undefined : normalizedText(input.note, 1, 2000);
+  if (
+    !id ||
+    !decisionId ||
+    !criterionId ||
+    !planHash ||
+    !evidenceSetHash ||
+    !positiveSafeInteger(input.expectedRevision) ||
+    status === undefined ||
+    (input.note !== undefined && note === undefined) ||
+    (status === "rejected" && note === undefined)
+  ) {
+    return undefined;
+  }
+  const result = {
+    id,
+    expectedRevision: input.expectedRevision,
+    decisionId,
+    criterionId,
+    status,
+    planHash,
+    evidenceSetHash,
+    ...(note === undefined ? {} : { note }),
+  };
+  return withinBudget(result) ? result : undefined;
+}
+
+export function normalizeAccept(params: unknown): PublicAccept | undefined {
+  if (!params || typeof params !== "object") {
+    return undefined;
+  }
+  const input = params as Record<string, unknown>; // SAFETY: params passed the object guard above.
+  const id = normalizedUuid(input.id);
+  const acceptanceId = normalizedUuid(input.acceptanceId);
+  const planHash = normalizedHash(input.planHash);
+  const closureHash = normalizedHash(input.closureHash);
+  if (
+    !id ||
+    !acceptanceId ||
+    !planHash ||
+    !closureHash ||
+    !positiveSafeInteger(input.expectedRevision)
+  ) {
+    return undefined;
+  }
+  const result = {
+    id,
+    expectedRevision: input.expectedRevision,
+    acceptanceId,
+    planHash,
+    closureHash,
+  };
   return withinBudget(result) ? result : undefined;
 }
 

@@ -87,6 +87,33 @@ export const outcomeRefreshParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+const outcomeHash = Type.String({ pattern: "^[0-9a-f]{64}$" });
+
+export const outcomeVerifyCriterionParamsSchema = Type.Object(
+  {
+    id: outcomeId,
+    expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+    decisionId: outcomeId,
+    criterionId: outcomeId,
+    status: Type.Union([Type.Literal("verified"), Type.Literal("rejected")]),
+    planHash: outcomeHash,
+    evidenceSetHash: outcomeHash,
+    note: Type.Optional(Type.String({ minLength: 1, maxLength: 2000 * 2 })),
+  },
+  { additionalProperties: false },
+);
+
+export const outcomeAcceptParamsSchema = Type.Object(
+  {
+    id: outcomeId,
+    expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+    acceptanceId: outcomeId,
+    planHash: outcomeHash,
+    closureHash: outcomeHash,
+  },
+  { additionalProperties: false },
+);
+
 const outcomeWorkboardLinkFields = {
   id: outcomeId,
   expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),

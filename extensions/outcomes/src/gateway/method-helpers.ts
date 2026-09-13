@@ -35,7 +35,9 @@ export function respondMutation(
   now: number,
   presentation?: {
     authorizedSources: AuthorizedOutcomeSource[];
+    evidence: OutcomeRecord["evidence"];
     projections: OutcomeRecord["projections"];
+    visibleHistoricalRefs: OutcomeRecord["criteria"][number]["workRefs"];
   },
 ): void {
   if (decision.kind === "updated" || decision.kind === "noop") {
@@ -45,6 +47,8 @@ export function respondMutation(
         now,
         presentation?.authorizedSources,
         presentation?.projections,
+        presentation?.evidence,
+        presentation?.visibleHistoricalRefs,
       ),
     });
   }

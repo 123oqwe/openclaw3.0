@@ -15,6 +15,21 @@ import {
 import { OutcomesPageState } from "./outcomes-page-state.ts";
 
 export abstract class OutcomesPageGateway extends OutcomesPageState {
+  protected clearAssuranceState() {
+    this.assuranceRequestSequence += 1;
+    this.verificationDialogOpen = false;
+    this.verifying = false;
+    this.verificationError = null;
+    this.verificationCriterionId = "";
+    this.verificationStatus = "verified";
+    this.verificationNote = "";
+    this.verificationRequest = null;
+    this.acceptanceRequest = null;
+    this.verificationReplayPending = false;
+    this.acceptanceReplayPending = false;
+    this.assuranceRefreshRequired = false;
+  }
+
   protected readonly handleVisibilityChange = () => {
     if (document.visibilityState === "visible") {
       this.revalidateAfterPageResume();
@@ -153,6 +168,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.linkCriterionId = "";
     this.linkCardId = "";
     this.linkRequestSequence += 1;
+    this.clearAssuranceState();
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
@@ -267,6 +283,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.linkCriterionId = "";
     this.linkCardId = "";
     this.linkRequestSequence += 1;
+    this.clearAssuranceState();
     void this.loadSelectedOutcome();
   }
 
@@ -296,6 +313,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.linkCriterionId = "";
     this.linkCardId = "";
     this.linkRequestSequence += 1;
+    this.clearAssuranceState();
     this.mutationSequence += 1;
     if (focusId) {
       this.restoreListFocus(focusId);
@@ -334,19 +352,38 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
   }
 
   protected canOutcomeAction(
-    action: "refresh" | "edit-contract" | "unlink-work" | "activate" | "cancel",
+    action:
+      | "refresh"
+      | "edit-contract"
+      | "unlink-work"
+      | "activate"
+      | "cancel"
+      | "review-evidence"
+      | "accept",
     method:
       | "outcomes.refresh"
       | "outcomes.update"
       | "outcomes.unlinkWorkboard"
       | "outcomes.activate"
-      | "outcomes.cancel",
+      | "outcomes.cancel"
+      | "outcomes.verifyCriterion"
+      | "outcomes.accept",
     requireFresh = false,
   ): boolean {
     return Boolean(
       this.detail &&
       this.detail.nextActions.includes(action) &&
       (!requireFresh || !this.isDetailExpired()) &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, method, "operator.write"),
+    );
+  }
+
+  protected canReplayOutcomeAssurance(
+    method: "outcomes.verifyCriterion" | "outcomes.accept",
+  ): boolean {
+    return Boolean(
+      this.detail &&
       this.gatewayIdentity?.canRead &&
       canCallGatewayMethod(this.gateway.snapshot, method, "operator.write"),
     );
@@ -404,6 +441,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
 
   protected replaceOutcome(detail: OutcomeDetail, requestStartedAt = performance.now()) {
     this.detail = detail;
+    this.assuranceRefreshRequired = false;
     this.setDetailFreshness(detail, requestStartedAt);
     this.outcomes = replaceOutcomeSummary(this.outcomes, detail);
   }

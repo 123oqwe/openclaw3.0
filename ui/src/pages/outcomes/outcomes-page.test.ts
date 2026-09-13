@@ -21,6 +21,149 @@ afterEach(() => {
 });
 
 describe("OutcomesPage", () => {
+  it("renders authorized historical decision and acceptance plans without restoring restricted refs", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        const detail = outcomeDetail("outcome-a", "Outcome A");
+        return Promise.resolve({
+          outcome: {
+            ...detail,
+            objective: "Current Outcome objective after the contract changed",
+            decisions: [
+              {
+                criterionId: "criterion-1",
+                decidedAt: 2,
+                decidedPlan: {
+                  contractRevision: 1,
+                  criteria: [
+                    {
+                      id: "criterion-1",
+                      required: true,
+                      sourcesVisibility: "complete" as const,
+                      text: "Original release criterion",
+                      workRefs: detail.criteria[0]!.workRefs,
+                    },
+                  ],
+                  objective: "Original Outcome objective",
+                  outcomeId: detail.id,
+                  planGeneration: 0,
+                },
+                decidedRevision: 2,
+                evidenceSetHash: "e".repeat(64),
+                id: "decision-a",
+                note: "The reviewer found a release blocker.",
+                planGeneration: 0,
+                planHash: "p".repeat(64),
+                status: "rejected" as const,
+              },
+            ],
+            acceptances: [
+              {
+                acceptedAt: 3,
+                acceptedPlan: {
+                  contractRevision: 1,
+                  criteria: [
+                    {
+                      id: "criterion-1",
+                      required: true,
+                      sourcesVisibility: "restricted" as const,
+                      text: "Original acceptance criterion",
+                      workRefs: [],
+                    },
+                  ],
+                  objective: "Original accepted objective",
+                  outcomeId: detail.id,
+                  planGeneration: 0,
+                },
+                acceptedRevision: 3,
+                closureHash: "c".repeat(64),
+                id: "acceptance-a",
+                planGeneration: 0,
+                planHash: "p".repeat(64),
+              },
+            ],
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = {
+      gateway: createGateway({ request } as unknown as GatewayBrowserClient),
+    } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      const decision = page.querySelector<HTMLElement>('[data-outcome-decision="decision-a"]');
+      expect(decision?.textContent).toContain("The reviewer found a release blocker.");
+      expect(decision?.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
+      expect(decision?.textContent).toContain("Original Outcome objective");
+      expect(decision?.textContent).toContain("Original release criterion");
+      expect(decision?.querySelector('[data-outcome-history-card="card-1"]')).not.toBeNull();
+      const decisionSummary = decision?.querySelector<HTMLElement>("summary");
+      decisionSummary?.focus();
+      expect(document.activeElement).toBe(decisionSummary);
+
+      const acceptance = page.querySelector<HTMLElement>(
+        '[data-outcome-acceptance-history="acceptance-a"]',
+      );
+      expect(acceptance?.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
+      expect(acceptance?.textContent).toContain("Original accepted objective");
+      expect(acceptance?.textContent).toContain("Original acceptance criterion");
+      expect(acceptance?.querySelector("[data-outcome-history-card]")).toBeNull();
+      expect(acceptance?.textContent).toContain(
+        "Some linked cards are no longer available to you.",
+      );
+    });
+  });
+
+  it("states when a current acceptance was last successfully checked", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        const detail = outcomeDetail("outcome-a", "Outcome A");
+        return Promise.resolve({
+          outcome: {
+            ...detail,
+            acceptance: { acceptanceValidity: "current" as const, lastSuccessfulAt: 42 },
+            acceptanceValidity: "current" as const,
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = {
+      gateway: createGateway({ request } as unknown as GatewayBrowserClient),
+    } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      const checkedAt = page.querySelector<HTMLTimeElement>("[data-outcome-last-successful-check]");
+      expect(checkedAt?.dateTime).toBe(new Date(42).toISOString());
+      expect(checkedAt?.textContent).toContain("Last checked at");
+    });
+  });
+
   it("renders a Workboard-disabled source issue as an explicit unavailable state", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {

@@ -652,6 +652,172 @@ suite.define(() => {
     );
   });
 
+  it("records a verified decision and accepts its current closure through the real Gateway", async () => {
+    const cardId = requireCardId(
+      await callGateway("workboard.cards.create", {
+        priority: "normal",
+        title: "Accept real Outcome evidence",
+      }),
+    );
+    const proofId = requireProofId(
+      await callGateway("workboard.cards.proof", {
+        id: cardId,
+        label: "Outcome acceptance verification",
+        status: "passed",
+      }),
+    );
+    await suite.withPage(
+      {
+        locale: "en-US",
+        serviceWorkers: "block",
+        viewport: { height: 900, width: 1280 },
+      },
+      async ({ page }) => {
+        await page.goto(await outcomesUrl());
+        await waitForControlUiGatewayReady(page);
+        await page.locator('[data-outcome-action="create"]').click();
+        const createForm = page.locator("[data-outcome-create-form]");
+        await createForm.locator('input[name="title"]').fill("Accept Outcome E2E");
+        await createForm.locator('textarea[name="objective"]').fill("Prove human acceptance");
+        await createForm.locator('input[name="criterion"]').fill("Proof is reviewed");
+        await createForm.locator("[data-outcome-confirm-create]").click();
+
+        const summary = page.locator(".outcome-summary", { hasText: "Accept Outcome E2E" });
+        await summary.locator("[data-outcome-select]").click();
+        const detail = page.locator("[data-outcome-detail-id]");
+        await detail.waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-action="link-work"]').click();
+        const linkForm = page.locator("[data-outcome-link-form]");
+        await linkForm.locator('select[name="card"]').selectOption(cardId);
+        await linkForm.locator("[data-outcome-confirm-link]").click();
+        await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-action="activate"]').click();
+        await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-action="refresh"]').click();
+        await detail.locator(`[data-outcome-evidence="${proofId}"]`).waitFor({ state: "visible" });
+
+        await detail.locator('[data-outcome-action="review-evidence"]').click();
+        const verificationForm = page.locator("[data-outcome-verification-form]");
+        await verificationForm.waitFor({ state: "visible" });
+        await verificationForm.locator("[data-outcome-confirm-verification]").click();
+        await detail
+          .locator("[data-outcome-decision]")
+          .getByText("Verified", { exact: true })
+          .waitFor({
+            state: "visible",
+          });
+        const firstDecision = detail.locator("[data-outcome-decision]").first();
+        const firstDecisionDetails = firstDecision.locator("details");
+        await firstDecision.locator("summary").focus();
+        await page.keyboard.press("Enter");
+        await expect.poll(() => firstDecisionDetails.getAttribute("open")).toBe("");
+        await firstDecision
+          .locator(".outcome-detail__historical-plan > p")
+          .getByText("Objective: Prove human acceptance", { exact: true })
+          .waitFor({ state: "visible" });
+        await firstDecision.getByText("Proof is reviewed", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await page.keyboard.press("Space");
+        await expect.poll(() => firstDecisionDetails.getAttribute("open")).toBeNull();
+        await detail.locator('[data-outcome-action="accept"]').click();
+        await detail.locator('[data-outcome-phase="accepted"]').waitFor({ state: "visible" });
+        await detail.locator("[data-outcome-acceptance-history]").waitFor({ state: "visible" });
+        await callGateway("workboard.cards.proof", {
+          id: cardId,
+          label: "Outcome acceptance evidence changed",
+          status: "passed",
+        });
+        await detail.locator('[data-outcome-action="refresh"]').click();
+        await detail
+          .locator('[data-outcome-acceptance="needs-review"]')
+          .waitFor({ state: "visible" });
+        await expect.poll(() => detail.locator('[data-outcome-action="accept"]').count()).toBe(0);
+        await detail.locator('[data-outcome-action="review-evidence"]').click();
+        await verificationForm.locator('select[name="status"]').selectOption("rejected");
+        await verificationForm.locator('textarea[name="note"]').fill("The new proof needs review");
+        await verificationForm.locator("[data-outcome-confirm-verification]").click();
+        await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(2);
+        await detail
+          .locator("[data-outcome-decision]")
+          .getByText("Rejected", { exact: true })
+          .waitFor({
+            state: "visible",
+          });
+        await detail.locator('[data-outcome-action="review-evidence"]').click();
+        await verificationForm.locator("[data-outcome-confirm-verification]").click();
+        await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(3);
+        await detail.locator('[data-outcome-action="accept"]').click();
+        await detail.locator('[data-outcome-acceptance="current"]').waitFor({ state: "visible" });
+
+        if (!instance) {
+          throw new Error("Outcome Gateway fixture was not started");
+        }
+        const outcomeInstance = instance;
+        try {
+          await outcomeInstance.stopGateway();
+          await page
+            .getByText("Outcome connection unavailable", { exact: true })
+            .waitFor({ state: "visible" });
+          await outcomeInstance.state.writeConfig(outcomeGatewayConfig(outcomeInstance, false));
+          await outcomeInstance.startGateway();
+          await waitForControlUiGatewayReady(page);
+          await page.reload();
+          await waitForControlUiGatewayReady(page);
+          await page
+            .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+            .locator("[data-outcome-select]")
+            .click();
+          const unavailableDetail = page.locator("[data-outcome-detail-id]");
+          await unavailableDetail.locator('[data-outcome-acceptance="needs-review"]').waitFor({
+            state: "visible",
+          });
+          await expect
+            .poll(() => unavailableDetail.locator('[data-outcome-action="accept"]').count())
+            .toBe(0);
+          await expect
+            .poll(() => unavailableDetail.locator(`[data-outcome-evidence="${proofId}"]`).count())
+            .toBe(0);
+        } finally {
+          await outcomeInstance.stopGateway();
+          await outcomeInstance.state.writeConfig(outcomeGatewayConfig(outcomeInstance, true));
+          await outcomeInstance.startGateway();
+          await waitForControlUiGatewayReady(page);
+          await page.reload();
+          await waitForControlUiGatewayReady(page);
+        }
+        await page
+          .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+          .locator("[data-outcome-select]")
+          .click();
+        const restoredDetail = page.locator("[data-outcome-detail-id]");
+        await restoredDetail
+          .locator('[data-outcome-acceptance="current"]')
+          .waitFor({ state: "visible" });
+        await restoredDetail.locator('[data-outcome-action="edit-contract"]').click();
+        const editForm = page.locator("[data-outcome-edit-form]");
+        await editForm.locator('textarea[name="objective"]').fill("Revised accepted objective");
+        await editForm.locator("[data-outcome-confirm-edit]").click();
+        await restoredDetail.getByText("Revised accepted objective", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await restoredDetail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
+        await restoredDetail.locator('[data-outcome-acceptance="needs-review"]').waitFor({
+          state: "visible",
+        });
+        const firstAcceptance = restoredDetail.locator("[data-outcome-acceptance-history]").first();
+        await firstAcceptance.locator("summary").click();
+        await firstAcceptance
+          .locator(".outcome-detail__historical-plan > p")
+          .getByText("Objective: Prove human acceptance", { exact: true })
+          .waitFor({ state: "visible" });
+        await firstAcceptance.getByText("Proof is reviewed", { exact: true }).waitFor({
+          state: "visible",
+        });
+      },
+    );
+  });
+
   it("keeps the keyboard create flow usable without horizontal overflow on a narrow screen", async () => {
     await suite.withPage(
       {

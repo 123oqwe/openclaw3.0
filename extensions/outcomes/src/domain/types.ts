@@ -30,7 +30,7 @@ export type WorkProjection = {
     | "identity-conflict";
 };
 
-type OutcomePlanSnapshot = {
+export type OutcomePlanSnapshot = {
   outcomeId: string;
   objective: string;
   contractRevision: number;

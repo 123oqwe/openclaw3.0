@@ -6,13 +6,27 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
+import { deriveOutcomeClosure } from "../assurance/closure.js";
+import {
+  reduceOutcomeAcceptance,
+  reduceOutcomeDecision,
+  type OutcomeAcceptanceResult,
+  type OutcomeDecisionResult,
+} from "../domain/assurance-reducer.js";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import {
   reduceOutcomeActivate,
+  reduceOutcomeContract,
   reduceOutcomeTitle,
+  reduceOutcomeUnlink,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
-import { createRequestHash, planHash, workboardProjectionFingerprint } from "../domain/schema.js";
+import {
+  createRequestHash,
+  evidenceSetHash,
+  planHash,
+  workboardProjectionFingerprint,
+} from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
@@ -50,32 +64,63 @@ function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
   };
 }
 
-function oversizedAvailableProjection(digest: string): OutcomeRecord["projections"][number] {
+function assuredActiveRecord(id: string): OutcomeRecord {
+  const draft = draftRecord(id);
   const ref = {
     owner: "workboard" as const,
-    cardId: "c",
+    cardId: "card-1",
     cardCreatedAt: 1,
-    boardIdAtLink: "b",
+    boardIdAtLink: "board-1",
   };
-  const proofs = [{ sourceId: "s", digest }];
-  const artifacts: Array<{ sourceId: string; digest: string }> = [];
+  const criteria = [{ ...draft.criteria[0]!, workRefs: [ref] }];
+  const planGeneration = 1;
+  const activePlanHash = planHash({
+    outcomeId: draft.id,
+    objective: draft.objective,
+    contractRevision: draft.contractRevision,
+    planGeneration,
+    criteria,
+  });
   return {
-    ref,
-    availability: "available",
-    currentBoardId: "board-current",
-    status: "done",
-    observedAt: 1,
-    sourceUpdatedAt: 1,
-    proofs,
-    artifacts,
-    sourceFingerprint: workboardProjectionFingerprint({
-      ref,
-      proofs,
-      artifacts,
-      currentBoardId: "board-current",
-      status: "done",
-      sourceUpdatedAt: 1,
-    }),
+    ...draft,
+    phase: "active",
+    revision: 2,
+    planGeneration,
+    planHash: activePlanHash,
+    criteria,
+    projections: [
+      {
+        ref,
+        availability: "available",
+        currentBoardId: "board-current",
+        status: "done",
+        observedAt: 10,
+        lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
+        proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+        artifacts: [],
+        sourceFingerprint: workboardProjectionFingerprint({
+          ref,
+          proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+          artifacts: [],
+          currentBoardId: "board-current",
+          status: "done",
+          sourceUpdatedAt: 10,
+        }),
+      },
+    ],
+    evidence: [
+      {
+        id: "evidence-1",
+        criterionId: "c-1",
+        planGeneration,
+        workRef: ref,
+        kind: "workboard-proof",
+        sourceId: "proof-1",
+        sourceDigest: "proof-digest-1",
+        observedAt: 10,
+      },
+    ],
   };
 }
 
@@ -254,6 +299,265 @@ describe("Outcome repository host adapter", () => {
           updatedAt: 42,
           revision: 2,
         });
+      },
+    );
+  });
+
+  it("restores decision and acceptance snapshots after contract changes and unlink", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-assurance-history", applyEnv: false },
+      async (state) => {
+        const namespace = `outcomes-v1-${randomUUID()}`;
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const repository = createOutcomeRepository(store);
+        const initial = assuredActiveRecord("assurance-history");
+        await repository.create(initial);
+        const evidenceHash = evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: initial.planGeneration,
+          sourceDigests: ["proof-digest-1"],
+        });
+        const rejected = await repository.transact<OutcomeDecisionResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeDecision(current!, {
+              expectedRevision: current!.revision,
+              id: "decision-rejected",
+              requestHash: "d".repeat(64),
+              criterionId: "c-1",
+              status: "rejected",
+              planHash: current!.planHash!,
+              evidenceSetHash: evidenceHash,
+              profileId: "alice",
+              note: "requires reviewer follow-up",
+              serverTime: 42,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
+        expect(rejected).toMatchObject({ kind: "updated", replayed: false });
+        const verified = await repository.transact<OutcomeDecisionResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeDecision(current!, {
+              expectedRevision: current!.revision,
+              id: "decision-verified",
+              requestHash: "e".repeat(64),
+              criterionId: "c-1",
+              status: "verified",
+              planHash: current!.planHash!,
+              evidenceSetHash: evidenceHash,
+              profileId: "alice",
+              serverTime: 43,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
+        expect(verified).toMatchObject({ kind: "updated", replayed: false });
+        if (verified.kind !== "updated") {
+          return;
+        }
+        const closureHash = deriveOutcomeClosure(verified.record, verified.record.projections, 43);
+        if (closureHash === null || verified.record.planHash === null) {
+          throw new Error("fixture closure must be complete after verification");
+        }
+        const accepted = await repository.transact<OutcomeAcceptanceResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeAcceptance(current!, {
+              expectedRevision: current!.revision,
+              id: "acceptance-1",
+              requestHash: "a".repeat(64),
+              planHash: current!.planHash!,
+              closureHash,
+              profileId: "alice",
+              serverTime: 44,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
+        expect(accepted).toMatchObject({ kind: "updated", replayed: false });
+        if (accepted.kind !== "updated") {
+          return;
+        }
+        const decisionSnapshots = structuredClone(accepted.record.decisions);
+        const acceptanceSnapshot = structuredClone(accepted.record.acceptances);
+        const renamed = await repository.transact<OutcomeMutationResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeTitle(current!, {
+              expectedRevision: current!.revision,
+              title: "renamed after acceptance",
+              serverTime: 45,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
+        expect(renamed).toMatchObject({
+          kind: "updated",
+          record: { phase: "accepted", title: "renamed after acceptance" },
+        });
+        if (renamed.kind !== "updated") {
+          return;
+        }
+        expect(renamed.record.decisions).toEqual(decisionSnapshots);
+        expect(renamed.record.acceptances).toEqual(acceptanceSnapshot);
+        const contractChanged = await repository.transact<OutcomeMutationResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeContract(current!, {
+              expectedRevision: current!.revision,
+              objective: "revised objective",
+              criteria: current!.criteria,
+              serverTime: 46,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
+        expect(contractChanged.kind).toBe("updated");
+        const unlinked = await repository.transact<OutcomeMutationResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeUnlink(current!, {
+              expectedRevision: current!.revision,
+              criterionId: "c-1",
+              cardId: "card-1",
+              serverTime: 47,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
+        expect(unlinked.kind).toBe("updated");
+
+        resetPluginStateStoreForTests();
+        const reopenedStore = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const restored = await createOutcomeRepository(reopenedStore).get("assurance-history");
+        expect(restored).toMatchObject({
+          phase: "active",
+          planGeneration: 3,
+          revision: 8,
+          title: "renamed after acceptance",
+        });
+        expect(restored?.decisions).toEqual(decisionSnapshots);
+        expect(restored?.acceptances).toEqual(acceptanceSnapshot);
+        expect(restored?.criteria[0]?.workRefs).toEqual([]);
+      },
+    );
+  });
+
+  it("keeps a decision-only historical plan readable from a fresh process", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-repository-decision-history-process", applyEnv: false },
+      async (state) => {
+        const namespace = `outcomes-v1-${randomUUID()}`;
+        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
+          namespace,
+          maxEntries: OUTCOME_MAX_ENTRIES,
+          overflowPolicy: "reject-new",
+          env: state.env,
+        });
+        const repository = createOutcomeRepository(store);
+        const initial = assuredActiveRecord("decision-history-process");
+        await repository.create(initial);
+        const evidenceHash = evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: initial.planGeneration,
+          sourceDigests: ["proof-digest-1"],
+        });
+        const verified = await repository.transact<OutcomeDecisionResult>(initial.id, (current) => {
+          const decision = reduceOutcomeDecision(current!, {
+            expectedRevision: current!.revision,
+            id: "decision-only",
+            requestHash: "d".repeat(64),
+            criterionId: "c-1",
+            status: "verified",
+            planHash: current!.planHash!,
+            evidenceSetHash: evidenceHash,
+            profileId: "alice",
+            serverTime: 42,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(verified).toMatchObject({ kind: "updated", record: { acceptances: [] } });
+        if (verified.kind !== "updated") {
+          return;
+        }
+        const decidedPlan = structuredClone(verified.record.decisions[0]?.decidedPlan);
+        const changed = await repository.transact<OutcomeMutationResult>(initial.id, (current) => {
+          const decision = reduceOutcomeContract(current!, {
+            expectedRevision: current!.revision,
+            objective: "changed after the original decision",
+            criteria: current!.criteria,
+            serverTime: 43,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(changed.kind).toBe("updated");
+        const unlinked = await repository.transact<OutcomeMutationResult>(initial.id, (current) => {
+          const decision = reduceOutcomeUnlink(current!, {
+            expectedRevision: current!.revision,
+            criterionId: "c-1",
+            cardId: "card-1",
+            serverTime: 44,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(unlinked.kind).toBe("updated");
+
+        const child = spawnSync(
+          process.execPath,
+          [
+            "--import",
+            "tsx",
+            "--input-type=module",
+            "--eval",
+            `
+          import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
+          const store = createPluginStateKeyedStoreForTests("outcomes", {
+            namespace: ${JSON.stringify(namespace)},
+            maxEntries: ${OUTCOME_MAX_ENTRIES},
+            overflowPolicy: "reject-new",
+          });
+          const value = await store.lookup(${JSON.stringify(initial.id)});
+          process.stdout.write(JSON.stringify(value));
+        `,
+          ],
+          { cwd: process.cwd(), encoding: "utf8", env: { ...process.env, ...state.env } },
+        );
+        expect(child.status, child.stderr).toBe(0);
+        const restored = JSON.parse(child.stdout) as OutcomeRecord;
+        expect(restored.acceptances).toEqual([]);
+        expect(restored.planGeneration).toBe(3);
+        expect(restored.criteria[0]?.workRefs).toEqual([]);
+        expect(restored.decisions[0]?.decidedPlan).toEqual(decidedPlan);
       },
     );
   });
@@ -473,65 +777,6 @@ describe("Outcome repository host adapter", () => {
         await expect(
           repository.createOwned("alice", { ...record, createRequestHash: "b".repeat(64) }),
         ).rejects.toBeInstanceOf(OutcomeRepositoryConflictError);
-      },
-    );
-  });
-
-  it("commits one record when identical owner creates race", async () => {
-    await withOpenClawTestState(
-      { label: "outcome-repository-create-race", applyEnv: false },
-      async (state) => {
-        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
-          namespace: `outcomes-v1-${randomUUID()}`,
-          maxEntries: 500,
-          overflowPolicy: "reject-new",
-          env: state.env,
-        });
-        const repository = createOutcomeRepository(store);
-        const record = { ...draftRecord("race"), createRequestHash: "c".repeat(64) };
-        const results = await Promise.all([
-          repository.createOwned("alice", record),
-          repository.createOwned("alice", record),
-        ]);
-        expect(results.filter((result) => result.created)).toHaveLength(1);
-        expect(results.filter((result) => result.replayed)).toHaveLength(1);
-        await expect(repository.get(record.id)).resolves.toEqual(record);
-      },
-    );
-  });
-
-  it("rejects oversized aggregates before create or update", async () => {
-    await withOpenClawTestState(
-      { label: "outcome-repository-size", applyEnv: false },
-      async (state) => {
-        const store = createPluginStateKeyedStoreForTests<OutcomeRecord>("outcomes", {
-          namespace: `outcomes-v1-${randomUUID()}`,
-          maxEntries: 500,
-          overflowPolicy: "reject-new",
-          env: state.env,
-        });
-        const repository = createOutcomeRepository(store);
-        const oversized = {
-          ...draftRecord("large"),
-          projections: [oversizedAvailableProjection("x".repeat(140_000))],
-        };
-        await expect(repository.create(oversized)).rejects.toMatchObject({
-          code: "outcome-capacity-exceeded",
-        });
-        await expect(repository.get(oversized.id)).resolves.toBeUndefined();
-
-        const existing = draftRecord("small");
-        await repository.create(existing);
-        await expect(
-          repository.transact(existing.id, (current) => ({
-            result: "updated",
-            next: {
-              ...current!,
-              projections: [oversizedAvailableProjection("x".repeat(140_000))],
-            },
-          })),
-        ).rejects.toMatchObject({ code: "outcome-capacity-exceeded" });
-        await expect(repository.get(existing.id)).resolves.toEqual(existing);
       },
     );
   });

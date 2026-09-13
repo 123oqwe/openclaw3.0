@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import * as contract from "./index.js";
 import {
   OUTCOME_DEFAULT_LIST_LIMIT,
@@ -9,14 +9,24 @@ import {
   type OutcomeHealthParams,
   type OutcomeHealthResult,
   type OutcomeDetail,
+  type OutcomeDecisionView,
 } from "./index.js";
 
-type Forbidden = "managerProfileId" | "requestHash" | "operations" | "decisions" | "acceptances";
+type Forbidden = "managerProfileId" | "requestHash" | "operations";
+type DecisionForbidden = "profileId" | "requestHash";
 type AssertNever<T extends never> = T;
 type PublicForbiddenKeys = AssertNever<Extract<keyof OutcomeDetail, Forbidden>>;
+type PublicDecisionForbiddenKeys = AssertNever<
+  Extract<keyof OutcomeDecisionView, DecisionForbidden>
+>;
 void (undefined as unknown as PublicForbiddenKeys);
+void (undefined as unknown as PublicDecisionForbiddenKeys);
 
 describe("outcomes public contract", () => {
+  it("keeps the public decision note optional", () => {
+    expectTypeOf<OutcomeDecisionView["note"]>().toEqualTypeOf<string | undefined>();
+  });
+
   it("exports only the P-01 view surface and bounded list constants", () => {
     expect(OUTCOME_PHASES).toEqual(["draft", "active", "accepted", "cancelled"]);
     expect(OUTCOME_DEFAULT_LIST_LIMIT).toBe(25);

@@ -9,7 +9,9 @@ import { html, nothing } from "lit";
 import "../../components/modal-dialog.ts";
 import { t } from "../../i18n/index.ts";
 import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
+import { formatDateTimeMs } from "../../lib/format.ts";
 import "../../styles/outcomes.css";
+import { renderOutcomeVerificationDialog } from "./outcome-verification-dialog.ts";
 import {
   acceptanceValidityLabel,
   attentionLabel,
@@ -26,11 +28,13 @@ registerOutcomesEnglish();
 
 export type OutcomeDetailViewData = {
   canActivate: boolean;
+  canAccept: boolean;
   canCancel: boolean;
   canEdit: boolean;
   canLink: boolean;
   canRefresh: boolean;
   canUnlink: boolean;
+  canVerify: boolean;
   cancelConfirmationOpen: boolean;
   cancelError: string | null;
   cancelling: boolean;
@@ -46,17 +50,24 @@ export type OutcomeDetailViewData = {
   loading: boolean;
   onBack: () => void;
   onActivate: () => void;
+  onAccept: () => void;
   onDismissEdit: (event: Event) => void;
   onEditCriterionInput: (index: number, value: string) => void;
   onEditInput: (field: "title" | "objective", value: string) => void;
   onRequestAddEditCriterion: () => void;
   onRequestEdit: () => void;
+  onRequestVerify: () => void;
   onRequestLink: () => void;
   onRequestRemoveEditCriterion: (index: number) => void;
   onCancelConfirmationDismiss: (event: Event) => void;
   onConfirmCancel: () => void;
   onRequestCancel: () => void;
   onRefresh: () => void;
+  onDismissVerification: (event: Event) => void;
+  onSubmitVerification: (event: SubmitEvent) => void;
+  onVerificationCriterionChange: (id: string) => void;
+  onVerificationNoteChange: (note: string) => void;
+  onVerificationStatusChange: (status: "verified" | "rejected") => void;
   onSubmitEdit: (event: SubmitEvent) => void;
   onDismissLink: (event: Event) => void;
   onLinkCardChange: (id: string) => void;
@@ -75,6 +86,15 @@ export type OutcomeDetailViewData = {
   linkDialogOpen: boolean;
   linkError: string | null;
   linking: boolean;
+  verificationCriterionId: string;
+  verificationDialogOpen: boolean;
+  verificationError: string | null;
+  verificationNote: string;
+  verificationReplayPending: boolean;
+  acceptanceReplayPending: boolean;
+  assuranceRefreshRequired: boolean;
+  verificationStatus: "verified" | "rejected";
+  verifying: boolean;
 };
 
 function evidenceKindLabel(kind: OutcomeEvidenceKind): string {
@@ -102,6 +122,46 @@ function sourceIssueLabel(reason: OutcomeSourceIssueReason): string {
     default:
       return t("outcomesPage.sourceIssue.unavailable");
   }
+}
+
+function renderHistoricalPlan(
+  plan: OutcomeDetail["decisions"][number]["decidedPlan"],
+  decisionCriterionId?: string,
+) {
+  const criteria =
+    decisionCriterionId === undefined
+      ? plan.criteria
+      : plan.criteria.filter((criterion) => criterion.id === decisionCriterionId);
+  return html`<div class="outcome-detail__historical-plan">
+    <p><strong>${t("outcomesPage.objective")}</strong>: ${plan.objective}</p>
+    <h4>${t("outcomesPage.criteria")}</h4>
+    <ul>
+      ${criteria.map(
+        (criterion) => html`<li data-outcome-history-criterion=${criterion.id}>
+          <strong>${criterion.text}</strong>
+          <span class="outcome-detail__criterion-kind">
+            ${criterion.required
+              ? t("outcomesPage.requiredCriterion")
+              : t("outcomesPage.optionalCriterion")}
+          </span>
+          ${criterion.workRefs.length > 0
+            ? html`<ul aria-label=${t("outcomesPage.linkedCards")}>
+                ${criterion.workRefs.map(
+                  (ref) => html`<li data-outcome-history-card=${ref.cardId}>
+                    ${t("outcomesPage.linkedCard", { cardId: ref.cardId })}
+                  </li>`,
+                )}
+              </ul>`
+            : nothing}
+          ${criterion.sourcesVisibility === "restricted"
+            ? html`<p class="outcome-detail__historical-restricted">
+                ${t("outcomesPage.historicalSourcesRestricted")}
+              </p>`
+            : nothing}
+        </li>`,
+      )}
+    </ul>
+  </div>`;
 }
 
 export function renderOutcomeDetail(data: OutcomeDetailViewData) {
@@ -141,9 +201,26 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     <p class="outcome-detail__acceptance" data-outcome-acceptance=${acceptanceValidity}>
       ${t("outcomesPage.acceptanceLabel")}: ${acceptanceValidityLabel(acceptanceValidity)}
     </p>
+    ${data.detail.acceptance.lastSuccessfulAt === undefined
+      ? nothing
+      : html`<time
+          data-outcome-last-successful-check
+          datetime=${new Date(data.detail.acceptance.lastSuccessfulAt).toISOString()}
+          >${t("outcomesPage.lastSuccessfulCheck", {
+            time: formatDateTimeMs(data.detail.acceptance.lastSuccessfulAt, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+          })}</time
+        >`}
     <p class="outcome-detail__readiness" data-outcome-readiness=${readiness}>
       ${readinessLabel(readiness)}
     </p>
+    ${data.assuranceRefreshRequired
+      ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+          ${t("outcomesPage.assuranceRefreshRequired")}
+        </p>`
+      : nothing}
     ${data.detailExpired
       ? html`<section class="outcomes-state" role="alert">
           ${t("outcomesPage.detailsExpired")}
@@ -226,6 +303,53 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           </ul>
         </section>`
       : nothing}
+    ${data.detail.decisions.length > 0
+      ? html`<section
+          class="outcome-detail__section"
+          aria-label=${t("outcomesPage.decisionHistoryLabel")}
+        >
+          <h3>${t("outcomesPage.decisionHistoryLabel")}</h3>
+          <ul>
+            ${data.detail.decisions.map(
+              (decision) => html`<li data-outcome-decision=${decision.id}>
+                <details>
+                  <summary>
+                    <span data-outcome-decision-status=${decision.status}>
+                      ${decision.status === "verified"
+                        ? t("outcomesPage.verified")
+                        : t("outcomesPage.rejected")}
+                    </span>
+                    — ${t("outcomesPage.historicalPlan")}
+                  </summary>
+                  ${decision.note === undefined ? nothing : html`<p>${decision.note}</p>`}
+                  ${renderHistoricalPlan(decision.decidedPlan, decision.criterionId)}
+                </details>
+              </li>`,
+            )}
+          </ul>
+        </section>`
+      : nothing}
+    ${data.detail.acceptances.length > 0
+      ? html`<section
+          class="outcome-detail__section"
+          aria-label=${t("outcomesPage.acceptanceHistoryLabel")}
+        >
+          <h3>${t("outcomesPage.acceptanceHistoryLabel")}</h3>
+          <ul>
+            ${data.detail.acceptances.map(
+              (acceptance) => html`<li data-outcome-acceptance-history=${acceptance.id}>
+                <details>
+                  <summary>
+                    ${t("outcomesPage.acceptedAt", { time: String(acceptance.acceptedAt) })} —
+                    ${t("outcomesPage.historicalPlan")}
+                  </summary>
+                  ${renderHistoricalPlan(acceptance.acceptedPlan)}
+                </details>
+              </li>`,
+            )}
+          </ul>
+        </section>`
+      : nothing}
     ${data.detail.attention.length > 0
       ? html`<section class="outcome-detail__section">
           <h3>${t("outcomesPage.attentionLabel")}</h3>
@@ -295,6 +419,43 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           >
             ${data.refreshing ? t("common.refreshing") : t("common.refresh")}
           </button>
+          ${data.mutationError
+            ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                ${data.mutationError}
+              </p>`
+            : nothing}
+        </section>`
+      : nothing}
+    ${data.canVerify &&
+    (data.detail.nextActions.includes("review-evidence") || data.verificationReplayPending)
+      ? html`<section class="outcome-detail__section outcome-detail__actions">
+          <button
+            data-outcome-action="review-evidence"
+            type="button"
+            ?disabled=${data.mutationInFlight}
+            @click=${data.onRequestVerify}
+          >
+            ${data.verificationReplayPending
+              ? t("common.retry")
+              : t("outcomesPage.nextAction.reviewEvidence")}
+          </button>
+        </section>`
+      : nothing}
+    ${data.canAccept && (data.detail.nextActions.includes("accept") || data.acceptanceReplayPending)
+      ? html`<section class="outcome-detail__section outcome-detail__actions" aria-live="polite">
+          <button
+            data-outcome-action="accept"
+            type="button"
+            ?disabled=${data.mutationInFlight}
+            @click=${data.onAccept}
+          >
+            ${data.acceptanceReplayPending
+              ? t("common.retry")
+              : t("outcomesPage.nextAction.accept")}
+          </button>
+          ${data.acceptanceReplayPending
+            ? html`<p>${t("outcomesPage.assuranceReplayHelp")}</p>`
+            : nothing}
           ${data.mutationError
             ? html`<p class="outcomes-state outcomes-state--error" role="alert">
                 ${data.mutationError}
@@ -513,5 +674,6 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           </form>
         </openclaw-modal-dialog>`
       : nothing}
+    ${renderOutcomeVerificationDialog(data)}
   </article>`;
 }

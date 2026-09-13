@@ -11,10 +11,10 @@ import {
   updateOutcome,
   unlinkOutcomeWorkboard,
 } from "./client.ts";
-import { OutcomesPageGateway } from "./outcomes-page-gateway.ts";
+import { OutcomesPageAssuranceMutations } from "./outcomes-page-assurance-mutations.ts";
 import { replaceOutcomeSummary } from "./outcomes-page-model.ts";
 
-export abstract class OutcomesPageMutations extends OutcomesPageGateway {
+export abstract class OutcomesPageMutations extends OutcomesPageAssuranceMutations {
   protected openCreateDialog() {
     if (!this.canCreateOutcome() || this.creating) {
       return;

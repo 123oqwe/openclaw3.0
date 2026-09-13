@@ -21,6 +21,8 @@ describe("P-02 Outcome handlers", () => {
     ["outcomes.activate", {}],
     ["outcomes.refresh", {}],
     ["outcomes.cancel", {}],
+    ["outcomes.verifyCriterion", {}],
+    ["outcomes.accept", {}],
   ])("rejects malformed %s input before owner or repository access", async (method, params) => {
     const harness = createHarness();
     expect(await harness.call(method, params, null as never)).toMatchObject([
@@ -450,13 +452,15 @@ describe("P-02 Outcome handlers", () => {
     const outcome = (
       response[1] as {
         outcome: {
+          phase: "draft";
           criteria: Array<{ evidenceSetHash: string | null }>;
           evidence: Array<{ sourceDigest: string }>;
         };
       }
     ).outcome;
+    expect(outcome.phase).toBe("draft");
     expect(outcome.evidence[0]!.sourceDigest).not.toBe(persistedDigest);
-    expect(outcome.criteria[0]!.evidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(outcome.criteria[0]!.evidenceSetHash).toBeNull();
     expect(harness.gatewayRequest).toHaveBeenCalledOnce();
     expect(harness.writes()).toBe(writes);
     expect(harness.records.get(id)!.evidence).toHaveLength(1);
@@ -757,6 +761,72 @@ describe("P-02 Outcome handlers", () => {
       { code: "OUTCOME_INVALID_STATE" },
     ]);
     expect(harness.writes()).toBe(writes);
+  });
+
+  it("does not treat an empty-evidence rejection as current after new proof arrives", async () => {
+    const cards = [
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 2,
+        metadata: {
+          automation: { boardId: "board-a" },
+          proof: [] as Array<{
+            id: string;
+            status: "passed";
+            createdAt: number;
+            label: string;
+          }>,
+          artifacts: [],
+        },
+      },
+    ];
+    const harness = createHarness({ workboardCards: cards });
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const refreshedOutcome = (
+      refreshed[1] as {
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
+      }
+    ).outcome;
+    const emptyEvidenceHash = refreshedOutcome.criteria[0]!.evidenceSetHash;
+    const rejected = await harness.call("outcomes.verifyCriterion", {
+      id,
+      expectedRevision: refreshedOutcome.revision,
+      decisionId: "123e4567-e89b-42d3-a456-426614174030",
+      criterionId,
+      status: "rejected",
+      planHash: refreshedOutcome.planHash,
+      evidenceSetHash: emptyEvidenceHash,
+      note: "No proof was available during review",
+    });
+    expect(rejected).toMatchObject([true, { outcome: { revision: 5 } }]);
+
+    cards[0]!.metadata.proof.push({
+      id: "proof-arrived-after-rejection",
+      status: "passed",
+      createdAt: 3,
+      label: "New proof requires a new human review",
+    });
+    const current = await harness.call("outcomes.get", { id });
+    expect(current).toMatchObject([
+      true,
+      {
+        outcome: {
+          attention: expect.arrayContaining([{ code: "verification-required", criterionId }]),
+          closureHash: null,
+        },
+      },
+    ]);
+    const currentOutcome = (current[1] as { outcome: { attention: Array<{ code: string }> } })
+      .outcome;
+    expect(currentOutcome.attention).not.toContainEqual({ code: "rejected" });
   });
 
   it("does not write when cancellation is terminal or an operation is in flight", async () => {

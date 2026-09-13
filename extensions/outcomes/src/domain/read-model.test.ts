@@ -1,7 +1,7 @@
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
 import { describe, expect, it } from "vitest";
 import { evidenceSetHash } from "./hash.js";
-import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
+import { toOutcomeDetail, toOutcomeSummary, type AuthorizedOutcomeSource } from "./read-model.js";
 import { parseOutcomeRecord, planHash, workboardProjectionFingerprint } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
 
@@ -135,6 +135,30 @@ function withCurrentVerifiedEvidence(input: OutcomeRecord): OutcomeRecord {
     },
   ];
   return valid(input);
+}
+
+function authorizedSources(input: OutcomeRecord): AuthorizedOutcomeSource[] {
+  const projection = first(input.projections);
+  return [
+    {
+      ref: projection.ref,
+      currentBoardId: projection.currentBoardId ?? "",
+      status: projection.status ?? "",
+      sourceUpdatedAt: projection.sourceUpdatedAt ?? 0,
+      upstreamStale: projection.upstreamStale === true,
+      evidence: input.evidence.map((evidence) => ({
+        id: evidence.id,
+        criterionId: evidence.criterionId,
+        workRef: evidence.workRef,
+        kind: evidence.kind,
+        sourceId: evidence.sourceId,
+        sourceDigest: evidence.sourceDigest,
+        observedAt: evidence.observedAt,
+        planGeneration: evidence.planGeneration,
+        sourceCreatedAt: evidence.observedAt,
+      })),
+    },
+  ];
 }
 
 function syncCurrentDecisionPlan(input: OutcomeRecord): OutcomeRecord {
@@ -282,7 +306,13 @@ describe("Outcome P-01 read model", () => {
     const detail = toOutcomeDetail(valid(input), 10);
 
     expect(detail.attention).toEqual([{ code: "owner-unavailable", criterionId: "c-1" }]);
-    expect(detail.nextActions).toEqual(["refresh", "unlink-work", "cancel"]);
+    expect(detail.nextActions).toEqual([
+      "refresh",
+      "unlink-work",
+      "edit-contract",
+      "link-work",
+      "cancel",
+    ]);
   });
 
   it("keeps refresh available for a fresh linked Outcome", () => {
@@ -354,9 +384,44 @@ describe("Outcome P-01 read model", () => {
           attemptedAt: 1,
         },
       ];
-      expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
+      const detail = toOutcomeDetail(valid(input), 10);
+      expect(detail.readiness).toBe("blocked");
+      expect(detail.nextActions).not.toEqual(
+        expect.arrayContaining(["edit-contract", "link-work", "unlink-work"]),
+      );
     },
   );
+
+  it("does not offer contract mutation actions for an uncertain operation with a missing link", () => {
+    const input = record();
+    input.operations = [
+      {
+        id: "op-missing-link",
+        kind: "workboard-card-start",
+        criterionId: "c-1",
+        planGeneration: 1,
+        createdRevision: 2,
+        requestHash: "b".repeat(64),
+        state: "unknown",
+        target: {
+          owner: "workboard",
+          cardId: "card",
+          cardCreatedAt: 1,
+          boardIdAtLink: "board",
+        },
+      },
+    ];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.attention).toEqual(
+      expect.arrayContaining([
+        { code: "contract-incomplete", criterionId: "c-1" },
+        { code: "unknown-operation" },
+      ]),
+    );
+    expect(detail.nextActions).not.toEqual(expect.arrayContaining(["edit-contract", "link-work"]));
+  });
 
   it("keeps unavailable and stale ahead of blocked", () => {
     const input = record();
@@ -508,18 +573,367 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
   });
 
-  it("does not promote persisted verification to ready before P-02 source authorization", () => {
+  it("derives a current closure only from fresh verified evidence", () => {
     const input = withCurrentVerifiedEvidence(record());
-    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
+    const current = toOutcomeDetail(input, 10);
+    expect(current.readiness).toBe("ready");
+    expect(current.closureHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(current.attention).toContainEqual({ code: "ready-for-acceptance" });
 
     input.projections[0]!.ref = {
       ...input.projections[0]!.ref,
       boardIdAtLink: "board-moved-after-link",
     };
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
+
+    input.projections[0]!.ref = {
+      ...input.projections[0]!.ref,
+      cardCreatedAt: 2,
+    };
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
 
+    input.projections[0]!.ref = first(first(input.criteria).workRefs);
     input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
+  });
+
+  it("does not expose a criterion evidence guard while cancelled", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    input.phase = "cancelled";
+    const parsed = valid(input);
+
+    expect(
+      toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash,
+    ).toBeNull();
+  });
+
+  it("does not expose a criterion evidence guard while draft", () => {
+    const active = withCurrentVerifiedEvidence(record());
+    const input = {
+      ...active,
+      phase: "draft" as const,
+      planGeneration: 0,
+      planHash: null,
+      evidence: active.evidence.map((evidence) => ({
+        id: evidence.id,
+        criterionId: evidence.criterionId,
+        planGeneration: 0,
+        workRef: evidence.workRef,
+        kind: evidence.kind,
+        sourceId: evidence.sourceId,
+        sourceDigest: evidence.sourceDigest,
+        observedAt: evidence.observedAt,
+      })),
+      decisions: [],
+    };
+    const parsed = parseOutcomeRecord(input);
+
+    expect(
+      toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash,
+    ).toBeNull();
+  });
+
+  it("does not expose a criterion evidence guard from a stale owner observation", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const parsed = valid(input);
+
+    const freshEvidenceSetHash = toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]
+      ?.evidenceSetHash;
+    if (freshEvidenceSetHash === null || freshEvidenceSetHash === undefined) {
+      throw new Error("fixture must expose a fresh evidence guard");
+    }
+    expect(freshEvidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(
+      toOutcomeDetail(parsed, 10 + OUTCOME_PROJECTION_MAX_AGE_MS, authorizedSources(parsed))
+        .criteria[0]?.evidenceSetHash,
+    ).toBeNull();
+  });
+
+  it("keeps an accepted current closure reviewable without falsely requiring verification", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const current = toOutcomeDetail(input, 10);
+    if (current.closureHash === null || input.planHash === null) {
+      throw new Error("fixture closure must be current");
+    }
+    input.revision = 4;
+    input.updatedAt = 20;
+    input.phase = "accepted";
+    input.acceptances = [
+      {
+        id: "acceptance-current",
+        requestHash: "a".repeat(64),
+        acceptedRevision: input.revision,
+        profileId: "manager-1",
+        acceptedAt: 10,
+        planGeneration: input.planGeneration,
+        planHash: input.planHash,
+        closureHash: current.closureHash,
+        acceptedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: input.contractRevision,
+          planGeneration: input.planGeneration,
+          criteria: input.criteria,
+        },
+      },
+    ];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.acceptance).toEqual({
+      acceptanceValidity: "current",
+      lastSuccessfulAt: 10,
+    });
+    expect(detail.attention).not.toContainEqual({
+      code: "verification-required",
+      criterionId: "c-1",
+    });
+    expect(detail.nextActions).toContain("review-evidence");
+    expect(detail.nextActions).toEqual(
+      expect.arrayContaining(["edit-contract", "link-work", "unlink-work"]),
+    );
+  });
+
+  it("reports the earliest successful check across every linked source of a current acceptance", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const firstCriterion = first(input.criteria);
+    const secondRef = {
+      owner: "workboard" as const,
+      cardId: "card-second",
+      cardCreatedAt: 2,
+      boardIdAtLink: "board-link",
+    };
+    const secondCriterion = {
+      id: "c-2",
+      text: "Second done",
+      required: true,
+      workRefs: [secondRef],
+    };
+    input.criteria = [firstCriterion, secondCriterion];
+    input.revision = 3;
+    input.updatedAt = 3;
+    input.planHash = planHash({
+      outcomeId: input.id,
+      objective: input.objective,
+      contractRevision: input.contractRevision,
+      planGeneration: input.planGeneration,
+      criteria: input.criteria,
+    });
+    const firstDecision = first(input.decisions);
+    firstDecision.planHash = input.planHash;
+    firstDecision.decidedPlan = {
+      outcomeId: input.id,
+      objective: input.objective,
+      contractRevision: input.contractRevision,
+      planGeneration: input.planGeneration,
+      criteria: input.criteria,
+    };
+    input.projections.push({
+      ref: secondRef,
+      availability: "available",
+      currentBoardId: "board-current",
+      status: "done",
+      sourceUpdatedAt: 20,
+      observedAt: 20,
+      lastSuccessfulAt: 20,
+      proofs: [{ sourceId: "proof-2", digest: "proof-digest-2" }],
+      artifacts: [],
+    });
+    input.evidence.push({
+      id: "evidence-2",
+      criterionId: secondCriterion.id,
+      planGeneration: input.planGeneration,
+      workRef: secondRef,
+      kind: "workboard-proof",
+      sourceId: "proof-2",
+      sourceDigest: "proof-digest-2",
+      observedAt: 20,
+    });
+    input.decisions.push({
+      ...firstDecision,
+      id: "decision-verified-second",
+      criterionId: secondCriterion.id,
+      decidedRevision: input.revision,
+      evidenceSetHash: evidenceSetHash({
+        criterionId: secondCriterion.id,
+        planGeneration: input.planGeneration,
+        sourceDigests: ["proof-digest-2"],
+      }),
+    });
+    const current = toOutcomeDetail(valid(input), 20);
+    if (current.closureHash === null || input.planHash === null) {
+      throw new Error("fixture closure must be current");
+    }
+    input.revision = 4;
+    input.updatedAt = 20;
+    input.phase = "accepted";
+    input.acceptances = [
+      {
+        id: "acceptance-current",
+        requestHash: "a".repeat(64),
+        acceptedRevision: input.revision,
+        profileId: input.managerProfileId,
+        acceptedAt: 20,
+        planGeneration: input.planGeneration,
+        planHash: input.planHash,
+        closureHash: current.closureHash,
+        acceptedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: input.contractRevision,
+          planGeneration: input.planGeneration,
+          criteria: input.criteria,
+        },
+      },
+    ];
+
+    expect(toOutcomeDetail(valid(input), 20).acceptance).toEqual({
+      acceptanceValidity: "current",
+      lastSuccessfulAt: 10,
+    });
+  });
+
+  it("returns an accepted outcome to review when current evidence is rejected", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const acceptedClosure = toOutcomeDetail(input, 10).closureHash;
+    if (acceptedClosure === null || input.planHash === null) {
+      throw new Error("fixture closure must be current");
+    }
+    const verified = first(input.decisions);
+    input.phase = "accepted";
+    input.acceptances = [
+      {
+        id: "acceptance-current",
+        requestHash: "a".repeat(64),
+        acceptedRevision: input.revision,
+        profileId: "manager-1",
+        acceptedAt: 10,
+        planGeneration: input.planGeneration,
+        planHash: input.planHash,
+        closureHash: acceptedClosure,
+        acceptedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: input.contractRevision,
+          planGeneration: input.planGeneration,
+          criteria: input.criteria,
+        },
+      },
+    ];
+    input.decisions = [{ ...verified, id: "decision-current-rejected", status: "rejected" }];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.acceptanceValidity).toBe("needs-review");
+    expect(detail.attention).toEqual(
+      expect.arrayContaining([{ code: "acceptance-needs-review" }, { code: "rejected" }]),
+    );
+    expect(detail.attention).not.toContainEqual({
+      code: "verification-required",
+      criterionId: "c-1",
+    });
+    expect(detail.nextActions).toContain("review-evidence");
+  });
+
+  it("includes a human decision note in the public detail history", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    first(input.decisions).note = "private reviewer rationale";
+
+    const detail = toOutcomeDetail(input, 10);
+
+    expect(detail.decisions).toHaveLength(1);
+    expect(detail.decisions[0]).toMatchObject({ note: "private reviewer rationale" });
+    expect(JSON.stringify(detail)).toContain("private reviewer rationale");
+  });
+
+  it("does not restore an older verified decision after evidence changes back", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const verified = first(input.decisions);
+    const currentDigest = "proof-digest-2";
+    input.revision = 3;
+    input.projections[0]!.proofs[0]!.digest = currentDigest;
+    input.evidence[0]!.sourceDigest = currentDigest;
+    input.decisions = [
+      verified,
+      {
+        ...verified,
+        id: "decision-newer-rejected",
+        decidedRevision: 3,
+        status: "rejected",
+        evidenceSetHash: evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: 1,
+          sourceDigests: [currentDigest],
+        }),
+      },
+    ];
+    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+
+    input.projections[0]!.proofs[0]!.digest = "proof-digest-1";
+    input.evidence[0]!.sourceDigest = "proof-digest-1";
+    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+  });
+
+  it("does not derive a closure from an empty verified evidence set", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    input.projections[0]!.proofs = [];
+    input.evidence = [];
+    first(input.decisions).evidenceSetHash = evidenceSetHash({
+      criterionId: "c-1",
+      planGeneration: 1,
+      sourceDigests: [],
+    });
+
+    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+  });
+
+  it("does not derive a closure while an optional criterion is currently rejected", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const ref = first(first(input.criteria).workRefs);
+    const optional = { id: "c-optional", text: "Optional", required: false, workRefs: [ref] };
+    input.criteria.push(optional);
+    input.planHash = planHash({
+      outcomeId: input.id,
+      objective: input.objective,
+      contractRevision: input.contractRevision,
+      planGeneration: input.planGeneration,
+      criteria: input.criteria,
+    });
+    const verified = first(input.decisions);
+    const decidedPlan = {
+      outcomeId: input.id,
+      objective: input.objective,
+      contractRevision: input.contractRevision,
+      planGeneration: input.planGeneration,
+      criteria: input.criteria,
+    };
+    input.decisions = [
+      { ...verified, planHash: input.planHash, decidedPlan },
+      {
+        ...verified,
+        id: "decision-optional-rejected",
+        criterionId: optional.id,
+        decidedRevision: input.revision + 1,
+        status: "rejected",
+        planHash: input.planHash,
+        decidedPlan,
+        evidenceSetHash: evidenceSetHash({
+          criterionId: optional.id,
+          planGeneration: input.planGeneration,
+          sourceDigests: [first(input.evidence).sourceDigest],
+        }),
+        note: "optional criterion requires follow-up",
+      },
+    ];
+    input.revision += 1;
+    input.updatedAt += 1;
+    input.evidence.push({
+      ...first(input.evidence),
+      id: "evidence-optional",
+      criterionId: optional.id,
+    });
+
+    expect(toOutcomeDetail(valid(input), 10).closureHash).toBeNull();
   });
 
   it("blocks only a current rejected decision whose evidence still matches", () => {
@@ -527,6 +941,10 @@ describe("Outcome P-01 read model", () => {
     const current = first(input.decisions);
     input.decisions = [{ ...current, id: "decision-current-rejected", status: "rejected" }];
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
+    expect(toOutcomeDetail(valid(input), 10)).toMatchObject({
+      attention: expect.arrayContaining([{ code: "rejected" }]),
+      nextActions: expect.arrayContaining(["review-evidence"]),
+    });
 
     input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
@@ -579,123 +997,6 @@ describe("Outcome P-01 read model", () => {
       { ...current, id: "decision-old-rejected", decidedRevision: 1, status: "rejected" },
       current,
     ];
-    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
-  });
-
-  it("uses last successful observation and the inclusive 24-hour boundary", () => {
-    const input = record();
-    const ref = {
-      owner: "workboard" as const,
-      cardId: "card",
-      cardCreatedAt: 1,
-      boardIdAtLink: "board",
-    };
-    const criterion = first(input.criteria);
-    criterion.workRefs = [ref];
-    input.projections = [
-      {
-        ref,
-        availability: "available",
-        observedAt: 99,
-        lastSuccessfulAt: 1,
-        proofs: [],
-        artifacts: [],
-      },
-    ];
-    expect(toOutcomeSummary(input, 1 + 24 * 60 * 60 * 1000 - 1).readiness).toBe("incomplete");
-    expect(toOutcomeSummary(input, 1 + 24 * 60 * 60 * 1000).readiness).toBe("stale");
-  });
-
-  it("ignores unlinked failures and reports every criterion sharing a ref", () => {
-    const input = record();
-    const current = {
-      owner: "workboard" as const,
-      cardId: "shared",
-      cardCreatedAt: 1,
-      boardIdAtLink: "board",
-    };
-    const old = {
-      owner: "workboard" as const,
-      cardId: "old",
-      cardCreatedAt: 1,
-      boardIdAtLink: "board",
-    };
-    const firstCriterion = first(input.criteria);
-    firstCriterion.workRefs = [current];
-    input.criteria.push({ id: "c-2", text: "Also done", required: true, workRefs: [current] });
-    input.projections = [
-      {
-        ref: current,
-        availability: "identity-conflict",
-        errorCode: "identity-conflict",
-        observedAt: 1,
-        proofs: [],
-        artifacts: [],
-      },
-      {
-        ref: old,
-        availability: "identity-conflict",
-        errorCode: "identity-conflict",
-        observedAt: 1,
-        proofs: [],
-        artifacts: [],
-      },
-      {
-        ref: current,
-        availability: "identity-conflict",
-        errorCode: "identity-conflict",
-        observedAt: 2,
-        proofs: [],
-        artifacts: [],
-      },
-    ];
-    const detail = toOutcomeDetail(input, 10);
-    expect(detail.sourceIssues).toEqual([
-      { criterionId: "c-1", reason: "identity-conflict" },
-      { criterionId: "c-2", reason: "identity-conflict" },
-    ]);
-    expect(detail.sourceIssues.map((issue) => issue.criterionId)).not.toContain("old");
-    expect(detail.sourceIssues).toHaveLength(2);
-  });
-
-  it("ignores an old failed projection after its link is removed", () => {
-    const input = record();
-    input.projections = [
-      {
-        ref: { owner: "workboard", cardId: "old", cardCreatedAt: 1, boardIdAtLink: "board" },
-        availability: "identity-conflict",
-        errorCode: "identity-conflict",
-        observedAt: 1,
-        proofs: [],
-        artifacts: [],
-      },
-    ];
-    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
-  });
-
-  it("keeps a valid historical acceptance reviewable until observed again", () => {
-    const input = record();
-    input.phase = "accepted";
-    input.acceptances = [
-      {
-        id: "accept-1",
-        requestHash: "f".repeat(64),
-        acceptedRevision: 2,
-        profileId: "manager-1",
-        acceptedAt: 2,
-        planGeneration: 1,
-        planHash: input.planHash!,
-        closureHash: "e".repeat(64),
-        acceptedPlan: {
-          outcomeId: input.id,
-          objective: input.objective,
-          contractRevision: 1,
-          planGeneration: 1,
-          criteria: input.criteria,
-        },
-      },
-    ];
-    expect(() => parseOutcomeRecord(input)).not.toThrow();
-    expect(toOutcomeSummary(input, 10).acceptanceValidity).toBe("needs-review");
+    expect(toOutcomeSummary(valid(input), 10).readiness).toBe("ready");
   });
 });

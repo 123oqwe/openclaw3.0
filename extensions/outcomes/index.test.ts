@@ -76,7 +76,7 @@ describe("Outcome plugin shell", () => {
     });
   });
 
-  it("registers the authenticated P-02 first-package method scopes", () => {
+  it("registers the authenticated P-05 Gateway method scopes", () => {
     const registerGatewayMethod = vi.fn();
 
     plugin.register(
@@ -102,6 +102,8 @@ describe("Outcome plugin shell", () => {
       { method: "outcomes.unlinkWorkboard", options: { scope: "operator.write" } },
       { method: "outcomes.activate", options: { scope: "operator.write" } },
       { method: "outcomes.refresh", options: { scope: "operator.write" } },
+      { method: "outcomes.verifyCriterion", options: { scope: "operator.write" } },
+      { method: "outcomes.accept", options: { scope: "operator.write" } },
       { method: "outcomes.cancel", options: { scope: "operator.write" } },
     ]);
   });

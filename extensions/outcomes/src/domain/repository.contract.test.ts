@@ -354,6 +354,7 @@ describe("Outcome repository atomic contract", () => {
     }));
     expect(reduceOutcomeRefresh(record, { ...mutation, evidence })).toEqual({
       kind: "rejected",
+      reason: "capacity-exceeded",
       record,
     });
   });

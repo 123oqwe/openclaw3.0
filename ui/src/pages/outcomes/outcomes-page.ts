@@ -106,17 +106,26 @@ class OutcomesPage extends OutcomesPageMutations {
         canLink: this.canLinkOutcome(),
         canRefresh: this.canOutcomeAction("refresh", "outcomes.refresh"),
         canUnlink: this.canOutcomeAction("unlink-work", "outcomes.unlinkWorkboard"),
+        canVerify:
+          this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion", true) ||
+          (this.verificationReplayPending &&
+            this.canReplayOutcomeAssurance("outcomes.verifyCriterion")),
+        canAccept:
+          this.canOutcomeAction("accept", "outcomes.accept", true) ||
+          (this.acceptanceReplayPending && this.canReplayOutcomeAssurance("outcomes.accept")),
         cancelConfirmationOpen: this.cancelConfirmationOpen,
         cancelError: this.cancelError,
         cancelling: this.cancelling,
         mutationError: this.mutationError,
         mutationInFlight: this.outcomeMutationIsInFlight(this.selectedOutcomeId),
         onActivate: () => void this.activateSelectedOutcome(),
+        onAccept: () => void this.acceptSelectedOutcome(),
         onDismissEdit: (event) => this.dismissEditDialog(event),
         onEditCriterionInput: (index, value) => this.updateEditCriterion(index, value),
         onEditInput: (field, value) => this.updateEditField(field, value),
         onRequestAddEditCriterion: () => this.addEditCriterion(),
         onRequestEdit: () => this.openEditDialog(),
+        onRequestVerify: () => this.openVerificationDialog(),
         onRequestLink: () => void this.openLinkDialog(),
         onRequestRemoveEditCriterion: (index) => this.removeEditCriterion(index),
         onSubmitEdit: (event) => void this.submitEditOutcome(event),
@@ -129,6 +138,11 @@ class OutcomesPage extends OutcomesPageMutations {
         onConfirmCancel: () => void this.cancelSelectedOutcome(),
         onRequestCancel: () => this.openCancelConfirmation(),
         onRefresh: () => void this.refreshSelectedOutcome(),
+        onDismissVerification: (event) => this.dismissVerificationDialog(event),
+        onVerificationCriterionChange: (id) => this.updateVerificationCriterion(id),
+        onVerificationNoteChange: (note) => this.updateVerificationNote(note),
+        onVerificationStatusChange: (status) => this.updateVerificationStatus(status),
+        onSubmitVerification: (event) => void this.submitVerification(event),
         revalidating: this.detailRevalidating,
         refreshing: this.refreshing,
         onBack: () => this.clearSelectedOutcome(),
@@ -146,6 +160,15 @@ class OutcomesPage extends OutcomesPageMutations {
         linkDialogOpen: this.linkDialogOpen,
         linkError: this.linkError,
         linking: this.linking,
+        verificationCriterionId: this.verificationCriterionId,
+        verificationDialogOpen: this.verificationDialogOpen,
+        verificationError: this.verificationError,
+        verificationNote: this.verificationNote,
+        verificationReplayPending: this.verificationReplayPending,
+        acceptanceReplayPending: this.acceptanceReplayPending,
+        assuranceRefreshRequired: this.assuranceRefreshRequired,
+        verificationStatus: this.verificationStatus,
+        verifying: this.verifying,
       })}
     `;
   }

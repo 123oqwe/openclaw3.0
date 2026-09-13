@@ -1,14 +1,53 @@
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
 import type {
-  OutcomeAttentionCode,
   OutcomeDetail,
-  OutcomeNextAction,
+  OutcomePlanSnapshotView,
   OutcomeSummary,
 } from "@openclaw/outcomes-contract";
+import { deriveOutcomeAttention } from "../assurance/attention.js";
+import {
+  currentOutcomeDecision,
+  currentOutcomeProjections,
+  deriveOutcomeClosure,
+  isStaleOutcomeProjection,
+} from "../assurance/closure.js";
 import { evidenceSetHash } from "./hash.js";
 import type { OutcomeRecord } from "./types.js";
 
 type CurrentProjection = OutcomeRecord["projections"][number];
+
+function workRefIdentity(ref: OutcomeRecord["criteria"][number]["workRefs"][number]): string {
+  return `${ref.cardId}\0${ref.cardCreatedAt}`;
+}
+
+function withObservedEvidence(
+  record: OutcomeRecord,
+  evidence: OutcomeRecord["evidence"],
+): OutcomeRecord {
+  return evidence === record.evidence ? record : { ...record, evidence };
+}
+
+function currentSourceLastSuccessfulAt(
+  record: OutcomeRecord,
+  projections: CurrentProjection[],
+): number | undefined {
+  const linkedIdentities = new Set(
+    record.criteria.flatMap((criterion) => criterion.workRefs.map(workRefIdentity)),
+  );
+  if (linkedIdentities.size === 0) {
+    return undefined;
+  }
+  const successfulChecks = new Map<string, number>();
+  for (const projection of projections) {
+    const identity = workRefIdentity(projection.ref);
+    if (linkedIdentities.has(identity) && projection.lastSuccessfulAt !== undefined) {
+      successfulChecks.set(identity, projection.lastSuccessfulAt);
+    }
+  }
+  return successfulChecks.size === linkedIdentities.size
+    ? Math.min(...successfulChecks.values())
+    : undefined;
+}
 
 /**
  * Ephemeral data from one authorized Workboard read. It is deliberately not a
@@ -24,220 +63,40 @@ export type AuthorizedOutcomeSource = {
   evidence: OutcomeDetail["evidence"];
 };
 
-function workRefIdentity(ref: OutcomeRecord["criteria"][number]["workRefs"][number]): string {
-  return `${ref.cardId}\0${ref.cardCreatedAt}`;
-}
-
-function isStaleProjection(projection: CurrentProjection, observedAt: number): boolean {
-  return (
-    projection.upstreamStale === true ||
-    projection.lastSuccessfulAt === undefined ||
-    observedAt - projection.lastSuccessfulAt >= OUTCOME_PROJECTION_MAX_AGE_MS
-  );
-}
-
-/** Keep only the newest projection for every linked Workboard card identity. */
-function currentProjections(record: OutcomeRecord): CurrentProjection[] {
-  const linked = new Set(
-    record.criteria.flatMap((criterion) => criterion.workRefs.map(workRefIdentity)),
-  );
-  const newest = new Map<string, CurrentProjection>();
-  for (const projection of record.projections) {
-    const identity = workRefIdentity(projection.ref);
-    if (!linked.has(identity)) {
-      continue;
-    }
-    const previous = newest.get(identity);
-    if (previous === undefined || projection.observedAt > previous.observedAt) {
-      newest.set(identity, projection);
-    }
-  }
-  return Array.from(newest.values());
-}
-
-function currentEvidenceSourceDigests(
-  record: OutcomeRecord,
-  criterion: OutcomeRecord["criteria"][number],
-  projections: CurrentProjection[],
-  observedAt: number,
-): string[] | undefined {
-  const linked = new Map<string, OutcomeRecord["criteria"][number]["workRefs"][number]>();
-  for (const ref of criterion.workRefs) {
-    linked.set(workRefIdentity(ref), ref);
-  }
-  if (linked.size === 0) {
-    return undefined;
-  }
-  const linkedProjections = new Map<string, CurrentProjection>();
-  for (const projection of projections) {
-    const identity = workRefIdentity(projection.ref);
-    if (linked.has(identity)) {
-      linkedProjections.set(identity, projection);
-    }
-  }
-  if (
-    linkedProjections.size !== linked.size ||
-    Array.from(linkedProjections.values()).some(
-      (projection) =>
-        projection.availability !== "available" || isStaleProjection(projection, observedAt),
-    )
-  ) {
-    return undefined;
-  }
-  const sources = new Set<string>();
-  for (const projection of linkedProjections.values()) {
-    const identity = workRefIdentity(projection.ref);
-    for (const source of projection.proofs) {
-      sources.add(`${identity}\0workboard-proof\0${source.sourceId}\0${source.digest}`);
-    }
-    for (const source of projection.artifacts) {
-      sources.add(`${identity}\0workboard-artifact\0${source.sourceId}\0${source.digest}`);
-    }
-  }
-  return record.evidence
-    .filter(
-      (evidence) =>
-        evidence.planGeneration === record.planGeneration &&
-        evidence.criterionId === criterion.id &&
-        linked.has(workRefIdentity(evidence.workRef)) &&
-        sources.has(
-          `${workRefIdentity(evidence.workRef)}\0${evidence.kind}\0${evidence.sourceId}\0${evidence.sourceDigest}`,
-        ),
-    )
-    .map((evidence) => evidence.sourceDigest);
-}
-
-function currentDecision(
-  record: OutcomeRecord,
-  criterion: OutcomeRecord["criteria"][number],
-  projections: CurrentProjection[],
-  observedAt: number,
-): { decision: OutcomeRecord["decisions"][number]; sourceDigests: string[] } | undefined {
-  const sourceDigests = currentEvidenceSourceDigests(record, criterion, projections, observedAt);
-  if (sourceDigests === undefined) {
-    return undefined;
-  }
-  const expectedEvidenceSetHash = evidenceSetHash({
-    criterionId: criterion.id,
-    planGeneration: record.planGeneration,
-    sourceDigests,
-  });
-  const selectedDecision = record.decisions
-    .filter(
-      (candidate) =>
-        candidate.criterionId === criterion.id &&
-        candidate.planGeneration === record.planGeneration &&
-        candidate.planHash === record.planHash &&
-        candidate.evidenceSetHash === expectedEvidenceSetHash,
-    )
-    .toSorted((a, b) => b.decidedRevision - a.decidedRevision)[0];
-  return selectedDecision === undefined ? undefined : { decision: selectedDecision, sourceDigests };
-}
-
-type P02Guidance = Pick<OutcomeDetail, "attention" | "nextActions">;
-
-/**
- * The P-02 hint set is deliberately derived from the same current projections
- * as the summary. It is guidance only: Gateway admission remains authoritative.
- */
-function p02Guidance(
-  record: OutcomeRecord,
-  projections: CurrentProjection[],
-  observedAt: number,
-): P02Guidance {
-  if (record.phase === "cancelled") {
-    return { attention: [], nextActions: [] };
-  }
-  const attention: OutcomeDetail["attention"] = [];
-  const nextActions: OutcomeNextAction[] = [];
-  const addAttention = (code: OutcomeAttentionCode, criterionId?: string) => {
-    if (!attention.some((item) => item.code === code && item.criterionId === criterionId)) {
-      attention.push(criterionId === undefined ? { code } : { code, criterionId });
-    }
+function toOutcomePlanSnapshotView(
+  plan: OutcomeRecord["decisions"][number]["decidedPlan"],
+  visibleRefIdentities: ReadonlySet<string>,
+): OutcomePlanSnapshotView {
+  return {
+    outcomeId: plan.outcomeId,
+    objective: plan.objective,
+    contractRevision: plan.contractRevision,
+    planGeneration: plan.planGeneration,
+    criteria: plan.criteria.map((criterion) => {
+      const workRefs = criterion.workRefs.filter((ref) =>
+        visibleRefIdentities.has(workRefIdentity(ref)),
+      );
+      return {
+        id: criterion.id,
+        text: criterion.text,
+        required: criterion.required,
+        workRefs,
+        sourcesVisibility:
+          workRefs.length === criterion.workRefs.length ? "complete" : "restricted",
+      };
+    }),
   };
-  const addAction = (action: OutcomeNextAction) => {
-    if (!nextActions.includes(action)) {
-      nextActions.push(action);
-    }
-  };
-  const projectionsByRef = new Map(
-    projections.map((projection) => [workRefIdentity(projection.ref), projection]),
-  );
-  let hasLinkedWork = false;
-  for (const criterion of record.criteria) {
-    const missingRequiredLink = criterion.required && criterion.workRefs.length === 0;
-    if (record.phase === "draft" || missingRequiredLink) {
-      addAttention("contract-incomplete", criterion.id);
-      addAction("edit-contract");
-      addAction("link-work");
-    }
-    if (criterion.workRefs.length > 0) {
-      hasLinkedWork = true;
-    }
-    let sourceIsCurrent = criterion.workRefs.length > 0;
-    for (const ref of criterion.workRefs) {
-      const projection = projectionsByRef.get(workRefIdentity(ref));
-      if (projection === undefined || projection.availability !== "available") {
-        addAttention("owner-unavailable", criterion.id);
-        addAction("refresh");
-        sourceIsCurrent = false;
-        continue;
-      }
-      if (isStaleProjection(projection, observedAt)) {
-        addAttention("stale", criterion.id);
-        addAction("refresh");
-        sourceIsCurrent = false;
-        continue;
-      }
-      if (projection.status === "blocked") {
-        addAttention("blocked", criterion.id);
-        addAction("refresh");
-        sourceIsCurrent = false;
-      }
-    }
-    if (!sourceIsCurrent) {
-      continue;
-    }
-    const sourceDigests = currentEvidenceSourceDigests(record, criterion, projections, observedAt);
-    if (sourceDigests === undefined) {
-      continue;
-    }
-    if (sourceDigests.length === 0) {
-      addAttention("evidence-missing", criterion.id);
-      addAction("refresh");
-    } else if (currentDecision(record, criterion, projections, observedAt) === undefined) {
-      addAttention("verification-required", criterion.id);
-    }
-  }
-  if (hasLinkedWork) {
-    addAction("unlink-work");
-    addAction("refresh");
-  }
-  if (
-    record.phase === "draft" &&
-    record.criteria
-      .filter((criterion) => criterion.required)
-      .every((criterion) => criterion.workRefs.length > 0)
-  ) {
-    addAction("activate");
-  }
-  if (
-    (record.phase === "draft" || record.phase === "active") &&
-    !record.operations.some((operation) =>
-      ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
-    )
-  ) {
-    addAction("cancel");
-  }
-  return { attention, nextActions };
 }
 
 /** Build the redacted P-01 summary without exposing the persisted aggregate. */
 export function toOutcomeSummary(
   record: OutcomeRecord,
   observedAt: number,
-  projections: CurrentProjection[] = currentProjections(record),
+  projections: CurrentProjection[] = currentOutcomeProjections(record),
+  observedEvidence: OutcomeRecord["evidence"] = record.evidence,
 ): OutcomeSummary {
+  const observedRecord = withObservedEvidence(record, observedEvidence);
+  const closureHash = deriveOutcomeClosure(observedRecord, projections, observedAt);
   const hasUnavailableSource = projections.some(
     (projection) =>
       projection.availability !== "available" ||
@@ -246,15 +105,16 @@ export function toOutcomeSummary(
       ),
   );
   const hasStaleSource = projections.some((projection) =>
-    isStaleProjection(projection, observedAt),
+    isStaleOutcomeProjection(projection, observedAt),
   );
   const hasBlockedSource = projections.some((projection) => projection.status === "blocked");
-  const hasUncertainOperation = record.operations.some((operation) =>
+  const hasUncertainOperation = observedRecord.operations.some((operation) =>
     ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
   );
-  const hasCurrentRejectedDecision = record.criteria.some(
+  const hasCurrentRejectedDecision = observedRecord.criteria.some(
     (criterion) =>
-      currentDecision(record, criterion, projections, observedAt)?.decision.status === "rejected",
+      currentOutcomeDecision(observedRecord, criterion, projections, observedAt)?.decision
+        .status === "rejected",
   );
   const readiness = hasUnavailableSource
     ? "unavailable"
@@ -263,16 +123,29 @@ export function toOutcomeSummary(
       : hasBlockedSource ||
           hasUncertainOperation ||
           hasCurrentRejectedDecision ||
-          record.phase === "cancelled"
+          observedRecord.phase === "cancelled"
         ? "blocked"
-        : "incomplete";
-  const acceptanceValidity = record.acceptances.length === 0 ? "none" : "needs-review";
+        : closureHash === null
+          ? "incomplete"
+          : "ready";
+  const latestAcceptance = observedRecord.acceptances.toSorted(
+    (left, right) => right.acceptedRevision - left.acceptedRevision,
+  )[0];
+  const acceptanceValidity =
+    latestAcceptance === undefined
+      ? "none"
+      : closureHash !== null &&
+          latestAcceptance.planGeneration === observedRecord.planGeneration &&
+          latestAcceptance.planHash === observedRecord.planHash &&
+          latestAcceptance.closureHash === closureHash
+        ? "current"
+        : "needs-review";
   return {
-    id: record.id,
-    title: record.title,
-    phase: record.phase,
-    revision: record.revision,
-    updatedAt: record.updatedAt,
+    id: observedRecord.id,
+    title: observedRecord.title,
+    phase: observedRecord.phase,
+    revision: observedRecord.revision,
+    updatedAt: observedRecord.updatedAt,
     readiness,
     acceptanceValidity,
   };
@@ -283,49 +156,65 @@ export function toOutcomeDetail(
   record: OutcomeRecord,
   observedAt: number,
   authorizedSources: AuthorizedOutcomeSource[] = [],
-  observedProjections: CurrentProjection[] = currentProjections(record),
+  observedProjections: CurrentProjection[] = currentOutcomeProjections(record),
+  observedEvidence: OutcomeRecord["evidence"] = record.evidence,
+  visibleHistoricalRefs: OutcomeRecord["criteria"][number]["workRefs"] = [],
 ): OutcomeDetail {
-  const summary = toOutcomeSummary(record, observedAt, observedProjections);
+  const observedRecord = withObservedEvidence(record, observedEvidence);
+  const summary = toOutcomeSummary(record, observedAt, observedProjections, observedEvidence);
   const sourcesByRef = new Map(
     authorizedSources.map((source) => [workRefIdentity(source.ref), source]),
   );
+  const visibleSnapshotRefIdentities = new Set([
+    ...sourcesByRef.keys(),
+    ...visibleHistoricalRefs.map(workRefIdentity),
+  ]);
   const projectionsByRef = new Map(
     observedProjections.map((projection) => [workRefIdentity(projection.ref), projection]),
   );
-  const criteria = record.criteria.map((criterion) => ({
-    ...(() => {
-      const visibleRefs = criterion.workRefs.filter((ref) =>
-        sourcesByRef.has(workRefIdentity(ref)),
-      );
-      const sourcesComplete = visibleRefs.length === criterion.workRefs.length;
-      const sourceDigests = sourcesComplete
-        ? visibleRefs.flatMap((ref) =>
-            (sourcesByRef.get(workRefIdentity(ref))?.evidence ?? [])
-              .filter(
-                (evidence) =>
-                  evidence.criterionId === criterion.id &&
-                  evidence.planGeneration === record.planGeneration,
-              )
-              .map((evidence) => evidence.sourceDigest),
-          )
-        : [];
-      return {
-        id: criterion.id,
-        text: criterion.text,
-        required: criterion.required,
-        workRefs: sourcesComplete ? visibleRefs : [],
-        sourcesVisibility: sourcesComplete ? ("complete" as const) : ("restricted" as const),
-        evidenceSetHash:
-          sourcesComplete && criterion.workRefs.length > 0
-            ? evidenceSetHash({
-                criterionId: criterion.id,
-                planGeneration: record.planGeneration,
-                sourceDigests,
-              })
-            : null,
-      };
-    })(),
-  }));
+  const criteria = record.criteria.map((criterion) => {
+    const visibleRefs = criterion.workRefs.filter((ref) => sourcesByRef.has(workRefIdentity(ref)));
+    const sourcesComplete = visibleRefs.length === criterion.workRefs.length;
+    const sourcesCurrent =
+      sourcesComplete &&
+      visibleRefs.every((ref) => {
+        const projection = projectionsByRef.get(workRefIdentity(ref));
+        return (
+          projection !== undefined &&
+          projection.availability === "available" &&
+          !isStaleOutcomeProjection(projection, observedAt)
+        );
+      });
+    const sourceDigests = sourcesComplete
+      ? visibleRefs.flatMap((ref) =>
+          (sourcesByRef.get(workRefIdentity(ref))?.evidence ?? [])
+            .filter(
+              (evidence) =>
+                evidence.criterionId === criterion.id &&
+                evidence.planGeneration === record.planGeneration,
+            )
+            .map((evidence) => evidence.sourceDigest),
+        )
+      : [];
+    return {
+      id: criterion.id,
+      text: criterion.text,
+      required: criterion.required,
+      workRefs: sourcesComplete ? visibleRefs : [],
+      sourcesVisibility: sourcesComplete ? ("complete" as const) : ("restricted" as const),
+      evidenceSetHash:
+        record.phase !== "draft" &&
+        record.phase !== "cancelled" &&
+        sourcesCurrent &&
+        criterion.workRefs.length > 0
+          ? evidenceSetHash({
+              criterionId: criterion.id,
+              planGeneration: record.planGeneration,
+              sourceDigests,
+            })
+          : null,
+    };
+  });
   const work: OutcomeDetail["work"] = authorizedSources
     .map((source) => ({
       ref: source.ref,
@@ -354,6 +243,36 @@ export function toOutcomeDetail(
         (left.kind < right.kind ? -1 : left.kind > right.kind ? 1 : 0) ||
         (left.sourceId < right.sourceId ? -1 : left.sourceId > right.sourceId ? 1 : 0),
     );
+  const decisions: OutcomeDetail["decisions"] = record.decisions
+    .toSorted((left, right) => right.decidedRevision - left.decidedRevision)
+    .map((decision) => {
+      const view = {
+        id: decision.id,
+        criterionId: decision.criterionId,
+        status: decision.status,
+        evidenceSetHash: decision.evidenceSetHash,
+        decidedAt: decision.decidedAt,
+        decidedRevision: decision.decidedRevision,
+        planGeneration: decision.planGeneration,
+        planHash: decision.planHash,
+        decidedPlan: toOutcomePlanSnapshotView(decision.decidedPlan, visibleSnapshotRefIdentities),
+      };
+      return decision.note === undefined ? view : Object.assign(view, { note: decision.note });
+    });
+  const acceptances: OutcomeDetail["acceptances"] = record.acceptances
+    .toSorted((left, right) => right.acceptedRevision - left.acceptedRevision)
+    .map((acceptance) => ({
+      id: acceptance.id,
+      acceptedAt: acceptance.acceptedAt,
+      acceptedRevision: acceptance.acceptedRevision,
+      planGeneration: acceptance.planGeneration,
+      planHash: acceptance.planHash,
+      closureHash: acceptance.closureHash,
+      acceptedPlan: toOutcomePlanSnapshotView(
+        acceptance.acceptedPlan,
+        visibleSnapshotRefIdentities,
+      ),
+    }));
   const sourceIssues = observedProjections
     .flatMap((projection) => {
       const linkedCriteria = record.criteria.filter((item) =>
@@ -383,7 +302,11 @@ export function toOutcomeDetail(
       (earliest, candidate) => (earliest === null || candidate < earliest ? candidate : earliest),
       null,
     );
-  const guidance = p02Guidance(record, observedProjections, observedAt);
+  const closureHash = deriveOutcomeClosure(observedRecord, observedProjections, observedAt);
+  const lastSuccessfulAt =
+    summary.acceptanceValidity === "current"
+      ? currentSourceLastSuccessfulAt(observedRecord, observedProjections)
+      : undefined;
   return {
     ...summary,
     objective: record.objective,
@@ -394,9 +317,12 @@ export function toOutcomeDetail(
     criteria,
     work,
     evidence,
+    decisions,
+    acceptances,
     sourceIssues,
     acceptance: {
       acceptanceValidity: summary.acceptanceValidity,
+      ...(lastSuccessfulAt === undefined ? {} : { lastSuccessfulAt }),
       ...(summary.acceptanceValidity === "needs-review"
         ? {
             reason: summary.readiness === "stale" ? ("stale" as const) : ("not-rechecked" as const),
@@ -405,7 +331,7 @@ export function toOutcomeDetail(
     },
     observedAt,
     recheckAfter,
-    closureHash: null,
-    ...guidance,
+    closureHash,
+    ...deriveOutcomeAttention(observedRecord, observedProjections, observedAt, closureHash),
   };
 }

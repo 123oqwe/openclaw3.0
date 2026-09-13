@@ -423,6 +423,8 @@ describe("P-02 Outcome Gateway admission", () => {
       ["outcomes.unlinkWorkboard", "operator.write"],
       ["outcomes.activate", "operator.write"],
       ["outcomes.refresh", "operator.write"],
+      ["outcomes.verifyCriterion", "operator.write"],
+      ["outcomes.accept", "operator.write"],
       ["outcomes.cancel", "operator.write"],
     ] as const;
     expect(
