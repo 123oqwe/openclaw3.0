@@ -281,7 +281,9 @@ async function waitForTransportPairsToClose(pairs: readonly TransportPair[]): Pr
   }
 }
 
-async function readServedControlUiBuildId(gatewayUrl: string): Promise<string> {
+async function readServedControlUiMetadata(
+  gatewayUrl: string,
+): Promise<{ clientBuildId: string; origin: string }> {
   const controlUiUrl = new URL(gatewayUrl);
   controlUiUrl.protocol = controlUiUrl.protocol === "wss:" ? "https:" : "http:";
   controlUiUrl.pathname = "/";
@@ -297,11 +299,11 @@ async function readServedControlUiBuildId(gatewayUrl: string): Promise<string> {
   if (!buildId) {
     throw new Error("Control UI document omitted its bundled build identity");
   }
-  return buildId;
+  return { clientBuildId: buildId, origin: controlUiUrl.origin };
 }
 
 async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
-  const clientBuildId = await readServedControlUiBuildId(gatewayUrl);
+  const { clientBuildId, origin: probeOrigin } = await readServedControlUiMetadata(gatewayUrl);
   let browserPrincipal: ProxyPrincipal = aliceIdentity;
   const connections: ProxyConnectionEvidence[] = [];
   const pairs = new Set<TransportPair>();
@@ -359,7 +361,7 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
         }
       }
     },
-    probeOrigin: controlUiUrl.origin,
+    probeOrigin,
     probeUrl: (principal) => `${baseUrl}/probe?principal=${encodeURIComponent(principal)}`,
     setBrowserPrincipal: (principal) => {
       browserPrincipal = principal;
