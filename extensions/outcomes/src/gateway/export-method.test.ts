@@ -218,10 +218,16 @@ describe("P-06 Outcome export Gateway handler", () => {
       }),
     ).toMatchObject([true, { outcome: { phase: "active" } }]);
     const unlinked = harness.records.get(id)!;
-    const baseline = structuredClone(unlinked);
     expect(
-      unlinked.criteria.find((criterion) => criterion.id === secondaryCriterionId)?.workRefs,
+      await harness.call("outcomes.refresh", { id, expectedRevision: unlinked.revision }),
+    ).toMatchObject([true, { outcome: { phase: "active" } }]);
+    const refreshedAfterUnlink = harness.records.get(id)!;
+    const baseline = structuredClone(refreshedAfterUnlink);
+    expect(
+      refreshedAfterUnlink.criteria.find((criterion) => criterion.id === secondaryCriterionId)?.workRefs,
     ).toEqual([]);
+    expect(refreshedAfterUnlink.projections.map((projection) => projection.ref.cardId)).toEqual(["card-a"]);
+    expect(refreshedAfterUnlink.acceptances).toHaveLength(1);
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
     const exported = await harness.call("outcomes.export", { id });
