@@ -40,7 +40,7 @@ export type AuthorizedOutcomeSource = {
 
 function toOutcomePlanSnapshotView(
   plan: OutcomeRecord["decisions"][number]["decidedPlan"],
-  sourcesByRef: ReadonlyMap<string, AuthorizedOutcomeSource>,
+  visibleRefIdentities: ReadonlySet<string>,
 ): OutcomePlanSnapshotView {
   return {
     outcomeId: plan.outcomeId,
@@ -48,7 +48,9 @@ function toOutcomePlanSnapshotView(
     contractRevision: plan.contractRevision,
     planGeneration: plan.planGeneration,
     criteria: plan.criteria.map((criterion) => {
-      const workRefs = criterion.workRefs.filter((ref) => sourcesByRef.has(workRefIdentity(ref)));
+      const workRefs = criterion.workRefs.filter((ref) =>
+        visibleRefIdentities.has(workRefIdentity(ref)),
+      );
       return {
         id: criterion.id,
         text: criterion.text,
@@ -129,12 +131,17 @@ export function toOutcomeDetail(
   authorizedSources: AuthorizedOutcomeSource[] = [],
   observedProjections: CurrentProjection[] = currentOutcomeProjections(record),
   observedEvidence: OutcomeRecord["evidence"] = record.evidence,
+  visibleHistoricalRefs: OutcomeRecord["criteria"][number]["workRefs"] = [],
 ): OutcomeDetail {
   const observedRecord = withObservedEvidence(record, observedEvidence);
   const summary = toOutcomeSummary(record, observedAt, observedProjections, observedEvidence);
   const sourcesByRef = new Map(
     authorizedSources.map((source) => [workRefIdentity(source.ref), source]),
   );
+  const visibleSnapshotRefIdentities = new Set([
+    ...sourcesByRef.keys(),
+    ...visibleHistoricalRefs.map(workRefIdentity),
+  ]);
   const projectionsByRef = new Map(
     observedProjections.map((projection) => [workRefIdentity(projection.ref), projection]),
   );
@@ -222,7 +229,7 @@ export function toOutcomeDetail(
       decidedRevision: decision.decidedRevision,
       planGeneration: decision.planGeneration,
       planHash: decision.planHash,
-      decidedPlan: toOutcomePlanSnapshotView(decision.decidedPlan, sourcesByRef),
+      decidedPlan: toOutcomePlanSnapshotView(decision.decidedPlan, visibleSnapshotRefIdentities),
       ...(decision.note === undefined ? {} : { note: decision.note }),
     }));
   const acceptances: OutcomeDetail["acceptances"] = record.acceptances
@@ -234,7 +241,7 @@ export function toOutcomeDetail(
       planGeneration: acceptance.planGeneration,
       planHash: acceptance.planHash,
       closureHash: acceptance.closureHash,
-      acceptedPlan: toOutcomePlanSnapshotView(acceptance.acceptedPlan, sourcesByRef),
+      acceptedPlan: toOutcomePlanSnapshotView(acceptance.acceptedPlan, visibleSnapshotRefIdentities),
     }));
   const sourceIssues = observedProjections
     .flatMap((projection) => {

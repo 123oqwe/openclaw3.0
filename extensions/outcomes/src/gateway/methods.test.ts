@@ -1007,6 +1007,93 @@ describe("P-02 Outcome handlers", () => {
       evidence: [{ sourceId: "proof-a" }],
     });
     expect(harness.records.get(id)?.evidence).toHaveLength(1);
+
+    harness.gatewayRequest.mockClear();
+    expect(
+      await harness.call("outcomes.unlinkWorkboard", {
+        id,
+        expectedRevision: 7,
+        criterionId,
+        cardId: "card-a",
+      }),
+    ).toMatchObject([
+      true,
+      {
+        outcome: {
+          phase: "active",
+          work: [],
+          evidence: [],
+          decisions: [
+            {
+              decidedPlan: {
+                criteria: [{ sourcesVisibility: "complete", workRefs: [{ cardId: "card-a" }] }],
+              },
+            },
+          ],
+          acceptances: [
+            {
+              acceptedPlan: {
+                criteria: [{ sourcesVisibility: "complete", workRefs: [{ cardId: "card-a" }] }],
+              },
+            },
+          ],
+        },
+      },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+
+    harness.gatewayRequest.mockClear();
+    expect(await harness.call("outcomes.get", { id })).toMatchObject([
+      true,
+      {
+        outcome: {
+          work: [],
+          evidence: [],
+          decisions: [
+            {
+              decidedPlan: {
+                criteria: [{ sourcesVisibility: "complete", workRefs: [{ cardId: "card-a" }] }],
+              },
+            },
+          ],
+          acceptances: [
+            {
+              acceptedPlan: {
+                criteria: [{ sourcesVisibility: "complete", workRefs: [{ cardId: "card-a" }] }],
+              },
+            },
+          ],
+        },
+      },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+
+    harness.gatewayRequest.mockClear();
+    harness.gatewayRequest.mockResolvedValueOnce({ cards: [] });
+    expect(await harness.call("outcomes.get", { id })).toMatchObject([
+      true,
+      {
+        outcome: {
+          work: [],
+          evidence: [],
+          decisions: [
+            {
+              decidedPlan: {
+                criteria: [{ sourcesVisibility: "restricted", workRefs: [] }],
+              },
+            },
+          ],
+          acceptances: [
+            {
+              acceptedPlan: {
+                criteria: [{ sourcesVisibility: "restricted", workRefs: [] }],
+              },
+            },
+          ],
+        },
+      },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
   });
 
   it("does not treat an empty-evidence rejection as current after new proof arrives", async () => {

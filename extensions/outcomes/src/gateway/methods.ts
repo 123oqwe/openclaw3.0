@@ -52,6 +52,7 @@ import { reduceGatewayOutcomePatch } from "./update-reducer.js";
 import {
   buildRefreshCandidate,
   findAuthorizedWorkboardCard,
+  hasOutcomeSourcePresentationRefs,
   readAuthorizedWorkboardCards,
   refreshReason,
   unavailableRefresh,
@@ -72,7 +73,7 @@ async function mutationPresentation(
 ) {
   if (
     (decision.kind !== "updated" && decision.kind !== "noop") ||
-    decision.record.criteria.every((criterion) => criterion.workRefs.length === 0)
+    !hasOutcomeSourcePresentationRefs(decision.record)
   ) {
     return undefined;
   }
@@ -86,6 +87,7 @@ async function mutationPresentation(
       authorizedSources: candidate.authorizedSources,
       evidence: candidate.evidence,
       projections: candidate.projections,
+      visibleHistoricalRefs: candidate.visibleHistoricalRefs,
     };
   } catch (error) {
     const candidate = unavailableRefresh(decision.record, now, refreshReason(error));
@@ -93,6 +95,7 @@ async function mutationPresentation(
       authorizedSources: candidate.authorizedSources,
       evidence: candidate.evidence,
       projections: candidate.projections,
+      visibleHistoricalRefs: candidate.visibleHistoricalRefs,
     };
   }
 }
@@ -122,6 +125,7 @@ function respondAssuranceMutation(
         candidate.authorizedSources,
         candidate.projections,
         candidate.evidence,
+        candidate.visibleHistoricalRefs,
       ),
       replayed: decision.replayed,
       receipt,
@@ -160,6 +164,7 @@ async function respondReplayedAssuranceMutation(
       presentation?.authorizedSources,
       presentation?.projections,
       presentation?.evidence,
+      presentation?.visibleHistoricalRefs,
     ),
     replayed: true,
     receipt,
@@ -250,7 +255,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
           return fail(respond, "NOT_FOUND");
         }
         const now = Date.now();
-        if (record.criteria.every((criterion) => criterion.workRefs.length === 0)) {
+        if (!hasOutcomeSourcePresentationRefs(record)) {
           respond(true, { outcome: toOutcomeDetail(record, now) });
           return;
         }
@@ -267,6 +272,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             candidate.authorizedSources,
             candidate.projections,
             candidate.evidence,
+            candidate.visibleHistoricalRefs,
           ),
         });
       } catch (error) {
@@ -549,11 +555,12 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
 
       const now = Date.now();
       let candidate: RefreshCandidate;
-      if (record.criteria.every((criterion) => criterion.workRefs.length === 0)) {
+      if (!hasOutcomeSourcePresentationRefs(record)) {
         candidate = {
           projections: [],
           evidence: [],
           authorizedSources: [],
+          visibleHistoricalRefs: [],
           refresh: { status: "available" },
         };
       } else {
@@ -584,6 +591,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
               candidate.authorizedSources,
               candidate.projections,
               candidate.evidence,
+              candidate.visibleHistoricalRefs,
             ),
             refresh: candidate.refresh,
           });
