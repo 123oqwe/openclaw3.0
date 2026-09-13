@@ -25,7 +25,6 @@ import {
   createRequestHash,
   evidenceSetHash,
   planHash,
-  workboardProjectionFingerprint,
 } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
@@ -61,35 +60,6 @@ function draftRecord(id: string, managerProfileId = "alice"): OutcomeRecord {
     acceptances: [],
     createdAt: 1,
     updatedAt: 1,
-  };
-}
-
-function oversizedAvailableProjection(digest: string): OutcomeRecord["projections"][number] {
-  const ref = {
-    owner: "workboard" as const,
-    cardId: "c",
-    cardCreatedAt: 1,
-    boardIdAtLink: "b",
-  };
-  const proofs = [{ sourceId: "s", digest }];
-  const artifacts: Array<{ sourceId: string; digest: string }> = [];
-  return {
-    ref,
-    availability: "available",
-    currentBoardId: "board-current",
-    status: "done",
-    observedAt: 1,
-    sourceUpdatedAt: 1,
-    proofs,
-    artifacts,
-    sourceFingerprint: workboardProjectionFingerprint({
-      ref,
-      proofs,
-      artifacts,
-      currentBoardId: "board-current",
-      status: "done",
-      sourceUpdatedAt: 1,
-    }),
   };
 }
 
