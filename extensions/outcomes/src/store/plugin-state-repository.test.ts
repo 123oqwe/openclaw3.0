@@ -400,12 +400,31 @@ describe("Outcome repository host adapter", () => {
         }
         const decisionSnapshots = structuredClone(accepted.record.decisions);
         const acceptanceSnapshot = structuredClone(accepted.record.acceptances);
+        const renamed = await repository.transact("assurance-history", (current) => {
+          const decision = reduceOutcomeTitle(current!, {
+            expectedRevision: current!.revision,
+            title: "renamed after acceptance",
+            serverTime: 45,
+          });
+          return decision.kind === "updated"
+            ? { result: decision, next: decision.record }
+            : { result: decision };
+        });
+        expect(renamed).toMatchObject({
+          kind: "updated",
+          record: { phase: "accepted", title: "renamed after acceptance" },
+        });
+        if (renamed.kind !== "updated") {
+          return;
+        }
+        expect(renamed.record.decisions).toEqual(decisionSnapshots);
+        expect(renamed.record.acceptances).toEqual(acceptanceSnapshot);
         const contractChanged = await repository.transact("assurance-history", (current) => {
           const decision = reduceOutcomeContract(current!, {
             expectedRevision: current!.revision,
             objective: "revised objective",
             criteria: current!.criteria,
-            serverTime: 45,
+            serverTime: 46,
           });
           return decision.kind === "updated"
             ? { result: decision, next: decision.record }
@@ -417,7 +436,7 @@ describe("Outcome repository host adapter", () => {
             expectedRevision: current!.revision,
             criterionId: "c-1",
             cardId: "card-1",
-            serverTime: 46,
+            serverTime: 47,
           });
           return decision.kind === "updated"
             ? { result: decision, next: decision.record }
@@ -433,7 +452,12 @@ describe("Outcome repository host adapter", () => {
           env: state.env,
         });
         const restored = await createOutcomeRepository(reopenedStore).get("assurance-history");
-        expect(restored).toMatchObject({ phase: "active", planGeneration: 3, revision: 7 });
+        expect(restored).toMatchObject({
+          phase: "active",
+          planGeneration: 3,
+          revision: 8,
+          title: "renamed after acceptance",
+        });
         expect(restored?.decisions).toEqual(decisionSnapshots);
         expect(restored?.acceptances).toEqual(acceptanceSnapshot);
         expect(restored?.criteria[0]?.workRefs).toEqual([]);
