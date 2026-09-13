@@ -945,6 +945,63 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
   });
 
+  it("does not treat an empty-evidence rejection as current after new proof arrives", async () => {
+    const cards = [
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 2,
+        metadata: {
+          automation: { boardId: "board-a" },
+          proof: [],
+          artifacts: [],
+        },
+      },
+    ];
+    const harness = createHarness({ workboardCards: cards });
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const refreshedOutcome = (
+      refreshed[1] as {
+        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+      }
+    ).outcome;
+    const emptyEvidenceHash = refreshedOutcome.criteria[0]!.evidenceSetHash;
+    const rejected = await harness.call("outcomes.verifyCriterion", {
+      id,
+      expectedRevision: refreshedOutcome.revision,
+      decisionId: "123e4567-e89b-42d3-a456-426614174030",
+      criterionId,
+      status: "rejected",
+      planHash: refreshedOutcome.planHash,
+      evidenceSetHash: emptyEvidenceHash,
+      note: "No proof was available during review",
+    });
+    expect(rejected).toMatchObject([true, { outcome: { revision: 5 } }]);
+
+    cards[0]!.metadata.proof.push({
+      id: "proof-arrived-after-rejection",
+      status: "passed",
+      createdAt: 3,
+      label: "New proof requires a new human review",
+    });
+    const current = await harness.call("outcomes.get", { id });
+    expect(current).toMatchObject([
+      true,
+      {
+        outcome: {
+          attention: expect.arrayContaining([{ code: "verification-required", criterionId }]),
+          closureHash: null,
+        },
+      },
+    ]);
+    const currentOutcome = (current[1] as { outcome: { attention: Array<{ code: string }> } })
+      .outcome;
+    expect(currentOutcome.attention).not.toContainEqual({ code: "rejected" });
+  });
+
   it("does not write when cancellation is terminal or an operation is in flight", async () => {
     const harness = createHarness();
     const { id, record: created } = await createOutcome(harness);
