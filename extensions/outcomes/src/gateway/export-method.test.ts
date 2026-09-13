@@ -209,7 +209,8 @@ describe("P-06 Outcome export Gateway handler", () => {
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
     const exported = await harness.call("outcomes.export", { id });
-    expect(parseOutcomeExport(JSON.parse(JSON.stringify(exported[1])))).toEqual({
+    const decisionWirePayload = JSON.stringify(exported[1]);
+    expect(parseOutcomeExport(JSON.parse(decisionWirePayload))).toEqual({
       schemaVersion: 1,
       exportedAt: expect.any(Number),
       record: baseline,
@@ -346,7 +347,8 @@ describe("P-06 Outcome export Gateway handler", () => {
     harness.gatewayRequest.mockClear();
     const exported = await harness.call("outcomes.export", { id });
     expect(exported[0]).toBe(true);
-    expect(parseOutcomeExport(JSON.parse(JSON.stringify(exported[1])))).toEqual({
+    const acceptedWirePayload = JSON.stringify(exported[1]);
+    expect(parseOutcomeExport(JSON.parse(acceptedWirePayload))).toEqual({
       schemaVersion: 1,
       exportedAt: expect.any(Number),
       record: baseline,

@@ -10,7 +10,11 @@ import {
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
 import type { OutcomeRecord } from "../domain/types.js";
-import { encodeOutcomeExport, outcomeExportWorkRefs } from "../export/export.js";
+import {
+  encodeOutcomeExport,
+  outcomeExportWorkRefs,
+  parseOutcomeExport,
+} from "../export/export.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { admitOutcomeOwner } from "./admission.js";
 import { registerOutcomeAssuranceMethods } from "./assurance-methods.js";
@@ -256,13 +260,19 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond,
         schema: outcomeExportParamsSchema,
       });
-      if (!admission) return;
+      if (!admission) {
+        return;
+      }
       const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
-      if (!id) return fail(respond, "NOT_FOUND");
+      if (!id) {
+        return fail(respond, "NOT_FOUND");
+      }
       try {
         const record = await repository.getOwned(owner, id);
-        if (!record) return fail(respond, "NOT_FOUND");
+        if (!record) {
+          return fail(respond, "NOT_FOUND");
+        }
         const refs = outcomeExportWorkRefs(record);
         if (refs.length > 0) {
           let cards: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>;
@@ -273,12 +283,15 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
           }
           for (const ref of refs) {
             const matches = cards.filter((card) => card.id === ref.cardId);
-            if (matches.length === 0) return fail(respond, "OWNER_UNAVAILABLE");
-            if (matches.length !== 1 || matches[0]!.createdAt !== ref.cardCreatedAt)
+            if (matches.length === 0) {
+              return fail(respond, "OWNER_UNAVAILABLE");
+            }
+            if (matches.length !== 1 || matches[0]!.createdAt !== ref.cardCreatedAt) {
               return fail(respond, "IDENTITY_CONFLICT");
+            }
           }
         }
-        respond(true, encodeOutcomeExport(record, Date.now()));
+        respond(true, parseOutcomeExport(encodeOutcomeExport(record, Date.now())));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
       }
