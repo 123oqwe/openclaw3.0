@@ -20,6 +20,86 @@ afterEach(() => {
 });
 
 describe("OutcomesPage mutations", () => {
+  it("requires refresh after a revision conflict before creating a new verification request", async () => {
+    const verificationParams: Array<Record<string, unknown>> = [];
+    const staleDetail = {
+      ...outcomeDetail("outcome-a", "Outcome A"),
+      criteria: [
+        {
+          ...outcomeDetail("outcome-a", "Outcome A").criteria[0]!,
+          evidenceSetHash: "e".repeat(64),
+        },
+      ],
+      nextActions: ["review-evidence", "refresh"] as const,
+      phase: "active" as const,
+      planGeneration: 1,
+      planHash: "a".repeat(64),
+      revision: 4,
+    };
+    const freshDetail = {
+      ...staleDetail,
+      criteria: [{ ...staleDetail.criteria[0]!, evidenceSetHash: "f".repeat(64) }],
+      planHash: "b".repeat(64),
+      revision: 5,
+    };
+    const request = vi.fn((method: string, params: Record<string, unknown>) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({ outcome: staleDetail });
+      }
+      if (method === "outcomes.verifyCriterion") {
+        verificationParams.push(params);
+        if (verificationParams.length === 1) {
+          return Promise.reject(Object.assign(new Error("changed"), { code: "OUTCOME_REVISION_CONFLICT" }));
+        }
+        return Promise.resolve({ outcome: { ...freshDetail, revision: 6 } });
+      }
+      if (method === "outcomes.refresh") {
+        return Promise.resolve({ outcome: freshDetail });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const gateway = createGateway({ request } as unknown as GatewayBrowserClient);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.refresh", "outcomes.verifyCriterion"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    const form = page.querySelector<HTMLFormElement>("[data-outcome-verification-form]");
+    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(verificationParams).toHaveLength(1));
+    await vi.waitFor(() => expect(page.textContent).toContain("Refresh the Outcome"));
+    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(verificationParams).toHaveLength(1);
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.refresh", { id: "outcome-a", expectedRevision: 4 });
+    });
+    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(verificationParams).toHaveLength(2));
+    expect(verificationParams[1]).toMatchObject({
+      decisionId: expect.any(String),
+      evidenceSetHash: "f".repeat(64),
+      expectedRevision: 5,
+      planHash: "b".repeat(64),
+    });
+    expect(verificationParams[1]?.decisionId).not.toBe(verificationParams[0]?.decisionId);
+  });
+
   it("replays the same acceptance payload only after an explicit user retry", async () => {
     let rejectAcceptance: ((reason?: unknown) => void) | undefined;
     const acceptanceParams: Array<Record<string, unknown>> = [];
