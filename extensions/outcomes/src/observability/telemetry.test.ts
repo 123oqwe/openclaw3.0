@@ -1,10 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHarness, createParams, outcomeIds } from "../gateway/methods.test-support.js";
-import {
-  recordOutcomeTelemetry,
-  type OutcomeTelemetryMethod,
-  type OutcomeTelemetryResult,
-} from "./telemetry.js";
+import { recordOutcomeTelemetry } from "./telemetry.js";
 
 const telemetry = vi.hoisted(() => {
   const counter = { add: vi.fn() };
@@ -20,6 +16,10 @@ const telemetry = vi.hoisted(() => {
 vi.mock("@opentelemetry/api", () => ({
   metrics: { getMeter: telemetry.getMeter },
 }));
+
+function recordUntrustedTelemetry(method: string, result: string, startedAt: number): void {
+  Reflect.apply(recordOutcomeTelemetry, undefined, [method, result, startedAt]);
+}
 
 describe("Outcome Gateway telemetry", () => {
   beforeEach(() => {
@@ -123,8 +123,7 @@ describe("Outcome Gateway telemetry", () => {
   });
 
   it("rejects an unbounded operation label instead of leaking it to telemetry", () => {
-    const untrustedMethod: unknown = "Private objective: replace credentials";
-    recordOutcomeTelemetry(untrustedMethod as OutcomeTelemetryMethod, "success", Date.now());
+    recordUntrustedTelemetry("Private objective: replace credentials", "success", Date.now());
 
     expect(telemetry.getMeter).not.toHaveBeenCalled();
     expect(telemetry.counter.add).not.toHaveBeenCalled();
@@ -132,8 +131,7 @@ describe("Outcome Gateway telemetry", () => {
   });
 
   it("drops invalid runtime results and records finite latency", () => {
-    const untrustedResult: unknown = "Private result: credentials";
-    recordOutcomeTelemetry("export", untrustedResult as OutcomeTelemetryResult, Date.now());
+    recordUntrustedTelemetry("export", "Private result: credentials", Date.now());
 
     expect(telemetry.getMeter).not.toHaveBeenCalled();
     expect(telemetry.counter.add).not.toHaveBeenCalled();
