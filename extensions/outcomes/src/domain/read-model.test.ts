@@ -597,9 +597,12 @@ describe("Outcome P-01 read model", () => {
       expect.arrayContaining([
         { code: "acceptance-needs-review" },
         { code: "rejected" },
-        { code: "verification-required", criterionId: "c-1" },
       ]),
     );
+    expect(detail.attention).not.toContainEqual({
+      code: "verification-required",
+      criterionId: "c-1",
+    });
     expect(detail.nextActions).toContain("review-evidence");
   });
 
