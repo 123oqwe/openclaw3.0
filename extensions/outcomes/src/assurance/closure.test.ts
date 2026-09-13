@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { outcomeClosureHash } from "./closure.js";
+import { outcomeClosureHash } from "../domain/hash.js";
 
 describe("Outcome closure hash", () => {
   it("uses the P-05 domain prefix and canonical required-criterion ordering", () => {

@@ -38,7 +38,7 @@ export type OutcomePlanSnapshot = {
   criteria: Criterion[];
 };
 
-export type Acceptance = {
+type Acceptance = {
   id: string;
   requestHash: string;
   acceptedRevision: number;
@@ -75,7 +75,7 @@ export type EvidenceRef = {
   observedAt: number;
 };
 
-export type HumanDecision = {
+type HumanDecision = {
   id: string;
   criterionId: string;
   planGeneration: number;

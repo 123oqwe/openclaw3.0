@@ -31,7 +31,6 @@ import {
   fail,
   reportCapacityWarning,
   respondMutation,
-  type GatewayRespond,
 } from "./method-helpers.js";
 import {
   outcomeCancelParamsSchema,
@@ -508,7 +507,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             ...(mutation.kind === "updated" ? { next: mutation.record } : {}),
           };
         });
-        if (decision.kind === "updated" || decision.kind === "noop") {
+        if (decision.kind === "updated") {
           respond(true, {
             outcome: toOutcomeDetail(
               decision.record,

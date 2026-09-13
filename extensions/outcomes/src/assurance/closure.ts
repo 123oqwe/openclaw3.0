@@ -1,17 +1,10 @@
 import { createHash } from "node:crypto";
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
-import { evidenceSetHash } from "../domain/hash.js";
+import { evidenceSetHash, outcomeClosureHash } from "../domain/hash.js";
 import type { OutcomeRecord } from "../domain/types.js";
 
 type CurrentProjection = OutcomeRecord["projections"][number];
-
-export type CurrentDecisionBinding = {
-  criterionId: string;
-  decisionId: string;
-  decidedRevision: number;
-  evidenceSetHash: string;
-};
 
 export type CurrentDecision = {
   decision: OutcomeRecord["decisions"][number];
@@ -141,25 +134,6 @@ export function currentOutcomeDecision(
   return { decision: selectedDecision, sourceDigests };
 }
 
-export function outcomeClosureHash(input: {
-  outcomeId: string;
-  planGeneration: number;
-  planHash: string;
-  requiredCriteria: CurrentDecisionBinding[];
-}): string {
-  const canonical = {
-    outcomeId: input.outcomeId,
-    planGeneration: input.planGeneration,
-    planHash: input.planHash,
-    requiredCriteria: [...input.requiredCriteria].toSorted((left, right) =>
-      left.criterionId < right.criterionId ? -1 : left.criterionId > right.criterionId ? 1 : 0,
-    ),
-  };
-  return createHash("sha256")
-    .update(`openclaw:outcome-closure:v1\0${stableStringify(canonical)}`, "utf8")
-    .digest("hex");
-}
-
 function requestHash(domain: string, value: object): string {
   return createHash("sha256")
     .update(`${domain}\0${stableStringify(value)}`, "utf8")
@@ -219,7 +193,12 @@ export function deriveOutcomeClosure(
   if (currentDecisions.some(({ current }) => current?.decision.status === "rejected")) {
     return null;
   }
-  const requiredCriteria: CurrentDecisionBinding[] = [];
+  const requiredCriteria: Array<{
+    criterionId: string;
+    decisionId: string;
+    decidedRevision: number;
+    evidenceSetHash: string;
+  }> = [];
   for (const criterion of record.criteria) {
     if (!criterion.required) {
       continue;

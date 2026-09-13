@@ -34,7 +34,7 @@ export type OutcomeAcceptanceMutation = {
   serverTime: number;
 };
 
-export type OutcomeAssuranceFailureReason =
+type OutcomeAssuranceFailureReason =
   | "operation-conflict"
   | "revision-conflict"
   | "invalid-state"
