@@ -49,6 +49,7 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/src/gateway/health.ts",
         "extensions/outcomes/src/gateway/delete-method.test.ts",
         "extensions/outcomes/src/gateway/export-method.test.ts",
+        "extensions/outcomes/src/export/codec.ts",
         "extensions/outcomes/src/export/export.test.ts",
         "extensions/outcomes/src/export/export.ts",
         "extensions/outcomes/src/gateway/p02-admission.contract.md",

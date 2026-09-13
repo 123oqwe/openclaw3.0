@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseOutcomeExport } from "../export/export.js";
+import { parseOutcomeExport } from "../export/codec.js";
 import {
   createHarness,
   createLinkedOutcome,

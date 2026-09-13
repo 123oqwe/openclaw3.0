@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { createRequestHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
-import { encodeOutcomeExport, outcomeExportWorkRefs, parseOutcomeExport } from "./export.js";
+import { parseOutcomeExport } from "./codec.js";
+import { encodeOutcomeExport, outcomeExportWorkRefs } from "./export.js";
 
 function draftRecord(): OutcomeRecord {
   const request = {

@@ -10,11 +10,7 @@ import {
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
 import type { OutcomeRecord } from "../domain/types.js";
-import {
-  encodeOutcomeExport,
-  outcomeExportWorkRefs,
-  parseOutcomeExport,
-} from "../export/export.js";
+import { encodeOutcomeExport, outcomeExportWorkRefs } from "../export/export.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { admitOutcomeOwner } from "./admission.js";
 import { registerOutcomeAssuranceMethods } from "./assurance-methods.js";
@@ -291,7 +287,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             }
           }
         }
-        respond(true, parseOutcomeExport(encodeOutcomeExport(record, Date.now())));
+        respond(true, encodeOutcomeExport(record, Date.now()));
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "read")));
       }

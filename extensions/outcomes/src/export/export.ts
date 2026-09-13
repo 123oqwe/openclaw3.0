@@ -1,29 +1,13 @@
-import { z } from "zod";
-import { parseOutcomeRecord } from "../domain/schema.js";
 import type { OutcomeRecord, WorkboardRef } from "../domain/types.js";
+import { parseOutcomeExport, type OutcomeExport } from "./codec.js";
 
-const outcomeExportSchema = z.strictObject({
-  schemaVersion: z.literal(1),
-  exportedAt: z.number().finite().nonnegative(),
-  record: z.unknown(),
-});
-
-export type OutcomeExport = {
-  schemaVersion: 1;
-  exportedAt: number;
-  record: OutcomeRecord;
-};
+export type { OutcomeExport } from "./codec.js";
 
 export function encodeOutcomeExport(record: OutcomeRecord, exportedAt: number): OutcomeExport {
   return parseOutcomeExport({ schemaVersion: 1, exportedAt, record });
 }
 
 /** Parses versioned lossless exports without exposing the persisted type to public callers. */
-export function parseOutcomeExport(input: unknown): OutcomeExport {
-  const envelope = outcomeExportSchema.parse(input);
-  return { ...envelope, record: parseOutcomeRecord(envelope.record) };
-}
-
 /** Every current and historical Workboard identity that makes a record lossless. */
 export function outcomeExportWorkRefs(record: OutcomeRecord): WorkboardRef[] {
   const refs = [
