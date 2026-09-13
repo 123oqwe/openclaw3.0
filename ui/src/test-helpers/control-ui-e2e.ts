@@ -3148,6 +3148,8 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
           })
         | null;
       const outcomeDetail = outcomesPage?.detail ?? null;
+      const outcomeDetailElement =
+        outcomesPage?.querySelector("[data-outcome-detail-id]") ?? null;
       return {
         app: {
           gateway: {
@@ -3205,7 +3207,9 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
           monotonicNow: Math.round(performance.now()),
           observedAt: finiteNumberOrNull(outcomeDetail?.observedAt),
           readiness:
-            document.querySelector("[data-outcome-readiness]")?.getAttribute("data-outcome-readiness") ??
+            outcomeDetailElement
+              ?.querySelector("[data-outcome-readiness]")
+              ?.getAttribute("data-outcome-readiness") ??
             null,
           recheckAfter: finiteNumberOrNull(outcomeDetail?.recheckAfter),
         },
