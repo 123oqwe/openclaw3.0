@@ -1,7 +1,11 @@
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
 import { describe, expect, it } from "vitest";
 import { evidenceSetHash } from "./hash.js";
-import { toOutcomeDetail, toOutcomeSummary } from "./read-model.js";
+import {
+  toOutcomeDetail,
+  toOutcomeSummary,
+  type AuthorizedOutcomeSource,
+} from "./read-model.js";
 import { parseOutcomeRecord, planHash, workboardProjectionFingerprint } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
 
@@ -137,7 +141,7 @@ function withCurrentVerifiedEvidence(input: OutcomeRecord): OutcomeRecord {
   return valid(input);
 }
 
-function authorizedSources(input: OutcomeRecord) {
+function authorizedSources(input: OutcomeRecord): AuthorizedOutcomeSource[] {
   const projection = first(input.projections);
   return [
     {
@@ -146,7 +150,17 @@ function authorizedSources(input: OutcomeRecord) {
       status: projection.status ?? "",
       sourceUpdatedAt: projection.sourceUpdatedAt ?? 0,
       upstreamStale: projection.upstreamStale === true,
-      evidence: input.evidence,
+      evidence: input.evidence.map((evidence) => ({
+        id: evidence.id,
+        criterionId: evidence.criterionId,
+        workRef: evidence.workRef,
+        kind: evidence.kind,
+        sourceId: evidence.sourceId,
+        sourceDigest: evidence.sourceDigest,
+        observedAt: evidence.observedAt,
+        planGeneration: evidence.planGeneration,
+        sourceCreatedAt: evidence.observedAt,
+      })),
     },
   ];
 }

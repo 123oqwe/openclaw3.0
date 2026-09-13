@@ -7,7 +7,12 @@ import {
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
 import { deriveOutcomeClosure } from "../assurance/closure.js";
-import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "../domain/assurance-reducer.js";
+import {
+  reduceOutcomeAcceptance,
+  reduceOutcomeDecision,
+  type OutcomeAcceptanceResult,
+  type OutcomeDecisionResult,
+} from "../domain/assurance-reducer.js";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import {
   reduceOutcomeActivate,
@@ -338,40 +343,46 @@ describe("Outcome repository host adapter", () => {
           planGeneration: initial.planGeneration,
           sourceDigests: ["proof-digest-1"],
         });
-        const rejected = await repository.transact("assurance-history", (current) => {
-          const decision = reduceOutcomeDecision(current!, {
-            expectedRevision: current!.revision,
-            id: "decision-rejected",
-            requestHash: "d".repeat(64),
-            criterionId: "c-1",
-            status: "rejected",
-            planHash: current!.planHash!,
-            evidenceSetHash: evidenceHash,
-            profileId: "alice",
-            note: "requires reviewer follow-up",
-            serverTime: 42,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const rejected = await repository.transact<OutcomeDecisionResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeDecision(current!, {
+              expectedRevision: current!.revision,
+              id: "decision-rejected",
+              requestHash: "d".repeat(64),
+              criterionId: "c-1",
+              status: "rejected",
+              planHash: current!.planHash!,
+              evidenceSetHash: evidenceHash,
+              profileId: "alice",
+              note: "requires reviewer follow-up",
+              serverTime: 42,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(rejected).toMatchObject({ kind: "updated", replayed: false });
-        const verified = await repository.transact("assurance-history", (current) => {
-          const decision = reduceOutcomeDecision(current!, {
-            expectedRevision: current!.revision,
-            id: "decision-verified",
-            requestHash: "e".repeat(64),
-            criterionId: "c-1",
-            status: "verified",
-            planHash: current!.planHash!,
-            evidenceSetHash: evidenceHash,
-            profileId: "alice",
-            serverTime: 43,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const verified = await repository.transact<OutcomeDecisionResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeDecision(current!, {
+              expectedRevision: current!.revision,
+              id: "decision-verified",
+              requestHash: "e".repeat(64),
+              criterionId: "c-1",
+              status: "verified",
+              planHash: current!.planHash!,
+              evidenceSetHash: evidenceHash,
+              profileId: "alice",
+              serverTime: 43,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(verified).toMatchObject({ kind: "updated", replayed: false });
         if (verified.kind !== "updated") {
           return;
@@ -380,36 +391,42 @@ describe("Outcome repository host adapter", () => {
         if (closureHash === null || verified.record.planHash === null) {
           throw new Error("fixture closure must be complete after verification");
         }
-        const accepted = await repository.transact("assurance-history", (current) => {
-          const decision = reduceOutcomeAcceptance(current!, {
-            expectedRevision: current!.revision,
-            id: "acceptance-1",
-            requestHash: "a".repeat(64),
-            planHash: current!.planHash!,
-            closureHash,
-            profileId: "alice",
-            serverTime: 44,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const accepted = await repository.transact<OutcomeAcceptanceResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeAcceptance(current!, {
+              expectedRevision: current!.revision,
+              id: "acceptance-1",
+              requestHash: "a".repeat(64),
+              planHash: current!.planHash!,
+              closureHash,
+              profileId: "alice",
+              serverTime: 44,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(accepted).toMatchObject({ kind: "updated", replayed: false });
         if (accepted.kind !== "updated") {
           return;
         }
         const decisionSnapshots = structuredClone(accepted.record.decisions);
         const acceptanceSnapshot = structuredClone(accepted.record.acceptances);
-        const renamed = await repository.transact("assurance-history", (current) => {
-          const decision = reduceOutcomeTitle(current!, {
-            expectedRevision: current!.revision,
-            title: "renamed after acceptance",
-            serverTime: 45,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const renamed = await repository.transact<OutcomeMutationResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeTitle(current!, {
+              expectedRevision: current!.revision,
+              title: "renamed after acceptance",
+              serverTime: 45,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(renamed).toMatchObject({
           kind: "updated",
           record: { phase: "accepted", title: "renamed after acceptance" },
@@ -419,29 +436,35 @@ describe("Outcome repository host adapter", () => {
         }
         expect(renamed.record.decisions).toEqual(decisionSnapshots);
         expect(renamed.record.acceptances).toEqual(acceptanceSnapshot);
-        const contractChanged = await repository.transact("assurance-history", (current) => {
-          const decision = reduceOutcomeContract(current!, {
-            expectedRevision: current!.revision,
-            objective: "revised objective",
-            criteria: current!.criteria,
-            serverTime: 46,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const contractChanged = await repository.transact<OutcomeMutationResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeContract(current!, {
+              expectedRevision: current!.revision,
+              objective: "revised objective",
+              criteria: current!.criteria,
+              serverTime: 46,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(contractChanged.kind).toBe("updated");
-        const unlinked = await repository.transact("assurance-history", (current) => {
-          const decision = reduceOutcomeUnlink(current!, {
-            expectedRevision: current!.revision,
-            criterionId: "c-1",
-            cardId: "card-1",
-            serverTime: 47,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const unlinked = await repository.transact<OutcomeMutationResult>(
+          "assurance-history",
+          (current) => {
+            const decision = reduceOutcomeUnlink(current!, {
+              expectedRevision: current!.revision,
+              criterionId: "c-1",
+              cardId: "card-1",
+              serverTime: 47,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(unlinked.kind).toBe("updated");
 
         resetPluginStateStoreForTests();
@@ -484,50 +507,59 @@ describe("Outcome repository host adapter", () => {
           planGeneration: initial.planGeneration,
           sourceDigests: ["proof-digest-1"],
         });
-        const verified = await repository.transact(initial.id, (current) => {
-          const decision = reduceOutcomeDecision(current!, {
-            expectedRevision: current!.revision,
-            id: "decision-only",
-            requestHash: "d".repeat(64),
-            criterionId: "c-1",
-            status: "verified",
-            planHash: current!.planHash!,
-            evidenceSetHash: evidenceHash,
-            profileId: "alice",
-            serverTime: 42,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const verified = await repository.transact<OutcomeDecisionResult>(
+          initial.id,
+          (current) => {
+            const decision = reduceOutcomeDecision(current!, {
+              expectedRevision: current!.revision,
+              id: "decision-only",
+              requestHash: "d".repeat(64),
+              criterionId: "c-1",
+              status: "verified",
+              planHash: current!.planHash!,
+              evidenceSetHash: evidenceHash,
+              profileId: "alice",
+              serverTime: 42,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(verified).toMatchObject({ kind: "updated", record: { acceptances: [] } });
         if (verified.kind !== "updated") {
           return;
         }
         const decidedPlan = structuredClone(verified.record.decisions[0]?.decidedPlan);
-        const changed = await repository.transact(initial.id, (current) => {
-          const decision = reduceOutcomeContract(current!, {
-            expectedRevision: current!.revision,
-            objective: "changed after the original decision",
-            criteria: current!.criteria,
-            serverTime: 43,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const changed = await repository.transact<OutcomeMutationResult>(
+          initial.id,
+          (current) => {
+            const decision = reduceOutcomeContract(current!, {
+              expectedRevision: current!.revision,
+              objective: "changed after the original decision",
+              criteria: current!.criteria,
+              serverTime: 43,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(changed.kind).toBe("updated");
-        const unlinked = await repository.transact(initial.id, (current) => {
-          const decision = reduceOutcomeUnlink(current!, {
-            expectedRevision: current!.revision,
-            criterionId: "c-1",
-            cardId: "card-1",
-            serverTime: 44,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const unlinked = await repository.transact<OutcomeMutationResult>(
+          initial.id,
+          (current) => {
+            const decision = reduceOutcomeUnlink(current!, {
+              expectedRevision: current!.revision,
+              criterionId: "c-1",
+              cardId: "card-1",
+              serverTime: 44,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(unlinked.kind).toBe("updated");
 
         const child = spawnSync(
@@ -624,22 +656,25 @@ describe("Outcome repository host adapter", () => {
           decisions: fullDecisionHistory,
         };
         await decisionRepository.create(fullDecisions);
-        const decisionResult = await decisionRepository.transact(fullDecisions.id, (current) => {
-          const decision = reduceOutcomeDecision(current!, {
-            expectedRevision: current!.revision,
-            id: "decision-101",
-            requestHash: "b".repeat(64),
-            criterionId: "c-1",
-            status: "verified",
-            planHash: current!.planHash!,
-            evidenceSetHash: decisionEvidenceHash,
-            profileId: "alice",
-            serverTime: 102,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const decisionResult = await decisionRepository.transact<OutcomeDecisionResult>(
+          fullDecisions.id,
+          (current) => {
+            const decision = reduceOutcomeDecision(current!, {
+              expectedRevision: current!.revision,
+              id: "decision-101",
+              requestHash: "b".repeat(64),
+              criterionId: "c-1",
+              status: "verified",
+              planHash: current!.planHash!,
+              evidenceSetHash: decisionEvidenceHash,
+              profileId: "alice",
+              serverTime: 102,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(decisionResult).toMatchObject({ kind: "rejected", reason: "capacity-exceeded" });
         expect(decisionUpdates).toEqual([undefined]);
         await expect(decisionRepository.get(fullDecisions.id)).resolves.toEqual(fullDecisions);
@@ -730,22 +765,25 @@ describe("Outcome repository host adapter", () => {
           planGeneration: activePlanGeneration,
           sourceDigests: ["proof-digest-1"],
         });
-        const verified = await acceptanceRepository.transact(fullAcceptances.id, (current) => {
-          const decision = reduceOutcomeDecision(current!, {
-            expectedRevision: current!.revision,
-            id: "decision-current",
-            requestHash: "e".repeat(64),
-            criterionId: "c-1",
-            status: "verified",
-            planHash: current!.planHash!,
-            evidenceSetHash: currentEvidenceHash,
-            profileId: "alice",
-            serverTime: 101,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const verified = await acceptanceRepository.transact<OutcomeDecisionResult>(
+          fullAcceptances.id,
+          (current) => {
+            const decision = reduceOutcomeDecision(current!, {
+              expectedRevision: current!.revision,
+              id: "decision-current",
+              requestHash: "e".repeat(64),
+              criterionId: "c-1",
+              status: "verified",
+              planHash: current!.planHash!,
+              evidenceSetHash: currentEvidenceHash,
+              profileId: "alice",
+              serverTime: 101,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(verified).toMatchObject({ kind: "updated", replayed: false });
         if (verified.kind !== "updated" || verified.record.planHash === null) {
           throw new Error("fixture must create a current verified decision");
@@ -754,7 +792,7 @@ describe("Outcome repository host adapter", () => {
         if (closureHash === null) {
           throw new Error("fixture closure must be complete");
         }
-        const acceptanceResult = await acceptanceRepository.transact(
+        const acceptanceResult = await acceptanceRepository.transact<OutcomeAcceptanceResult>(
           fullAcceptances.id,
           (current) => {
             const decision = reduceOutcomeAcceptance(current!, {
@@ -816,16 +854,19 @@ describe("Outcome repository host adapter", () => {
           }),
         };
         await repository.create(record);
-        const result = await repository.transact<OutcomeMutationResult>(record.id, (current) => {
-          const decision = reduceOutcomeTitle(current!, {
-            expectedRevision: 2,
-            title: "same",
-            serverTime: 42,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const result = await repository.transact<OutcomeMutationResult>(
+          record.id,
+          (current) => {
+            const decision = reduceOutcomeTitle(current!, {
+              expectedRevision: 2,
+              title: "same",
+              serverTime: 42,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(result.kind).toBe("rejected");
         await expect(repository.get(record.id)).resolves.toEqual(record);
         expect(updates).toEqual([undefined]);
@@ -847,16 +888,19 @@ describe("Outcome repository host adapter", () => {
           }),
         };
         await repository.create(active);
-        const noop = await repository.transact<OutcomeMutationResult>(active.id, (current) => {
-          const decision = reduceOutcomeTitle(current!, {
-            expectedRevision: 2,
-            title: "same",
-            serverTime: 42,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const noop = await repository.transact<OutcomeMutationResult>(
+          active.id,
+          (current) => {
+            const decision = reduceOutcomeTitle(current!, {
+              expectedRevision: 2,
+              title: "same",
+              serverTime: 42,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(noop.kind).toBe("noop");
         expect(updates).toEqual([undefined, undefined]);
         await expect(repository.get(active.id)).resolves.toEqual(active);
