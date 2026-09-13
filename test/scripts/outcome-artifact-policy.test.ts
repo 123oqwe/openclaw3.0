@@ -58,6 +58,7 @@ describe("outcome artifact policy", () => {
         "extensions/outcomes/src/assurance/closure.test.ts",
         "extensions/outcomes/src/assurance/closure.ts",
         "extensions/outcomes/src/domain/constants.ts",
+        "extensions/outcomes/src/store/plugin-state-repository-capacity.test.ts",
         "extensions/outcomes/src/store/plugin-state-repository.capacity.test.ts",
         "extensions/outcomes/src/store/plugin-state-repository.corrupt.test.ts",
         "extensions/outcomes/src/store/outcome-repository.ts",
