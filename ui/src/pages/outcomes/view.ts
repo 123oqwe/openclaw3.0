@@ -11,6 +11,7 @@ import { t } from "../../i18n/index.ts";
 import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
 import { formatDateTimeMs } from "../../lib/format.ts";
 import "../../styles/outcomes.css";
+import { renderOutcomeCancelDialog } from "./outcome-cancel-dialog.ts";
 import { renderOutcomeDeleteDialog } from "./outcome-delete-dialog.ts";
 import { renderOutcomeVerificationDialog } from "./outcome-verification-dialog.ts";
 import {
@@ -505,41 +506,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           ${t("outcomesPage.deleteOutcome")}
         </button>`
       : nothing}
-    ${data.cancelConfirmationOpen
-      ? html`<openclaw-modal-dialog
-          label=${t("outcomesPage.cancelOutcome")}
-          description=${t("outcomesPage.cancelHelp")}
-          @modal-cancel=${data.onCancelConfirmationDismiss}
-        >
-          <section class="outcome-cancel-dialog" aria-busy=${data.cancelling ? "true" : "false"}>
-            <h2>${t("outcomesPage.cancelOutcome")}</h2>
-            <p>${t("outcomesPage.cancelHelp")}</p>
-            ${data.cancelError
-              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
-                  ${data.cancelError}
-                </p>`
-              : nothing}
-            <div class="outcome-cancel-dialog__actions">
-              <button
-                data-outcome-dismiss-cancel
-                type="button"
-                ?disabled=${data.cancelling}
-                @click=${() => data.onCancelConfirmationDismiss(new Event("modal-cancel"))}
-              >
-                ${t("common.back")}
-              </button>
-              <button
-                data-outcome-confirm-cancel
-                type="button"
-                ?disabled=${data.cancelling}
-                @click=${data.onConfirmCancel}
-              >
-                ${data.cancelling ? t("outcomesPage.cancelling") : t("common.confirm")}
-              </button>
-            </div>
-          </section>
-        </openclaw-modal-dialog>`
-      : nothing}
+    ${renderOutcomeCancelDialog(data)}
     ${renderOutcomeDeleteDialog(data)}
     ${data.editDialogOpen
       ? html`<openclaw-modal-dialog

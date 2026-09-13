@@ -87,6 +87,7 @@ const ALLOWED_PATHS = new Set([
   "ui/src/pages/outcomes/client.ts",
   "ui/src/pages/outcomes/freshness.test.ts",
   "ui/src/pages/outcomes/freshness.ts",
+  "ui/src/pages/outcomes/outcome-cancel-dialog.ts",
   "ui/src/pages/outcomes/outcome-delete-dialog.ts",
   "ui/src/pages/outcomes/outcome-verification-dialog.ts",
   "ui/src/pages/outcomes/outcomes-page-freshness.test.ts",
