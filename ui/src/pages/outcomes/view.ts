@@ -90,6 +90,7 @@ export type OutcomeDetailViewData = {
   verificationNote: string;
   verificationReplayPending: boolean;
   acceptanceReplayPending: boolean;
+  assuranceRefreshRequired: boolean;
   verificationStatus: "verified" | "rejected";
   verifying: boolean;
 };
@@ -161,6 +162,11 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     <p class="outcome-detail__readiness" data-outcome-readiness=${readiness}>
       ${readinessLabel(readiness)}
     </p>
+    ${data.assuranceRefreshRequired
+      ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+          ${t("outcomesPage.assuranceRefreshRequired")}
+        </p>`
+      : nothing}
     ${data.detailExpired
       ? html`<section class="outcomes-state" role="alert">
           ${t("outcomesPage.detailsExpired")}
@@ -355,7 +361,9 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
             ?disabled=${data.mutationInFlight}
             @click=${data.onRequestVerify}
           >
-            ${t("outcomesPage.nextAction.reviewEvidence")}
+            ${data.verificationReplayPending
+              ? t("common.retry")
+              : t("outcomesPage.nextAction.reviewEvidence")}
           </button>
         </section>`
       : nothing}
@@ -367,8 +375,11 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
             ?disabled=${data.mutationInFlight}
             @click=${data.onAccept}
           >
-            ${t("outcomesPage.nextAction.accept")}
+            ${data.acceptanceReplayPending ? t("common.retry") : t("outcomesPage.nextAction.accept")}
           </button>
+          ${data.acceptanceReplayPending
+            ? html`<p>${t("outcomesPage.assuranceReplayHelp")}</p>`
+            : nothing}
           ${data.mutationError
             ? html`<p class="outcomes-state outcomes-state--error" role="alert">
                 ${data.mutationError}
@@ -601,6 +612,9 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           >
             <h2>${t("outcomesPage.verifyCriterion")}</h2>
             <p>${t("outcomesPage.verifyHelp")}</p>
+            ${data.verificationReplayPending
+              ? html`<p>${t("outcomesPage.assuranceReplayHelp")}</p>`
+              : nothing}
             <label>
               ${t("outcomesPage.criterion")}
               <select
@@ -660,7 +674,11 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 ${t("common.back")}
               </button>
               <button data-outcome-confirm-verification type="submit" ?disabled=${data.verifying}>
-                ${data.verifying ? t("common.loading") : t("common.confirm")}
+                ${data.verifying
+                  ? t("common.loading")
+                  : data.verificationReplayPending
+                    ? t("common.retry")
+                    : t("common.confirm")}
               </button>
             </div>
           </form>

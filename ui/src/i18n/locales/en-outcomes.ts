@@ -25,6 +25,9 @@ const enOutcomes = {
     loadMore: "Load more outcomes",
     loadDetailFailed: "Couldn't load outcome details: {error}",
     mutationFailed: "Request failed: {error}",
+    assuranceReplayHelp:
+      "The previous request may have been applied. Retry the same request before changing these fields.",
+    assuranceRefreshRequired: "Refresh the Outcome before submitting a new assurance request.",
     createOutcome: "Create outcome",
     retryCreateOutcome: "Retry the same outcome",
     abandonPendingCreate: "Start a different outcome",

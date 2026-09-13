@@ -1,4 +1,8 @@
-import type { OutcomeCreateParams } from "@openclaw/outcomes-contract";
+import type {
+  OutcomeAcceptParams,
+  OutcomeCreateParams,
+  OutcomeVerifyCriterionParams,
+} from "@openclaw/outcomes-contract";
 import { t } from "../../i18n/index.ts";
 import { formatUiError } from "../../lib/format-error.ts";
 import {

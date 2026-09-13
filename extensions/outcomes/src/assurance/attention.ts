@@ -100,11 +100,9 @@ export function deriveOutcomeAttention(
       continue;
     }
     const currentDecision = currentOutcomeDecision(record, criterion, projections, observedAt)?.decision;
+    addAction("review-evidence");
     if (currentDecision === undefined) {
       addAttention("verification-required", criterion.id);
-      addAction("review-evidence");
-    } else if (currentDecision.status === "rejected") {
-      addAction("review-evidence");
     }
   }
   if (hasLinkedWork) {

@@ -1,4 +1,4 @@
-import type { OutcomeDetail, OutcomeNextAction } from "@openclaw/outcomes-contract";
+import type { OutcomeDetail } from "@openclaw/outcomes-contract";
 import type { ApplicationContext } from "../../app/context.ts";
 import { t } from "../../i18n/index.ts";
 import { formatUiError } from "../../lib/format-error.ts";
@@ -352,7 +352,14 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
   }
 
   protected canOutcomeAction(
-    action: OutcomeNextAction,
+    action:
+      | "refresh"
+      | "edit-contract"
+      | "unlink-work"
+      | "activate"
+      | "cancel"
+      | "review-evidence"
+      | "accept",
     method:
       | "outcomes.refresh"
       | "outcomes.update"

@@ -525,6 +525,42 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
 
+  it("keeps an accepted current closure reviewable without falsely requiring verification", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const current = toOutcomeDetail(input, 10);
+    if (current.closureHash === null || input.planHash === null) {
+      throw new Error("fixture closure must be current");
+    }
+    input.phase = "accepted";
+    input.acceptances = [
+      {
+        id: "acceptance-current",
+        requestHash: "a".repeat(64),
+        acceptedRevision: input.revision,
+        profileId: "manager-1",
+        acceptedAt: 10,
+        planGeneration: input.planGeneration,
+        planHash: input.planHash,
+        closureHash: current.closureHash,
+        acceptedPlan: {
+          outcomeId: input.id,
+          objective: input.objective,
+          contractRevision: input.contractRevision,
+          planGeneration: input.planGeneration,
+          criteria: input.criteria,
+        },
+      },
+    ];
+
+    const detail = toOutcomeDetail(valid(input), 10);
+
+    expect(detail.attention).not.toContainEqual({
+      code: "verification-required",
+      criterionId: "c-1",
+    });
+    expect(detail.nextActions).toContain("review-evidence");
+  });
+
   it("includes a human decision note in the public detail history", () => {
     const input = withCurrentVerifiedEvidence(record());
     first(input.decisions).note = "private reviewer rationale";

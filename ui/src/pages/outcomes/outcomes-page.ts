@@ -165,6 +165,7 @@ class OutcomesPage extends OutcomesPageMutations {
         verificationNote: this.verificationNote,
         verificationReplayPending: this.verificationReplayPending,
         acceptanceReplayPending: this.acceptanceReplayPending,
+        assuranceRefreshRequired: this.assuranceRefreshRequired,
         verificationStatus: this.verificationStatus,
         verifying: this.verifying,
       })}
