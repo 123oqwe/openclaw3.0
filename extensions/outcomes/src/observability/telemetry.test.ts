@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHarness, createParams, outcomeIds } from "../gateway/methods.test-support.js";
-import { recordOutcomeTelemetry } from "./telemetry.js";
+import {
+  recordOutcomeTelemetry,
+  type OutcomeTelemetryMethod,
+  type OutcomeTelemetryResult,
+} from "./telemetry.js";
 
 const telemetry = vi.hoisted(() => {
   const counter = { add: vi.fn() };
@@ -119,11 +123,28 @@ describe("Outcome Gateway telemetry", () => {
   });
 
   it("rejects an unbounded operation label instead of leaking it to telemetry", () => {
-    recordOutcomeTelemetry("Private objective: replace credentials", "success", Date.now());
+    const untrustedMethod: unknown = "Private objective: replace credentials";
+    recordOutcomeTelemetry(untrustedMethod as OutcomeTelemetryMethod, "success", Date.now());
 
     expect(telemetry.getMeter).not.toHaveBeenCalled();
     expect(telemetry.counter.add).not.toHaveBeenCalled();
     expect(telemetry.histogram.record).not.toHaveBeenCalled();
+  });
+
+  it("drops invalid runtime results and records finite latency", () => {
+    const untrustedResult: unknown = "Private result: credentials";
+    recordOutcomeTelemetry("export", untrustedResult as OutcomeTelemetryResult, Date.now());
+
+    expect(telemetry.getMeter).not.toHaveBeenCalled();
+    expect(telemetry.counter.add).not.toHaveBeenCalled();
+    expect(telemetry.histogram.record).not.toHaveBeenCalled();
+
+    recordOutcomeTelemetry("export", "success", Number.NaN);
+
+    expect(telemetry.histogram.record).toHaveBeenCalledWith(0, {
+      method: "export",
+      result: "success",
+    });
   });
 
   it("preserves the Gateway response when the telemetry provider throws", async () => {
