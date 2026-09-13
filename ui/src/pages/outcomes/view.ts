@@ -11,6 +11,7 @@ import { t } from "../../i18n/index.ts";
 import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
 import { formatDateTimeMs } from "../../lib/format.ts";
 import "../../styles/outcomes.css";
+import { renderOutcomeDeleteDialog } from "./outcome-delete-dialog.ts";
 import { renderOutcomeVerificationDialog } from "./outcome-verification-dialog.ts";
 import {
   acceptanceValidityLabel,
@@ -539,41 +540,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           </section>
         </openclaw-modal-dialog>`
       : nothing}
-    ${data.deleteConfirmationOpen
-      ? html`<openclaw-modal-dialog
-          label=${t("outcomesPage.deleteOutcome")}
-          description=${t("outcomesPage.deleteHelp")}
-          @modal-cancel=${data.onDeleteConfirmationDismiss}
-        >
-          <section class="outcome-cancel-dialog" aria-busy=${data.deleting ? "true" : "false"}>
-            <h2>${t("outcomesPage.deleteOutcome")}</h2>
-            <p>${t("outcomesPage.deleteHelp")}</p>
-            ${data.deleteError
-              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
-                  ${data.deleteError}
-                </p>`
-              : nothing}
-            <div class="outcome-cancel-dialog__actions">
-              <button
-                data-outcome-dismiss-delete
-                type="button"
-                ?disabled=${data.deleting}
-                @click=${() => data.onDeleteConfirmationDismiss(new Event("modal-cancel"))}
-              >
-                ${t("common.back")}
-              </button>
-              <button
-                data-outcome-confirm-delete
-                type="button"
-                ?disabled=${data.deleting}
-                @click=${data.onConfirmDelete}
-              >
-                ${data.deleting ? t("outcomesPage.deleting") : t("common.confirm")}
-              </button>
-            </div>
-          </section>
-        </openclaw-modal-dialog>`
-      : nothing}
+    ${renderOutcomeDeleteDialog(data)}
     ${data.editDialogOpen
       ? html`<openclaw-modal-dialog
           label=${t("outcomesPage.editOutcome")}

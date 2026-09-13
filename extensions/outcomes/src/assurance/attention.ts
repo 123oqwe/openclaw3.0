@@ -28,7 +28,11 @@ export function deriveOutcomeAttention(
     const hasUncertainOperation = record.operations.some((operation) =>
       ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
     );
-    return { attention: [], nextActions: hasUncertainOperation ? [] : ["delete"] };
+    return {
+      attention: [],
+      nextActions:
+        hasUncertainOperation || record.acceptances.length > 0 ? [] : ["delete"],
+    };
   }
   const attention: OutcomeDetail["attention"] = [];
   const nextActions: OutcomeNextAction[] = [];
@@ -138,7 +142,7 @@ export function deriveOutcomeAttention(
   if ((record.phase === "draft" || record.phase === "active") && !hasUncertainOperation) {
     addAction("cancel");
   }
-  if (record.phase === "draft" && !hasUncertainOperation) {
+  if (record.phase === "draft" && !hasUncertainOperation && record.acceptances.length === 0) {
     addAction("delete");
   }
   const hasCurrentAcceptance =

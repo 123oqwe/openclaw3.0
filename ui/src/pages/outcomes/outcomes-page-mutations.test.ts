@@ -46,13 +46,19 @@ describe("OutcomesPage mutations", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="export"]')).not.toBeNull();
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="delete"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="export"]'),
+      ).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="delete"]'),
+      ).not.toBeNull();
     });
     expect(request).not.toHaveBeenCalledWith("outcomes.export", expect.anything());
     page.querySelector<HTMLButtonElement>('[data-outcome-action="delete"]')?.click();
@@ -60,7 +66,10 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector('[data-outcome-confirm-delete]')).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-confirm-delete]')?.click();
-    expect(request).toHaveBeenCalledWith("outcomes.delete", { expectedRevision: 1, id: "outcome-a" });
+    expect(request).toHaveBeenCalledWith("outcomes.delete", {
+      expectedRevision: 1,
+      id: "outcome-a",
+    });
   });
 
   it("offers export without requiring a delete action", async () => {
@@ -84,12 +93,16 @@ describe("OutcomesPage mutations", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="export"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="export"]'),
+      ).not.toBeNull();
     });
     expect(request).not.toHaveBeenCalledWith("outcomes.export", expect.anything());
     expect(page.querySelector('[data-outcome-action="delete"]')).toBeNull();

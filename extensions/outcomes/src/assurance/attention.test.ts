@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { planHash } from "../domain/canonical-plan.js";
+import { parseOutcomeRecord } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import { deriveOutcomeAttention } from "./attention.js";
 
@@ -15,7 +17,9 @@ function record(): OutcomeRecord {
     contractRevision: 1,
     planGeneration: 0,
     planHash: null,
-    criteria: [{ id: "criterion-1", text: "Done", required: true, workRefs: [] }],
+    criteria: [
+      { id: "criterion-1", text: "Done", required: true, workRefs: [] },
+    ],
     projections: [],
     evidence: [],
     decisions: [],
@@ -37,11 +41,30 @@ describe("Outcome delete guidance", () => {
   );
 
   it("withholds delete after an accepted Outcome is later changed and cancelled", () => {
-    const acceptedThenCancelled: OutcomeRecord = {
+    const acceptedPlan = {
+      outcomeId: "outcome-1",
+      objective: "Ship safely",
+      contractRevision: 1,
+      planGeneration: 1,
+      criteria: [
+        { id: "criterion-1", text: "Done", required: true, workRefs: [] },
+      ],
+    };
+    const currentPlan = {
+      ...acceptedPlan,
+      objective: "Ship safely after a contract update",
+      contractRevision: 2,
+      planGeneration: 2,
+    };
+    const acceptedThenCancelled = parseOutcomeRecord({
       ...record(),
       phase: "cancelled",
       revision: 4,
       contractRevision: 2,
+      planGeneration: currentPlan.planGeneration,
+      planHash: planHash(currentPlan),
+      objective: currentPlan.objective,
+      criteria: currentPlan.criteria,
       acceptances: [
         {
           id: "acceptance-1",
@@ -49,19 +72,13 @@ describe("Outcome delete guidance", () => {
           acceptedRevision: 2,
           profileId: "manager-1",
           acceptedAt: 2,
-          planGeneration: 1,
-          planHash: "c".repeat(64),
+          planGeneration: acceptedPlan.planGeneration,
+          planHash: planHash(acceptedPlan),
           closureHash: "d".repeat(64),
-          acceptedPlan: {
-            outcomeId: "outcome-1",
-            objective: "Ship safely",
-            contractRevision: 1,
-            planGeneration: 1,
-            criteria: [{ id: "criterion-1", text: "Done", required: true, workRefs: [] }],
-          },
+          acceptedPlan,
         },
       ],
-    };
+    });
 
     expect(
       deriveOutcomeAttention(acceptedThenCancelled, [], 4, null).nextActions,
