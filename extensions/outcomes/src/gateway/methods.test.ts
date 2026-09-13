@@ -783,6 +783,20 @@ describe("P-02 Outcome handlers", () => {
     const refreshedOutcome = (refreshed[1] as { outcome: { criteria: Array<{ evidenceSetHash: string }> ; planHash: string; revision: number } }).outcome;
     const criterion = refreshedOutcome.criteria[0]!;
 
+    const writesBeforeRejectedGuard = harness.writes();
+    expect(
+      await harness.call("outcomes.verifyCriterion", {
+        id,
+        expectedRevision: refreshedOutcome.revision,
+        decisionId: "123e4567-e89b-42d3-a456-426614174019",
+        criterionId,
+        status: "verified",
+        planHash: "f".repeat(64),
+        evidenceSetHash: criterion.evidenceSetHash,
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
+    expect(harness.writes()).toBe(writesBeforeRejectedGuard);
+
     const verified = await harness.call("outcomes.verifyCriterion", {
       id,
       expectedRevision: refreshedOutcome.revision,
@@ -797,6 +811,30 @@ describe("P-02 Outcome handlers", () => {
       { replayed: false, receipt: { kind: "verify-criterion", committedRevision: 5 } },
     ]);
     const verifiedOutcome = (verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }).outcome;
+
+    const writesBeforeReplay = harness.writes();
+    harness.gatewayRequest.mockRejectedValueOnce(
+      Object.assign(new Error("owner unavailable"), { code: "GATEWAY_TIMEOUT" }),
+    );
+    expect(
+      await harness.call("outcomes.verifyCriterion", {
+        id,
+        expectedRevision: refreshedOutcome.revision,
+        decisionId: "123e4567-e89b-42d3-a456-426614174020",
+        criterionId,
+        status: "verified",
+        planHash: refreshedOutcome.planHash,
+        evidenceSetHash: criterion.evidenceSetHash,
+      }),
+    ).toMatchObject([
+      true,
+      {
+        replayed: true,
+        receipt: { kind: "verify-criterion", committedRevision: 5 },
+        outcome: { revision: 5, work: [], evidence: [] },
+      },
+    ]);
+    expect(harness.writes()).toBe(writesBeforeReplay);
 
     expect(
       await harness.call("outcomes.accept", {

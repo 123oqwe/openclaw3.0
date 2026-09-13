@@ -836,6 +836,7 @@ describe("Outcome repository atomic contract", () => {
       requestHash: "d".repeat(64),
       criterionId: "c-1",
       status: "verified",
+      planHash: record.planHash!,
       evidenceSetHash: evidenceHash,
       profileId: record.managerProfileId,
       serverTime: 42,
@@ -884,6 +885,7 @@ describe("Outcome repository atomic contract", () => {
       requestHash: "d".repeat(64),
       criterionId: "c-1",
       status: "verified" as const,
+      planHash: record.planHash!,
       evidenceSetHash: evidenceSetHash({
         criterionId: "c-1",
         planGeneration: record.planGeneration,
@@ -904,6 +906,27 @@ describe("Outcome repository atomic contract", () => {
     expect(
       reduceOutcomeDecision(committed.record, { ...mutation, requestHash: "e".repeat(64) }),
     ).toMatchObject({ kind: "conflict", replayed: false, record: committed.record });
+  });
+
+  it("rejects a decision whose client plan guard differs without changing the record", () => {
+    const record = assuredActiveRecord();
+    const result = reduceOutcomeDecision(record, {
+      expectedRevision: record.revision,
+      id: "decision-wrong-plan",
+      requestHash: "d".repeat(64),
+      criterionId: "c-1",
+      status: "verified",
+      planHash: "f".repeat(64),
+      evidenceSetHash: evidenceSetHash({
+        criterionId: "c-1",
+        planGeneration: record.planGeneration,
+        sourceDigests: ["proof-digest-1"],
+      }),
+      profileId: record.managerProfileId,
+      serverTime: 42,
+    });
+
+    expect(result).toEqual({ kind: "rejected", replayed: false, record });
   });
 
   it("rejects title updates for cancelled outcomes", () => {

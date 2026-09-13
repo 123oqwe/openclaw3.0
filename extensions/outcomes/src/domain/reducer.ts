@@ -94,6 +94,7 @@ export type OutcomeDecisionMutation = {
   requestHash: string;
   criterionId: string;
   status: "verified" | "rejected";
+  planHash: string;
   evidenceSetHash: string;
   profileId: string;
   note?: string;
@@ -630,6 +631,7 @@ export function reduceOutcomeDecision(
     sourceDigests,
   });
   if (
+    mutation.planHash !== observed.planHash ||
     mutation.evidenceSetHash !== currentEvidenceSetHash ||
     (mutation.status === "verified" && sourceDigests.length === 0) ||
     (mutation.status === "rejected" && mutation.note === undefined)

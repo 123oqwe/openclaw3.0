@@ -125,6 +125,21 @@ function respondAssuranceMutation(
   );
 }
 
+async function respondReplayedAssuranceMutation(
+  api: OpenClawPluginApi,
+  respond: GatewayRespond,
+  record: OutcomeRecord,
+  now: number,
+  receipt: { kind: "verify-criterion" | "accept"; id: string; committedRevision: number },
+): Promise<void> {
+  const presentation = await mutationPresentation(api, { kind: "updated", record }, now);
+  respond(true, {
+    outcome: toOutcomeDetail(record, now, presentation?.authorizedSources, presentation?.projections),
+    replayed: true,
+    receipt,
+  });
+}
+
 /** Register the P-02 first package; every persisted access is scoped to the authenticated owner. */
 export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void {
   const repository = createOutcomeRepository(
@@ -574,6 +589,15 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
       }
+      const requestHash = outcomeDecisionRequestHash({
+        id: request.id,
+        decisionId: request.decisionId,
+        criterionId: request.criterionId,
+        status: request.status,
+        planHash: request.planHash,
+        evidenceSetHash: request.evidenceSetHash,
+        ...(request.note === undefined ? {} : { note: request.note }),
+      });
       let record: OutcomeRecord | undefined;
       try {
         record = await repository.getOwned(owner, request.id);
@@ -585,6 +609,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         return fail(respond, "NOT_FOUND");
       }
       const now = Date.now();
+      const existing = record.decisions.find((decision) => decision.id === request.decisionId);
+      if (existing !== undefined) {
+        if (existing.requestHash !== requestHash) {
+          return fail(respond, "REVISION_CONFLICT");
+        }
+        await respondReplayedAssuranceMutation(api, respond, record, now, {
+          kind: "verify-criterion",
+          id: request.decisionId,
+          committedRevision: existing.decidedRevision,
+        });
+        return;
+      }
       let candidate: RefreshCandidate;
       try {
         candidate = buildRefreshCandidate(record, await readAuthorizedWorkboardCards(api), now);
@@ -592,15 +628,6 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond(false, undefined, outcomeError(outcomeOwnerError(error)));
         return;
       }
-      const requestHash = outcomeDecisionRequestHash({
-        id: request.id,
-        decisionId: request.decisionId,
-        criterionId: request.criterionId,
-        status: request.status,
-        planHash: request.planHash,
-        evidenceSetHash: request.evidenceSetHash,
-        ...(request.note === undefined ? {} : { note: request.note }),
-      });
       try {
         const decision = await repository.transactOwned(owner, request.id, (current) => {
           const mutation = reduceOutcomeDecision(current, {
@@ -609,6 +636,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
             requestHash,
             criterionId: request.criterionId,
             status: request.status,
+            planHash: request.planHash,
             evidenceSetHash: request.evidenceSetHash,
             profileId: owner,
             ...(request.note === undefined ? {} : { note: request.note }),
@@ -657,6 +685,12 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
       if (!request) {
         return fail(respond, "INVALID_REQUEST");
       }
+      const requestHash = outcomeAcceptanceRequestHash({
+        id: request.id,
+        acceptanceId: request.acceptanceId,
+        planHash: request.planHash,
+        closureHash: request.closureHash,
+      });
       let record: OutcomeRecord | undefined;
       try {
         record = await repository.getOwned(owner, request.id);
@@ -668,6 +702,18 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         return fail(respond, "NOT_FOUND");
       }
       const now = Date.now();
+      const existing = record.acceptances.find((acceptance) => acceptance.id === request.acceptanceId);
+      if (existing !== undefined) {
+        if (existing.requestHash !== requestHash) {
+          return fail(respond, "REVISION_CONFLICT");
+        }
+        await respondReplayedAssuranceMutation(api, respond, record, now, {
+          kind: "accept",
+          id: request.acceptanceId,
+          committedRevision: existing.acceptedRevision,
+        });
+        return;
+      }
       let candidate: RefreshCandidate;
       try {
         candidate = buildRefreshCandidate(record, await readAuthorizedWorkboardCards(api), now);
@@ -675,12 +721,6 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         respond(false, undefined, outcomeError(outcomeOwnerError(error)));
         return;
       }
-      const requestHash = outcomeAcceptanceRequestHash({
-        id: request.id,
-        acceptanceId: request.acceptanceId,
-        planHash: request.planHash,
-        closureHash: request.closureHash,
-      });
       try {
         const decision = await repository.transactOwned(owner, request.id, (current) => {
           const mutation = reduceOutcomeAcceptance(current, {
