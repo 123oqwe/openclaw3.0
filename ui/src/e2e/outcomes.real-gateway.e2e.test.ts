@@ -358,7 +358,8 @@ suite.define(() => {
           socket.on("framereceived", ({ payload }) => {
             const frame = gatewayFrame(payload);
             const hello = isGatewayCallResult(frame?.payload) ? frame.payload : undefined;
-            const features = hello && isGatewayCallResult(hello.features) ? hello.features : undefined;
+            const features =
+              hello && isGatewayCallResult(hello.features) ? hello.features : undefined;
             if (
               frame?.type === "res" &&
               frame.ok === true &&
@@ -583,9 +584,15 @@ suite.define(() => {
         expect(disabledRefresh?.refreshStatus).toBe("unavailable");
         expect(disabledRefresh?.revision).toEqual(expect.any(Number));
         expect(disabledRefresh?.sourceIssueReasons).toContain("forbidden");
-        await page.getByText("Linked source unavailable", { exact: true }).waitFor({ state: "visible" });
-        await expect.poll(() => detail.locator(`[data-outcome-work-card="${cardId}"]`).count()).toBe(0);
-        await expect.poll(() => detail.locator(`[data-outcome-evidence="${proofId}"]`).count()).toBe(0);
+        await page
+          .getByText("Linked source unavailable", { exact: true })
+          .waitFor({ state: "visible" });
+        await expect
+          .poll(() => detail.locator(`[data-outcome-work-card="${cardId}"]`).count())
+          .toBe(0);
+        await expect
+          .poll(() => detail.locator(`[data-outcome-evidence="${proofId}"]`).count())
+          .toBe(0);
         await page.screenshot({
           fullPage: true,
           path: path.join(suite.artifactDir, "outcomes-workboard-unavailable.png"),
