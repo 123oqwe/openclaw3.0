@@ -21,6 +21,8 @@ describe("P-02 Outcome handlers", () => {
     ["outcomes.activate", {}],
     ["outcomes.refresh", {}],
     ["outcomes.cancel", {}],
+    ["outcomes.verifyCriterion", {}],
+    ["outcomes.accept", {}],
   ])("rejects malformed %s input before owner or repository access", async (method, params) => {
     const harness = createHarness();
     expect(await harness.call(method, params, null as never)).toMatchObject([
@@ -757,6 +759,57 @@ describe("P-02 Outcome handlers", () => {
       { code: "OUTCOME_INVALID_STATE" },
     ]);
     expect(harness.writes()).toBe(writes);
+  });
+
+  it("records a verified criterion and then accepts the exact current closure", async () => {
+    const harness = createHarness({
+      workboardCards: [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 2,
+          metadata: {
+            automation: { boardId: "board-a" },
+            proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
+            artifacts: [],
+          },
+        },
+      ],
+    });
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const refreshedOutcome = (refreshed[1] as { outcome: { criteria: Array<{ evidenceSetHash: string }> ; planHash: string; revision: number } }).outcome;
+    const criterion = refreshedOutcome.criteria[0]!;
+
+    const verified = await harness.call("outcomes.verifyCriterion", {
+      id,
+      expectedRevision: refreshedOutcome.revision,
+      decisionId: "123e4567-e89b-42d3-a456-426614174020",
+      criterionId,
+      status: "verified",
+      planHash: refreshedOutcome.planHash,
+      evidenceSetHash: criterion.evidenceSetHash,
+    });
+    expect(verified).toMatchObject([
+      true,
+      { replayed: false, receipt: { kind: "verify-criterion", committedRevision: 5 } },
+    ]);
+    const verifiedOutcome = (verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }).outcome;
+
+    expect(
+      await harness.call("outcomes.accept", {
+        id,
+        expectedRevision: verifiedOutcome.revision,
+        acceptanceId: "123e4567-e89b-42d3-a456-426614174021",
+        planHash: verifiedOutcome.planHash,
+        closureHash: verifiedOutcome.closureHash,
+      }),
+    ).toMatchObject([
+      true,
+      { replayed: false, outcome: { phase: "accepted", revision: 6 }, receipt: { kind: "accept" } },
+    ]);
   });
 
   it("does not write when cancellation is terminal or an operation is in flight", async () => {

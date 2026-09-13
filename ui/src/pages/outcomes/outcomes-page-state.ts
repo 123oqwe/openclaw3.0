@@ -34,6 +34,12 @@ export abstract class OutcomesPageState extends OpenClawLightDomElement {
   @state() protected cancelling = false;
   @state() protected mutationError: string | null = null;
   @state() protected refreshing = false;
+  @state() protected verificationDialogOpen = false;
+  @state() protected verifying = false;
+  @state() protected verificationError: string | null = null;
+  @state() protected verificationCriterionId = "";
+  @state() protected verificationStatus: "verified" | "rejected" = "verified";
+  @state() protected verificationNote = "";
   @state() protected selectedOutcomeId: string | null = null;
   @state() protected mutationInFlightOutcomeLocks: readonly OutcomeMutationLock[] = [];
   @state() protected createDialogOpen = false;
@@ -63,6 +69,7 @@ export abstract class OutcomesPageState extends OpenClawLightDomElement {
   protected createRequestSequence = 0;
   protected editRequestSequence = 0;
   protected linkRequestSequence = 0;
+  protected assuranceRequestSequence = 0;
   protected createRequest: OutcomeCreateParams | null = null;
   protected gatewayIdentity: OutcomeGatewayIdentity | null = null;
   protected pendingListFocusId: string | null = null;

@@ -20,6 +20,75 @@ afterEach(() => {
 });
 
 describe("OutcomesPage mutations", () => {
+  it("submits a human verification only through the advertised Gateway method", async () => {
+    const detail = {
+      ...outcomeDetail("outcome-a", "Outcome A"),
+      criteria: [
+        {
+          ...outcomeDetail("outcome-a", "Outcome A").criteria[0]!,
+          evidenceSetHash: "e".repeat(64),
+        },
+      ],
+      nextActions: ["review-evidence"] as const,
+      phase: "active" as const,
+      planGeneration: 1,
+      planHash: "a".repeat(64),
+      revision: 4,
+    };
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({ outcome: detail });
+      }
+      if (method === "outcomes.verifyCriterion") {
+        return Promise.resolve({ outcome: { ...detail, revision: 5 } });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.verifyCriterion"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
+    page
+      .querySelector<HTMLFormElement>("[data-outcome-verification-form]")
+      ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(request).toHaveBeenCalledWith("outcomes.verifyCriterion", {
+        criterionId: "criterion-1",
+        decisionId: expect.any(String),
+        evidenceSetHash: "e".repeat(64),
+        expectedRevision: 4,
+        id: "outcome-a",
+        planHash: "a".repeat(64),
+        status: "verified",
+      });
+    });
+  });
+
   it("refreshes a selected Outcome only after the Gateway confirms the mutation", async () => {
     let resolveRefresh: ((result: { outcome: OutcomeDetail }) => void) | undefined;
     const request = vi.fn((method: string) => {

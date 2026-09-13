@@ -26,11 +26,13 @@ registerOutcomesEnglish();
 
 export type OutcomeDetailViewData = {
   canActivate: boolean;
+  canAccept: boolean;
   canCancel: boolean;
   canEdit: boolean;
   canLink: boolean;
   canRefresh: boolean;
   canUnlink: boolean;
+  canVerify: boolean;
   cancelConfirmationOpen: boolean;
   cancelError: string | null;
   cancelling: boolean;
@@ -46,17 +48,24 @@ export type OutcomeDetailViewData = {
   loading: boolean;
   onBack: () => void;
   onActivate: () => void;
+  onAccept: () => void;
   onDismissEdit: (event: Event) => void;
   onEditCriterionInput: (index: number, value: string) => void;
   onEditInput: (field: "title" | "objective", value: string) => void;
   onRequestAddEditCriterion: () => void;
   onRequestEdit: () => void;
+  onRequestVerify: () => void;
   onRequestLink: () => void;
   onRequestRemoveEditCriterion: (index: number) => void;
   onCancelConfirmationDismiss: (event: Event) => void;
   onConfirmCancel: () => void;
   onRequestCancel: () => void;
   onRefresh: () => void;
+  onDismissVerification: (event: Event) => void;
+  onSubmitVerification: (event: SubmitEvent) => void;
+  onVerificationCriterionChange: (id: string) => void;
+  onVerificationNoteChange: (note: string) => void;
+  onVerificationStatusChange: (status: "verified" | "rejected") => void;
   onSubmitEdit: (event: SubmitEvent) => void;
   onDismissLink: (event: Event) => void;
   onLinkCardChange: (id: string) => void;
@@ -75,6 +84,12 @@ export type OutcomeDetailViewData = {
   linkDialogOpen: boolean;
   linkError: string | null;
   linking: boolean;
+  verificationCriterionId: string;
+  verificationDialogOpen: boolean;
+  verificationError: string | null;
+  verificationNote: string;
+  verificationStatus: "verified" | "rejected";
+  verifying: boolean;
 };
 
 function evidenceKindLabel(kind: OutcomeEvidenceKind): string {
@@ -302,6 +317,35 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
             : nothing}
         </section>`
       : nothing}
+    ${data.canVerify && data.detail.nextActions.includes("review-evidence")
+      ? html`<section class="outcome-detail__section outcome-detail__actions">
+          <button
+            data-outcome-action="review-evidence"
+            type="button"
+            ?disabled=${data.mutationInFlight}
+            @click=${data.onRequestVerify}
+          >
+            ${t("outcomesPage.nextAction.reviewEvidence")}
+          </button>
+        </section>`
+      : nothing}
+    ${data.canAccept && data.detail.nextActions.includes("accept")
+      ? html`<section class="outcome-detail__section outcome-detail__actions" aria-live="polite">
+          <button
+            data-outcome-action="accept"
+            type="button"
+            ?disabled=${data.mutationInFlight}
+            @click=${data.onAccept}
+          >
+            ${t("outcomesPage.nextAction.accept")}
+          </button>
+          ${data.mutationError
+            ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                ${data.mutationError}
+              </p>`
+            : nothing}
+        </section>`
+      : nothing}
     ${data.canCancel && data.detail.nextActions.includes("cancel")
       ? html`<button
           class="outcome-detail__cancel"
@@ -508,6 +552,85 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
                 ?disabled=${data.linking || data.linkCardsLoading || !data.linkCardId}
               >
                 ${data.linking ? t("common.loading") : t("common.confirm")}
+              </button>
+            </div>
+          </form>
+        </openclaw-modal-dialog>`
+      : nothing}
+    ${data.verificationDialogOpen
+      ? html`<openclaw-modal-dialog
+          label=${t("outcomesPage.verifyCriterion")}
+          description=${t("outcomesPage.verifyHelp")}
+          @modal-cancel=${data.onDismissVerification}
+        >
+          <form
+            class="outcome-create-dialog"
+            data-outcome-verification-form
+            aria-busy=${data.verifying ? "true" : "false"}
+            @submit=${data.onSubmitVerification}
+          >
+            <h2>${t("outcomesPage.verifyCriterion")}</h2>
+            <p>${t("outcomesPage.verifyHelp")}</p>
+            <label>
+              ${t("outcomesPage.criterion")}
+              <select
+                name="criterion"
+                required
+                ?disabled=${data.verifying}
+                .value=${data.verificationCriterionId}
+                @change=${(event: Event) =>
+                  data.onVerificationCriterionChange(formControlValue(event))}
+              >
+                ${data.detail.criteria
+                  .filter((criterion) => criterion.evidenceSetHash !== null)
+                  .map((criterion) => html`<option value=${criterion.id}>${criterion.text}</option>`)}
+              </select>
+            </label>
+            <label>
+              ${t("outcomesPage.verificationStatus")}
+              <select
+                name="status"
+                required
+                ?disabled=${data.verifying}
+                .value=${data.verificationStatus}
+                @change=${(event: Event) =>
+                  data.onVerificationStatusChange(
+                    formControlValue(event) === "rejected" ? "rejected" : "verified",
+                  )}
+              >
+                <option value="verified">${t("outcomesPage.verified")}</option>
+                <option value="rejected">${t("outcomesPage.rejected")}</option>
+              </select>
+            </label>
+            ${data.verificationStatus === "rejected"
+              ? html`<label>
+                  ${t("outcomesPage.rejectionNote")}
+                  <textarea
+                    name="note"
+                    required
+                    ?disabled=${data.verifying}
+                    .value=${data.verificationNote}
+                    @input=${(event: InputEvent) =>
+                      data.onVerificationNoteChange(formControlValue(event))}
+                  ></textarea>
+                </label>`
+              : nothing}
+            ${data.verificationError
+              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
+                  ${data.verificationError}
+                </p>`
+              : nothing}
+            <div class="outcome-cancel-dialog__actions">
+              <button
+                data-outcome-dismiss-verification
+                type="button"
+                ?disabled=${data.verifying}
+                @click=${() => data.onDismissVerification(new Event("modal-cancel"))}
+              >
+                ${t("common.back")}
+              </button>
+              <button data-outcome-confirm-verification type="submit" ?disabled=${data.verifying}>
+                ${data.verifying ? t("common.loading") : t("common.confirm")}
               </button>
             </div>
           </form>

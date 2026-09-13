@@ -3,6 +3,7 @@ import { t } from "../../i18n/index.ts";
 import { formatUiError } from "../../lib/format-error.ts";
 import {
   activateOutcome,
+  acceptOutcome,
   cancelOutcome,
   createOutcome,
   linkOutcomeWorkboard,
@@ -10,11 +11,202 @@ import {
   refreshOutcome,
   updateOutcome,
   unlinkOutcomeWorkboard,
+  verifyOutcomeCriterion,
 } from "./client.ts";
 import { OutcomesPageGateway } from "./outcomes-page-gateway.ts";
 import { replaceOutcomeSummary } from "./outcomes-page-model.ts";
 
 export abstract class OutcomesPageMutations extends OutcomesPageGateway {
+  protected openVerificationDialog() {
+    const detail = this.detail;
+    if (
+      !detail ||
+      this.verifying ||
+      !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion")
+    ) {
+      return;
+    }
+    const criterion = detail.criteria.find((item) => item.evidenceSetHash !== null);
+    if (!criterion) {
+      return;
+    }
+    this.verificationCriterionId = criterion.id;
+    this.verificationStatus = "verified";
+    this.verificationNote = "";
+    this.verificationError = null;
+    this.verificationDialogOpen = true;
+  }
+
+  protected dismissVerificationDialog(event?: Event) {
+    if (this.verifying) {
+      event?.preventDefault();
+      return;
+    }
+    this.verificationDialogOpen = false;
+    this.verificationError = null;
+  }
+
+  protected updateVerificationCriterion(id: string) {
+    if (!this.verifying) {
+      this.verificationCriterionId = id;
+    }
+  }
+
+  protected updateVerificationStatus(status: "verified" | "rejected") {
+    if (!this.verifying) {
+      this.verificationStatus = status;
+    }
+  }
+
+  protected updateVerificationNote(note: string) {
+    if (!this.verifying) {
+      this.verificationNote = note;
+    }
+  }
+
+  protected async submitVerification(event: SubmitEvent) {
+    event.preventDefault();
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    const criterion = detail?.criteria.find((item) => item.id === this.verificationCriterionId);
+    const note = this.verificationNote.trim();
+    if (
+      this.verifying ||
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !detail.planHash ||
+      !criterion?.evidenceSetHash ||
+      (this.verificationStatus === "rejected" && !note) ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion") ||
+      this.outcomeMutationIsInFlight(id)
+    ) {
+      return;
+    }
+    const ownerId = snapshot.selfUser.id;
+    const sequence = ++this.assuranceRequestSequence;
+    const expectedRevision = detail.revision;
+    this.verificationError = null;
+    this.verifying = true;
+    this.detailRequestSequence += 1;
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
+    const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
+    try {
+      const outcome = await verifyOutcomeCriterion(client, {
+        id,
+        expectedRevision,
+        decisionId: crypto.randomUUID(),
+        criterionId: criterion.id,
+        status: this.verificationStatus,
+        planHash: detail.planHash,
+        evidenceSetHash: criterion.evidenceSetHash,
+        ...(note ? { note } : {}),
+      });
+      if (
+        sequence === this.assuranceRequestSequence &&
+        id === this.selectedOutcomeId &&
+        outcome.revision >= expectedRevision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        mutationResultWasCurrent = true;
+        this.detailRequestSequence += 1;
+        this.replaceOutcome(outcome, requestStartedAt);
+        this.verificationDialogOpen = false;
+      }
+    } catch (error) {
+      if (
+        sequence === this.assuranceRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        mutationResultWasCurrent = true;
+        this.verificationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
+      if (
+        sequence === this.assuranceRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        this.verifying = false;
+      }
+    }
+  }
+
+  protected async acceptSelectedOutcome() {
+    const detail = this.detail;
+    const id = this.selectedOutcomeId;
+    const snapshot = this.gateway.snapshot;
+    const client = this.gateway.client;
+    const scope = this.gateway.capture();
+    if (
+      !detail ||
+      !id ||
+      detail.id !== id ||
+      !detail.planHash ||
+      !detail.closureHash ||
+      !snapshot?.selfUser?.id ||
+      !client ||
+      !scope ||
+      !this.canOutcomeAction("accept", "outcomes.accept") ||
+      this.outcomeMutationIsInFlight(id)
+    ) {
+      return;
+    }
+    const ownerId = snapshot.selfUser.id;
+    const sequence = ++this.assuranceRequestSequence;
+    const expectedRevision = detail.revision;
+    this.mutationError = null;
+    this.detailRequestSequence += 1;
+    const mutationLock = this.beginOutcomeMutation(id, ownerId);
+    const requestStartedAt = performance.now();
+    let mutationResultWasCurrent = false;
+    try {
+      const outcome = await acceptOutcome(client, {
+        id,
+        expectedRevision,
+        acceptanceId: crypto.randomUUID(),
+        planHash: detail.planHash,
+        closureHash: detail.closureHash,
+      });
+      if (
+        sequence === this.assuranceRequestSequence &&
+        id === this.selectedOutcomeId &&
+        outcome.revision >= expectedRevision &&
+        this.gateway.isCurrent(scope)
+      ) {
+        mutationResultWasCurrent = true;
+        this.detailRequestSequence += 1;
+        this.replaceOutcome(outcome, requestStartedAt);
+      }
+    } catch (error) {
+      if (
+        sequence === this.assuranceRequestSequence &&
+        id === this.selectedOutcomeId &&
+        this.gateway.isCurrent(scope)
+      ) {
+        mutationResultWasCurrent = true;
+        this.mutationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
+      }
+    } finally {
+      this.endOutcomeMutation(mutationLock);
+      if (!mutationResultWasCurrent) {
+        this.revalidateAfterSettledMutation(mutationLock);
+      }
+    }
+  }
+
   protected openCreateDialog() {
     if (!this.canCreateOutcome() || this.creating) {
       return;

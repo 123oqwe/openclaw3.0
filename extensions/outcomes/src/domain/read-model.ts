@@ -197,7 +197,6 @@ export function toOutcomeDetail(
       planGeneration: decision.planGeneration,
       planHash: decision.planHash,
       decidedPlan: toOutcomePlanSnapshotView(decision.decidedPlan, sourcesByRef),
-      ...(decision.note === undefined ? {} : { note: decision.note }),
     }));
   const acceptances: OutcomeDetail["acceptances"] = record.acceptances
     .toSorted((left, right) => right.acceptedRevision - left.acceptedRevision)

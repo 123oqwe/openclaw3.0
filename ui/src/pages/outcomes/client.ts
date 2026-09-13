@@ -2,11 +2,14 @@ import type {
   OutcomeCreateParams,
   OutcomeCreateResult,
   OutcomeDetail,
+  OutcomeAcceptParams,
+  OutcomeAssuranceMutationResult,
   OutcomeListResult,
   OutcomeListParams,
   OutcomeMutationResult,
   OutcomeRefreshResult,
   OutcomeUpdateParams,
+  OutcomeVerifyCriterionParams,
   OutcomeWorkboardLinkParams,
 } from "@openclaw/outcomes-contract";
 import type { WorkboardListResult } from "@openclaw/workboard-contract";
@@ -101,5 +104,24 @@ export async function activateOutcome(
     expectedRevision,
     id,
   });
+  return result.outcome;
+}
+
+export async function verifyOutcomeCriterion(
+  client: GatewayBrowserClient,
+  params: OutcomeVerifyCriterionParams,
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeAssuranceMutationResult>(
+    "outcomes.verifyCriterion",
+    params,
+  );
+  return result.outcome;
+}
+
+export async function acceptOutcome(
+  client: GatewayBrowserClient,
+  params: OutcomeAcceptParams,
+): Promise<OutcomeDetail> {
+  const result = await client.request<OutcomeAssuranceMutationResult>("outcomes.accept", params);
   return result.outcome;
 }
