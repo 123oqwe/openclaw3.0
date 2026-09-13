@@ -11,6 +11,7 @@ import { t } from "../../i18n/index.ts";
 import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
 import { formatDateTimeMs } from "../../lib/format.ts";
 import "../../styles/outcomes.css";
+import { renderOutcomeVerificationDialog } from "./outcome-verification-dialog.ts";
 import {
   acceptanceValidityLabel,
   attentionLabel,
@@ -20,7 +21,6 @@ import {
   phaseLabel,
   readinessLabel,
 } from "./outcomes-view-support.ts";
-import { renderOutcomeVerificationDialog } from "./outcome-verification-dialog.ts";
 
 export { renderCreateOutcomeDialog, renderOutcomesList };
 

@@ -21,11 +21,7 @@ import {
   reduceOutcomeUnlink,
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
-import {
-  createRequestHash,
-  evidenceSetHash,
-  planHash,
-} from "../domain/schema.js";
+import { createRequestHash, evidenceSetHash, planHash } from "../domain/schema.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
