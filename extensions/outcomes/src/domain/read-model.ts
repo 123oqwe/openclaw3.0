@@ -3,7 +3,6 @@ import type { OutcomeDetail, OutcomePlanSnapshotView, OutcomeSummary } from "@op
 import { deriveOutcomeAttention } from "../assurance/attention.js";
 import {
   currentOutcomeDecision,
-  currentOutcomeEvidenceSourceDigests,
   currentOutcomeProjections,
   deriveOutcomeClosure,
   isStaleOutcomeProjection,

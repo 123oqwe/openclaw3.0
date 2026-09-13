@@ -155,7 +155,8 @@ export function normalizeVerifyCriterion(params: unknown): PublicVerify | undefi
   const criterionId = normalizedUuid(input.criterionId);
   const planHash = normalizedHash(input.planHash);
   const evidenceSetHash = normalizedHash(input.evidenceSetHash);
-  const status = input.status;
+  const status: PublicVerify["status"] | undefined =
+    input.status === "verified" || input.status === "rejected" ? input.status : undefined;
   const note = input.note === undefined ? undefined : normalizedText(input.note, 1, 2000);
   if (
     !id ||
@@ -164,7 +165,7 @@ export function normalizeVerifyCriterion(params: unknown): PublicVerify | undefi
     !planHash ||
     !evidenceSetHash ||
     !positiveSafeInteger(input.expectedRevision) ||
-    (status !== "verified" && status !== "rejected") ||
+    status === undefined ||
     (input.note !== undefined && note === undefined) ||
     (status === "rejected" && note === undefined)
   ) {
