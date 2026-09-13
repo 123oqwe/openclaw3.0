@@ -56,6 +56,29 @@ describe("P-06 Outcome export Gateway handler", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("fails closed on an ambiguous Workboard card identity", async () => {
+    const harness = createHarness();
+    const id = await createLinkedOutcome(harness, outcomeIds[0]!);
+    const record = structuredClone(harness.records.get(id)!);
+    const writes = harness.writes();
+    harness.gatewayRequest.mockResolvedValue({
+      cards: [
+        { id: "card-a", status: "done", createdAt: 1, updatedAt: 2, metadata: {} },
+        { id: "card-a", status: "done", createdAt: 2, updatedAt: 2, metadata: {} },
+      ],
+    });
+    harness.gatewayRequest.mockClear();
+
+    expect(await harness.call("outcomes.export", { id })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_IDENTITY_CONFLICT" },
+    ]);
+    expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
+    expect(harness.records.get(id)).toEqual(record);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("keeps an optional no-proof accepted snapshot subject to current owner authorization", async () => {
     const harness = createHarness({
       workboardCards: [
