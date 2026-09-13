@@ -460,6 +460,10 @@ const identitySuite = createControlUiE2eSuite({
               [bobIdentity]: operatorScopes,
             },
             mode: "trusted-proxy",
+            // createOpenClawTestInstance seeds token auth for ordinary Gateway
+            // fixtures. This identity-switch proof must remove that token rather
+            // than combine mutually exclusive authentication modes.
+            token: undefined,
             trustedProxy: {
               allowLoopback: true,
               allowUsers: [aliceIdentity, bobIdentity],

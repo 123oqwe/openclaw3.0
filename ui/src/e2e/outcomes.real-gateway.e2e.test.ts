@@ -430,6 +430,9 @@ suite.define(() => {
 
         const freshnessClockBeforeExpiry = await page.evaluate(() => performance.now());
         await page.clock.fastForward(twentyFourHoursMs + 1);
+        // Playwright advances due timers during fastForward, then a short run
+        // lets the reactive render scheduled by the freshness callback settle.
+        await page.clock.runFor(100);
         const freshnessClockAfterExpiry = await page.evaluate(() => performance.now());
         expect(freshnessClockAfterExpiry - freshnessClockBeforeExpiry).toBeGreaterThanOrEqual(
           twentyFourHoursMs,
