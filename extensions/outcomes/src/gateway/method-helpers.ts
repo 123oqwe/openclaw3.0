@@ -35,6 +35,7 @@ export function respondMutation(
   now: number,
   presentation?: {
     authorizedSources: AuthorizedOutcomeSource[];
+    evidence: OutcomeRecord["evidence"];
     projections: OutcomeRecord["projections"];
   },
 ): void {
@@ -45,6 +46,7 @@ export function respondMutation(
         now,
         presentation?.authorizedSources,
         presentation?.projections,
+        presentation?.evidence,
       ),
     });
   }

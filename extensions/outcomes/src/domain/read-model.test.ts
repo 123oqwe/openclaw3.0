@@ -566,9 +566,12 @@ describe("Outcome P-01 read model", () => {
     const input = withCurrentVerifiedEvidence(record());
     const parsed = valid(input);
 
-    expect(toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash).toMatch(
-      /^[0-9a-f]{64}$/,
-    );
+    const freshEvidenceSetHash = toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]
+      ?.evidenceSetHash;
+    if (freshEvidenceSetHash === null || freshEvidenceSetHash === undefined) {
+      throw new Error("fixture must expose a fresh evidence guard");
+    }
+    expect(freshEvidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
     expect(
       toOutcomeDetail(
         parsed,

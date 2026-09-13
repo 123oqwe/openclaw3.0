@@ -973,6 +973,34 @@ describe("P-02 Outcome handlers", () => {
     ).toMatchObject([false, undefined, { code: "OUTCOME_OPERATION_CONFLICT" }]);
     expect(harness.gatewayRequest).not.toHaveBeenCalled();
     expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
+
+    cards[0]!.metadata.proof.push({
+      id: "proof-added-during-title-update",
+      status: "passed",
+      createdAt: 4,
+      label: "A title update must not hide changed current evidence",
+    });
+    harness.gatewayRequest.mockClear();
+    const writesBeforeTitleUpdate = harness.writes();
+    expect(
+      await harness.call("outcomes.update", {
+        id,
+        expectedRevision: 6,
+        patch: { title: "Accepted Outcome with a changed source" },
+      }),
+    ).toMatchObject([
+      true,
+      {
+        outcome: {
+          phase: "accepted",
+          title: "Accepted Outcome with a changed source",
+          closureHash: null,
+          acceptanceValidity: "needs-review",
+        },
+      },
+    ]);
+    expect(harness.writes()).toBe(writesBeforeTitleUpdate + 1);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
   });
 
   it("does not treat an empty-evidence rejection as current after new proof arrives", async () => {
