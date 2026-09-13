@@ -306,7 +306,7 @@ suite.define(() => {
       async ({ page }) => {
         await page.clock.install();
         const refreshRequestIds = new Set<string>();
-        const refreshReplies = new Map<string, boolean>();
+        const refreshReplies = new Map<string, GatewayCallResult>();
         let gatewayWebSocketCloseCount = 0;
         page.on("websocket", (socket) => {
           socket.on("close", () => {
@@ -329,7 +329,7 @@ suite.define(() => {
               typeof frame.id === "string" &&
               refreshRequestIds.has(frame.id)
             ) {
-              refreshReplies.set(frame.id, frame.ok === true);
+              refreshReplies.set(frame.id, frame);
             }
           });
         });
@@ -412,7 +412,7 @@ suite.define(() => {
           throw new Error("Outcome refresh did not emit a Gateway request ID");
         }
         await expect.poll(() => refreshReplies.has(refreshRequestId)).toBe(true);
-        expect(refreshReplies.get(refreshRequestId)).toBe(true);
+        expect(refreshReplies.get(refreshRequestId)?.ok).toBe(true);
         const evidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
         await evidence.waitFor({ state: "visible" });
         await expect
@@ -514,6 +514,20 @@ suite.define(() => {
         const disabledRefreshRequestCount = refreshRequestIds.size;
         await detail.locator('[data-outcome-action="refresh"]').click();
         await expect.poll(() => refreshRequestIds.size).toBe(disabledRefreshRequestCount + 1);
+        const disabledRefreshRequestId = Array.from(refreshRequestIds).at(-1);
+        if (!disabledRefreshRequestId) {
+          throw new Error("Disabled Workboard refresh did not emit a Gateway request ID");
+        }
+        await expect.poll(() => refreshReplies.has(disabledRefreshRequestId)).toBe(true);
+        expect(refreshReplies.get(disabledRefreshRequestId)).toMatchObject({
+          ok: true,
+          payload: {
+            outcome: {
+              sourceIssues: expect.arrayContaining([{ reason: "workboard-disabled" }]),
+            },
+            refresh: { reason: "workboard-disabled", status: "unavailable" },
+          },
+        });
         await page.getByText("Workboard disabled", { exact: true }).waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,

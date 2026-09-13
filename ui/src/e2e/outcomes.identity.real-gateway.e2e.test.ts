@@ -496,7 +496,10 @@ const identitySuite = createControlUiE2eSuite({
               userHeader: "x-forwarded-user",
             },
           },
-          controlUi: { enabled: true },
+          controlUi: {
+            allowedOrigins: [`http://127.0.0.1:${owner.port}`],
+            enabled: true,
+          },
           trustedProxies: ["127.0.0.1", "::1"],
         },
         plugins: {
