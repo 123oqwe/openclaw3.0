@@ -812,6 +812,29 @@ describe("P-02 Outcome handlers", () => {
     ]);
     const verifiedOutcome = (verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }).outcome;
 
+    const originalProofLabel = cards[0]!.metadata.proof[0]!.label;
+    cards[0]!.metadata.proof[0]!.label = "Changed after the client lost its response";
+    const writesBeforeChangedProofReplay = harness.writes();
+    const replayAfterProofChange = await harness.call("outcomes.verifyCriterion", {
+      id,
+      expectedRevision: refreshedOutcome.revision,
+      decisionId: "123e4567-e89b-42d3-a456-426614174020",
+      criterionId,
+      status: "verified",
+      planHash: refreshedOutcome.planHash,
+      evidenceSetHash: criterion.evidenceSetHash,
+    });
+    expect(replayAfterProofChange).toMatchObject([
+      true,
+      {
+        replayed: true,
+        receipt: { kind: "verify-criterion", committedRevision: 5 },
+        outcome: { closureHash: null, revision: 5 },
+      },
+    ]);
+    expect(harness.writes()).toBe(writesBeforeChangedProofReplay);
+    cards[0]!.metadata.proof[0]!.label = originalProofLabel;
+
     const writesBeforeReplay = harness.writes();
     harness.gatewayRequest.mockRejectedValueOnce(
       Object.assign(new Error("owner unavailable"), { code: "GATEWAY_TIMEOUT" }),
