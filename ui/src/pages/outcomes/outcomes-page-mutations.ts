@@ -1,3 +1,4 @@
+import type { OutcomeCreateParams } from "@openclaw/outcomes-contract";
 import { t } from "../../i18n/index.ts";
 import { formatUiError } from "../../lib/format-error.ts";
 import {
@@ -10,12 +11,7 @@ import {
   updateOutcome,
   unlinkOutcomeWorkboard,
 } from "./client.ts";
-import {
-  addCreateDraftCriterion,
-  removeCreateDraftCriterion,
-  updateCreateDraftCriterion,
-  updateCreateDraftField,
-} from "./outcomes-page-model.ts";
+import { replaceOutcomeSummary } from "./outcomes-page-model.ts";
 import { OutcomesPageGateway } from "./outcomes-page-gateway.ts";
 
 export abstract class OutcomesPageMutations extends OutcomesPageGateway {

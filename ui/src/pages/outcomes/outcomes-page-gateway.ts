@@ -9,6 +9,7 @@ import { isOutcomeDetailFresh, outcomeDetailFreshnessDeadline } from "./freshnes
 import {
   mergeOutcomeSummaries,
   replaceOutcomeSummary,
+  type OutcomeGatewayIdentity,
   type OutcomeMutationLock,
 } from "./outcomes-page-model.ts";
 import { OutcomesPageState } from "./outcomes-page-state.ts";

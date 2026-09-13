@@ -20,6 +20,8 @@ import {
   readinessLabel,
 } from "./outcomes-view-support.ts";
 
+export { renderCreateOutcomeDialog, renderOutcomesList };
+
 registerOutcomesEnglish();
 
 export type OutcomeDetailViewData = {
