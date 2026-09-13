@@ -179,6 +179,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
           this.assuranceRefreshRequired = true;
         } else {
           this.verificationReplayPending = true;
+          mutationResultWasCurrent = false;
         }
         this.verificationError = t("outcomesPage.mutationFailed", { error: formatUiError(error) });
       }

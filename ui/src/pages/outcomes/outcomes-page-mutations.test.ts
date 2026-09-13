@@ -97,7 +97,12 @@ describe("OutcomesPage mutations", () => {
         expectedRevision: 4,
       });
     });
-    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
+    page
+      .querySelector<HTMLFormElement>("[data-outcome-verification-form]")
+      ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(2));
     expect(verificationParams[1]).toMatchObject({
       decisionId: expect.any(String),
@@ -309,7 +314,12 @@ describe("OutcomesPage mutations", () => {
     });
     expect(page.querySelector('[data-outcome-action="refresh"]')).not.toBeNull();
     expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
-    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
+    page
+      .querySelector<HTMLFormElement>("[data-outcome-verification-form]")
+      ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(2));
     expect(verificationParams[1]).toEqual(verificationParams[0]);
   });
