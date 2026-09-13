@@ -107,10 +107,10 @@ class OutcomesPage extends OutcomesPageMutations {
         canRefresh: this.canOutcomeAction("refresh", "outcomes.refresh"),
         canUnlink: this.canOutcomeAction("unlink-work", "outcomes.unlinkWorkboard"),
         canVerify:
-          this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion") ||
+          this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion", true) ||
           (this.verificationReplayPending && this.canReplayOutcomeAssurance("outcomes.verifyCriterion")),
         canAccept:
-          this.canOutcomeAction("accept", "outcomes.accept") ||
+          this.canOutcomeAction("accept", "outcomes.accept", true) ||
           (this.acceptanceReplayPending && this.canReplayOutcomeAssurance("outcomes.accept")),
         cancelConfirmationOpen: this.cancelConfirmationOpen,
         cancelError: this.cancelError,

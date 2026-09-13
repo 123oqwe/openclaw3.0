@@ -47,7 +47,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       !detail ||
       this.verifying ||
       (!this.verificationReplayPending &&
-        !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion")) ||
+        !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion", true)) ||
       (this.verificationReplayPending &&
         !this.canReplayOutcomeAssurance("outcomes.verifyCriterion"))
     ) {
@@ -121,7 +121,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       !client ||
       !scope ||
       (pendingRequest === null
-        ? !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion")
+        ? !this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion", true)
         : !this.canReplayOutcomeAssurance("outcomes.verifyCriterion")) ||
       this.outcomeMutationIsInFlight(id)
     ) {
@@ -213,7 +213,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       !client ||
       !scope ||
       (this.acceptanceRequest === null
-        ? !this.canOutcomeAction("accept", "outcomes.accept")
+        ? !this.canOutcomeAction("accept", "outcomes.accept", true)
         : !this.canReplayOutcomeAssurance("outcomes.accept")) ||
       this.outcomeMutationIsInFlight(id)
     ) {
