@@ -112,6 +112,32 @@ describe("Workboard adapter", () => {
         ],
       }),
     ).toThrow(/duplicate/i);
+    expect(() =>
+      readWorkboardCards({
+        cards: [
+          {
+            ...fixture.cards[0],
+            metadata: {
+              ...fixture.cards[0].metadata,
+              proof: [{ ...fixture.cards[0].metadata.proof[0], id: "" }],
+            },
+          },
+        ],
+      }),
+    ).toThrow();
+    expect(() =>
+      readWorkboardCards({
+        cards: [
+          {
+            ...fixture.cards[0],
+            metadata: {
+              ...fixture.cards[0].metadata,
+              artifacts: [{ ...fixture.cards[0].metadata.artifacts[0], id: "" }],
+            },
+          },
+        ],
+      }),
+    ).toThrow();
   });
 
   it("fails closed when one card id is reused with a different creation identity", () => {
