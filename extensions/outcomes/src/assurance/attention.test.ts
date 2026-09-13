@@ -17,9 +17,7 @@ function record(): OutcomeRecord {
     contractRevision: 1,
     planGeneration: 0,
     planHash: null,
-    criteria: [
-      { id: "criterion-1", text: "Done", required: true, workRefs: [] },
-    ],
+    criteria: [{ id: "criterion-1", text: "Done", required: true, workRefs: [] }],
     projections: [],
     evidence: [],
     decisions: [],
@@ -46,9 +44,7 @@ describe("Outcome delete guidance", () => {
       objective: "Ship safely",
       contractRevision: 1,
       planGeneration: 1,
-      criteria: [
-        { id: "criterion-1", text: "Done", required: true, workRefs: [] },
-      ],
+      criteria: [{ id: "criterion-1", text: "Done", required: true, workRefs: [] }],
     };
     const currentPlan = {
       ...acceptedPlan,
@@ -80,8 +76,8 @@ describe("Outcome delete guidance", () => {
       ],
     });
 
-    expect(
-      deriveOutcomeAttention(acceptedThenCancelled, [], 4, null).nextActions,
-    ).not.toContain("delete");
+    expect(deriveOutcomeAttention(acceptedThenCancelled, [], 4, null).nextActions).not.toContain(
+      "delete",
+    );
   });
 });

@@ -63,9 +63,9 @@ describe("OutcomesPage mutations", () => {
     expect(request).not.toHaveBeenCalledWith("outcomes.export", expect.anything());
     page.querySelector<HTMLButtonElement>('[data-outcome-action="delete"]')?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector('[data-outcome-confirm-delete]')).not.toBeNull();
+      expect(page.querySelector("[data-outcome-confirm-delete]")).not.toBeNull();
     });
-    page.querySelector<HTMLButtonElement>('[data-outcome-confirm-delete]')?.click();
+    page.querySelector<HTMLButtonElement>("[data-outcome-confirm-delete]")?.click();
     expect(request).toHaveBeenCalledWith("outcomes.delete", {
       expectedRevision: 1,
       id: "outcome-a",

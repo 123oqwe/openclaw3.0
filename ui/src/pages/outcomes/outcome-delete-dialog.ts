@@ -23,9 +23,7 @@ export function renderOutcomeDeleteDialog(data: OutcomeDeleteDialogData) {
       <h2>${t("outcomesPage.deleteOutcome")}</h2>
       <p>${t("outcomesPage.deleteHelp")}</p>
       ${data.deleteError
-        ? html`<p class="outcomes-state outcomes-state--error" role="alert">
-            ${data.deleteError}
-          </p>`
+        ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.deleteError}</p>`
         : nothing}
       <div class="outcome-cancel-dialog__actions">
         <button

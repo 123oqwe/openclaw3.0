@@ -23,9 +23,7 @@ export function renderOutcomeCancelDialog(data: OutcomeCancelDialogData) {
       <h2>${t("outcomesPage.cancelOutcome")}</h2>
       <p>${t("outcomesPage.cancelHelp")}</p>
       ${data.cancelError
-        ? html`<p class="outcomes-state outcomes-state--error" role="alert">
-            ${data.cancelError}
-          </p>`
+        ? html`<p class="outcomes-state outcomes-state--error" role="alert">${data.cancelError}</p>`
         : nothing}
       <div class="outcome-cancel-dialog__actions">
         <button

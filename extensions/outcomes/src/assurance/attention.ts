@@ -30,8 +30,7 @@ export function deriveOutcomeAttention(
     );
     return {
       attention: [],
-      nextActions:
-        hasUncertainOperation || record.acceptances.length > 0 ? [] : ["delete"],
+      nextActions: hasUncertainOperation || record.acceptances.length > 0 ? [] : ["delete"],
     };
   }
   const attention: OutcomeDetail["attention"] = [];

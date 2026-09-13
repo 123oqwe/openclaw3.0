@@ -506,8 +506,7 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           ${t("outcomesPage.deleteOutcome")}
         </button>`
       : nothing}
-    ${renderOutcomeCancelDialog(data)}
-    ${renderOutcomeDeleteDialog(data)}
+    ${renderOutcomeCancelDialog(data)} ${renderOutcomeDeleteDialog(data)}
     ${data.editDialogOpen
       ? html`<openclaw-modal-dialog
           label=${t("outcomesPage.editOutcome")}
