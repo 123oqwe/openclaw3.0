@@ -418,4 +418,115 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
       expect(harness.writes()).toBe(writes);
     },
   );
+
+  it("hides a legal assurance write from a foreign owner before reading sources or writing", async () => {
+    const harness = createHarness();
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const outcome = (
+      refreshed[1] as {
+        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+      }
+    ).outcome;
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+
+    expect(
+      await harness.call(
+        "outcomes.verifyCriterion",
+        {
+          id,
+          expectedRevision: outcome.revision,
+          decisionId: "123e4567-e89b-42d3-a456-426614174042",
+          criterionId,
+          status: "verified",
+          planHash: outcome.planHash,
+          evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+        },
+        { authenticatedUserProfile: { profileId: "manager-b" } },
+      ),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.writes()).toBe(writes);
+  });
+
+  it("rejects an acceptance when a required criterion is not verified without writing", async () => {
+    const harness = createHarness();
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const outcome = (
+      refreshed[1] as { outcome: { planHash: string; revision: number } }
+    ).outcome;
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+
+    expect(
+      await harness.call("outcomes.accept", {
+        id,
+        expectedRevision: outcome.revision,
+        acceptanceId: "123e4567-e89b-42d3-a456-426614174043",
+        planHash: outcome.planHash,
+        closureHash: "c".repeat(64),
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
+    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+    expect(harness.writes()).toBe(writes);
+  });
+
+  it("keeps a competing owner mutation when an assurance write loses its CAS", async () => {
+    const cards = [
+      {
+        id: "card-a",
+        status: "done",
+        createdAt: 1,
+        updatedAt: 2,
+        metadata: {
+          automation: { boardId: "board-a" },
+          proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
+          artifacts: [],
+        },
+      },
+    ];
+    const harness = createHarness({ workboardCards: cards });
+    const id = await createLinkedOutcome(harness);
+    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+    const outcome = (
+      refreshed[1] as {
+        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+      }
+    ).outcome;
+    const writes = harness.writes();
+    harness.gatewayRequest.mockClear();
+    harness.gatewayRequest.mockImplementationOnce(async () => {
+      expect(
+        await harness.call("outcomes.update", {
+          id,
+          expectedRevision: outcome.revision,
+          patch: { title: "Competing owner mutation" },
+        }),
+      ).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
+      return { cards };
+    });
+
+    expect(
+      await harness.call("outcomes.verifyCriterion", {
+        id,
+        expectedRevision: outcome.revision,
+        decisionId: "123e4567-e89b-42d3-a456-426614174044",
+        criterionId,
+        status: "verified",
+        planHash: outcome.planHash,
+        evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_REVISION_CONFLICT" }]);
+    expect(harness.writes()).toBe(writes + 1);
+    expect(harness.records.get(id)).toMatchObject({
+      title: "Competing owner mutation",
+      revision: outcome.revision + 1,
+      decisions: [],
+    });
+  });
 });

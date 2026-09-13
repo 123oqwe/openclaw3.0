@@ -711,9 +711,10 @@ suite.define(() => {
         await firstDecision.locator("summary").focus();
         await page.keyboard.press("Enter");
         await expect.poll(() => firstDecisionDetails.getAttribute("open")).toBe("");
-        await firstDecision.getByText("Prove human acceptance", { exact: true }).waitFor({
-          state: "visible",
-        });
+        await firstDecision
+          .locator(".outcome-detail__historical-plan > p")
+          .getByText("Objective: Prove human acceptance", { exact: true })
+          .waitFor({ state: "visible" });
         await firstDecision.getByText("Proof is reviewed", { exact: true }).waitFor({
           state: "visible",
         });
