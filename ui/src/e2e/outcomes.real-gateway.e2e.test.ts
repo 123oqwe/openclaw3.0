@@ -706,6 +706,16 @@ suite.define(() => {
         await detail.locator('[data-outcome-action="accept"]').click();
         await detail.locator('[data-outcome-phase="accepted"]').waitFor({ state: "visible" });
         await detail.locator("[data-outcome-acceptance-history]").waitFor({ state: "visible" });
+        await callGateway("workboard.cards.proof", {
+          id: cardId,
+          label: "Outcome acceptance evidence changed",
+          status: "passed",
+        });
+        await detail.locator('[data-outcome-action="refresh"]').click();
+        await detail
+          .locator('[data-outcome-acceptance="needs-review"]')
+          .waitFor({ state: "visible" });
+        await expect.poll(() => detail.locator('[data-outcome-action="accept"]').count()).toBe(0);
       },
     );
   });
