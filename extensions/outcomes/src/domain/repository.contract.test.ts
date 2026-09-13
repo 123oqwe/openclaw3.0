@@ -913,6 +913,53 @@ describe("Outcome repository atomic contract", () => {
     });
   });
 
+  it("orders opposite decisions from the same millisecond by revision", () => {
+    const record = assuredActiveRecord();
+    const evidenceHash = evidenceSetHash({
+      criterionId: "c-1",
+      planGeneration: record.planGeneration,
+      sourceDigests: ["proof-digest-1"],
+    });
+    const verified = reduceOutcomeDecision(record, {
+      expectedRevision: record.revision,
+      id: "decision-verified",
+      requestHash: "d".repeat(64),
+      criterionId: "c-1",
+      status: "verified",
+      planHash: record.planHash!,
+      evidenceSetHash: evidenceHash,
+      profileId: record.managerProfileId,
+      serverTime: 42,
+    });
+    if (verified.kind !== "updated") {
+      throw new Error("fixture verification did not commit");
+    }
+    const rejected = reduceOutcomeDecision(verified.record, {
+      expectedRevision: verified.record.revision,
+      id: "decision-rejected",
+      requestHash: "e".repeat(64),
+      criterionId: "c-1",
+      status: "rejected",
+      planHash: verified.record.planHash!,
+      evidenceSetHash: evidenceHash,
+      note: "The current evidence is insufficient",
+      profileId: verified.record.managerProfileId,
+      serverTime: 42,
+    });
+
+    expect(rejected).toMatchObject({ kind: "updated", replayed: false, record: { revision: 3 } });
+    if (rejected.kind !== "updated") {
+      return;
+    }
+    expect(rejected.record.decisions).toEqual(
+      expect.arrayContaining([
+        { id: "decision-verified", decidedAt: 42, decidedRevision: 2, status: "verified" },
+        { id: "decision-rejected", decidedAt: 42, decidedRevision: 3, status: "rejected" },
+      ]),
+    );
+    expect(deriveOutcomeClosure(rejected.record, rejected.record.projections, 42)).toBeNull();
+  });
+
   it("preserves actual decision and acceptance snapshots across later contract changes and unlink", () => {
     const initial = assuredActiveRecord();
     const verified = reduceOutcomeDecision(initial, {
