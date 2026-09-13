@@ -547,9 +547,9 @@ suite.define(() => {
         await expect
           .poll(() => page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches))
           .toBe(true);
-        expect(await create.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThanOrEqual(
-          44,
-        );
+        expect(
+          await create.evaluate((element) => element.getBoundingClientRect().height),
+        ).toBeGreaterThanOrEqual(44);
         expect(
           await page
             .locator("openclaw-outcomes-page")
