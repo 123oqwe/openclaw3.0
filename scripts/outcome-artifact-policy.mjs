@@ -51,6 +51,7 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/src/domain/read-model.ts",
   "extensions/outcomes/src/domain/reducer.ts",
   "extensions/outcomes/src/domain/assurance-reducer.ts",
+  "extensions/outcomes/src/domain/assurance-reducer.contract.test.ts",
   "extensions/outcomes/src/domain/repository.contract.test.ts",
   "extensions/outcomes/src/domain/schema.test.ts",
   "extensions/outcomes/src/domain/schema.ts",
