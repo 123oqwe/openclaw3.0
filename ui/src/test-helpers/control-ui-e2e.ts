@@ -3015,6 +3015,57 @@ export async function captureControlUiE2eFailureDiagnostics(
   }
 }
 
+const controlUiE2eSecretKey = /(?:authorization|bootstrap|cookie|password|secret|token)/iu;
+const controlUiE2eUrlKey = /(?:url|uri|href|location|resource)/iu;
+const controlUiE2eSecretAssignment =
+  /((?:authorization|bootstrap(?:token)?|cookie|password|secret|token)(?:\s*[=:]\s*|\s+)(?:Bearer\s+)?)[^\s,;"'}]+/giu;
+
+function sanitizeControlUiE2eDiagnosticString(value: string): string {
+  return value
+    .replaceAll(/https?:\/\/[^\s"')]+/gu, (candidate) => {
+      try {
+        const url = new URL(candidate);
+        url.search = "";
+        url.hash = "";
+        return url.href;
+      } catch {
+        return candidate;
+      }
+    })
+    .replaceAll(controlUiE2eSecretAssignment, "$1[redacted]");
+}
+
+function sanitizeControlUiE2eDiagnosticValue(value: unknown, key?: string): unknown {
+  if (key && controlUiE2eSecretKey.test(key)) {
+    return "[redacted]";
+  }
+  if (typeof value === "string") {
+    if (key && controlUiE2eUrlKey.test(key)) {
+      try {
+        const url = new URL(value);
+        url.search = "";
+        url.hash = "";
+        return url.href;
+      } catch {
+        // Fall through to the bounded textual sanitizer for non-URL locations.
+      }
+    }
+    return sanitizeControlUiE2eDiagnosticString(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((entry) => sanitizeControlUiE2eDiagnosticValue(entry));
+  }
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([entryKey, entryValue]) => [
+        entryKey,
+        sanitizeControlUiE2eDiagnosticValue(entryValue, entryKey),
+      ]),
+    );
+  }
+  return value;
+}
+
 async function captureControlUiE2eFailureDiagnosticsUnsafe(
   page: Page,
   {
@@ -3181,8 +3232,8 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
   const report = {
     schemaVersion: 2,
     label,
-    browserState,
-    captureErrors,
+    browserState: sanitizeControlUiE2eDiagnosticValue(browserState),
+    captureErrors: sanitizeControlUiE2eDiagnosticValue(captureErrors),
     capturedAt: new Date().toISOString(),
     ci: {
       githubJob: process.env.GITHUB_JOB ?? null,
@@ -3191,17 +3242,17 @@ async function captureControlUiE2eFailureDiagnosticsUnsafe(
       shardIndex: process.env.SHARD_INDEX ?? null,
       vitestShardCount: process.env.VITEST_SHARD_COUNT ?? null,
     },
-    pageEvents: [...pageEvents],
-    pageErrors: [...pageErrors],
+    pageEvents: sanitizeControlUiE2eDiagnosticValue(pageEvents),
+    pageErrors: sanitizeControlUiE2eDiagnosticValue(pageErrors),
     page: {
       closed: page.isClosed(),
-      url: page.url(),
+      url: sanitizeControlUiE2eDiagnosticValue(page.url(), "url"),
     },
     screenshot: screenshotWritten ? screenshotName : null,
     failure: {
-      message: error.message,
+      message: sanitizeControlUiE2eDiagnosticString(error.message),
       name: error.name,
-      stack: error.stack ?? null,
+      stack: error.stack ? sanitizeControlUiE2eDiagnosticString(error.stack) : null,
     },
   };
   writeFileSync(reportPath, `${JSON.stringify(report, null, 2)}\n`, "utf8");
