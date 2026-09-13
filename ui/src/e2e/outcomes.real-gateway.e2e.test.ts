@@ -115,6 +115,15 @@ let unavailableInstance: OpenClawTestInstance | undefined;
 
 type GatewayCallResult = Record<string, unknown>;
 
+type RefreshResponseSummary = {
+  errorCode?: string;
+  ok: boolean;
+  refreshReason?: string;
+  refreshStatus?: string;
+  revision?: number;
+  sourceIssueReasons: string[];
+};
+
 function isGatewayCallResult(value: unknown): value is GatewayCallResult {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -126,6 +135,29 @@ function gatewayFrame(payload: { toString(): string }): GatewayCallResult | unde
   } catch {
     return undefined;
   }
+}
+
+function refreshResponseSummary(frame: GatewayCallResult): RefreshResponseSummary {
+  const error = isGatewayCallResult(frame.error) ? frame.error : undefined;
+  const payload = isGatewayCallResult(frame.payload) ? frame.payload : undefined;
+  const refresh = payload && isGatewayCallResult(payload.refresh) ? payload.refresh : undefined;
+  const outcome = payload && isGatewayCallResult(payload.outcome) ? payload.outcome : undefined;
+  const sourceIssueReasons = Array.isArray(outcome?.sourceIssues)
+    ? outcome.sourceIssues.flatMap((issue) => {
+        if (!isGatewayCallResult(issue) || typeof issue.reason !== "string") {
+          return [];
+        }
+        return [issue.reason];
+      })
+    : [];
+  return {
+    ok: frame.ok === true,
+    sourceIssueReasons,
+    ...(typeof error?.code === "string" ? { errorCode: error.code } : {}),
+    ...(typeof refresh?.reason === "string" ? { refreshReason: refresh.reason } : {}),
+    ...(typeof refresh?.status === "string" ? { refreshStatus: refresh.status } : {}),
+    ...(typeof outcome?.revision === "number" ? { revision: outcome.revision } : {}),
+  };
 }
 
 async function callGateway(
@@ -306,7 +338,7 @@ suite.define(() => {
       async ({ page }) => {
         await page.clock.install();
         const refreshRequestIds = new Set<string>();
-        const refreshReplies = new Map<string, GatewayCallResult>();
+        const refreshReplies = new Map<string, RefreshResponseSummary>();
         let gatewayWebSocketCloseCount = 0;
         page.on("websocket", (socket) => {
           socket.on("close", () => {
@@ -329,7 +361,7 @@ suite.define(() => {
               typeof frame.id === "string" &&
               refreshRequestIds.has(frame.id)
             ) {
-              refreshReplies.set(frame.id, frame);
+              refreshReplies.set(frame.id, refreshResponseSummary(frame));
             }
           });
         });
@@ -412,7 +444,7 @@ suite.define(() => {
           throw new Error("Outcome refresh did not emit a Gateway request ID");
         }
         await expect.poll(() => refreshReplies.has(refreshRequestId)).toBe(true);
-        expect(refreshReplies.get(refreshRequestId)?.ok).toBe(true);
+        expect(refreshReplies.get(refreshRequestId)).toMatchObject({ ok: true });
         const evidence = detail.locator(`[data-outcome-evidence="${proofId}"]`);
         await evidence.waitFor({ state: "visible" });
         await expect
@@ -519,15 +551,14 @@ suite.define(() => {
           throw new Error("Disabled Workboard refresh did not emit a Gateway request ID");
         }
         await expect.poll(() => refreshReplies.has(disabledRefreshRequestId)).toBe(true);
-        expect(refreshReplies.get(disabledRefreshRequestId)).toMatchObject({
+        const disabledRefresh = refreshReplies.get(disabledRefreshRequestId);
+        expect(disabledRefresh).toMatchObject({
           ok: true,
-          payload: {
-            outcome: {
-              sourceIssues: expect.arrayContaining([{ reason: "workboard-disabled" }]),
-            },
-            refresh: { reason: "workboard-disabled", status: "unavailable" },
-          },
+          refreshReason: "workboard-disabled",
+          refreshStatus: "unavailable",
+          revision: expect.any(Number),
         });
+        expect(disabledRefresh?.sourceIssueReasons).toContain("workboard-disabled");
         await page.getByText("Workboard disabled", { exact: true }).waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,

@@ -77,6 +77,44 @@ const realGatewayPluginEnv = {
   VITEST_WORKER_ID: undefined,
 } as const;
 
+function identityGatewayConfig(owner: OpenClawTestInstance) {
+  return {
+    gateway: {
+      auth: {
+        identityScopes: {
+          [aliceIdentity]: operatorScopes,
+          [bobIdentity]: operatorScopes,
+        },
+        mode: "trusted-proxy" as const,
+        token: undefined,
+        trustedProxy: {
+          allowLoopback: true,
+          allowUsers: [aliceIdentity, bobIdentity],
+          deviceAutoApprove: {
+            enabled: true,
+            scopes: operatorScopes,
+          },
+          requiredHeaders: ["x-forwarded-proto"],
+          userHeader: "x-forwarded-user",
+        },
+      },
+      controlUi: {
+        allowedOrigins: [`http://127.0.0.1:${owner.port}`],
+        enabled: true,
+      },
+      trustedProxies: ["127.0.0.1", "::1"],
+    },
+    plugins: {
+      allow: ["outcomes", "workboard"],
+      enabled: true,
+      entries: {
+        outcomes: { enabled: true },
+        workboard: { enabled: true },
+      },
+    },
+  };
+}
+
 let instance: OpenClawTestInstance | undefined;
 let proxy: IdentityProxy | undefined;
 
@@ -473,47 +511,10 @@ const identitySuite = createControlUiE2eSuite({
       name: "control-ui-outcomes-identity-switch",
       startTimeoutMs: 120_000,
       env: realGatewayPluginEnv,
-      config: {
-        gateway: {
-          auth: {
-            identityScopes: {
-              [aliceIdentity]: operatorScopes,
-              [bobIdentity]: operatorScopes,
-            },
-            mode: "trusted-proxy",
-            // createOpenClawTestInstance seeds token auth for ordinary Gateway
-            // fixtures. This identity-switch proof must remove that token rather
-            // than combine mutually exclusive authentication modes.
-            token: undefined,
-            trustedProxy: {
-              allowLoopback: true,
-              allowUsers: [aliceIdentity, bobIdentity],
-              deviceAutoApprove: {
-                enabled: true,
-                scopes: operatorScopes,
-              },
-              requiredHeaders: ["x-forwarded-proto"],
-              userHeader: "x-forwarded-user",
-            },
-          },
-          controlUi: {
-            allowedOrigins: [`http://127.0.0.1:${owner.port}`],
-            enabled: true,
-          },
-          trustedProxies: ["127.0.0.1", "::1"],
-        },
-        plugins: {
-          allow: ["outcomes", "workboard"],
-          enabled: true,
-          entries: {
-            outcomes: { enabled: true },
-            workboard: { enabled: true },
-          },
-        },
-      },
     });
     instance = owner;
     try {
+      await owner.state.writeConfig(identityGatewayConfig(owner));
       await owner.startGateway();
       proxy = await startIdentityProxy(owner.url);
       return {
