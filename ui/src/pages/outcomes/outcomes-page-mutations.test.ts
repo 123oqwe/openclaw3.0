@@ -20,6 +20,61 @@ afterEach(() => {
 });
 
 describe("OutcomesPage mutations", () => {
+  it("replays the same acceptance payload only after an explicit user retry", async () => {
+    let rejectAcceptance: ((reason?: unknown) => void) | undefined;
+    const acceptanceParams: Array<Record<string, unknown>> = [];
+    const detail = {
+      ...outcomeDetail("outcome-a", "Outcome A"),
+      closureHash: "c".repeat(64),
+      nextActions: ["accept"] as const,
+      phase: "active" as const,
+      planGeneration: 1,
+      planHash: "a".repeat(64),
+      revision: 4,
+    };
+    const request = vi.fn((method: string, params: Record<string, unknown>) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({ outcome: detail });
+      }
+      if (method === "outcomes.accept") {
+        acceptanceParams.push(params);
+        if (acceptanceParams.length === 1) {
+          return new Promise((_resolve, reject) => {
+            rejectAcceptance = reject;
+          });
+        }
+        return Promise.resolve({ outcome: { ...detail, revision: 5 } });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const gateway = createGateway({ request } as unknown as GatewayBrowserClient);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.accept"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="accept"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="accept"]')?.click();
+    await vi.waitFor(() => expect(acceptanceParams).toHaveLength(1));
+    rejectAcceptance?.(new Error("response lost"));
+    await vi.waitFor(() => expect(page.textContent).toContain("Request failed"));
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="accept"]')?.click();
+    await vi.waitFor(() => expect(acceptanceParams).toHaveLength(2));
+    expect(acceptanceParams[1]).toEqual(acceptanceParams[0]);
+  });
+
   it("replays the same verification payload only after an explicit user retry", async () => {
     let rejectVerification: ((reason?: unknown) => void) | undefined;
     const verificationParams: Array<Record<string, unknown>> = [];
