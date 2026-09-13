@@ -286,7 +286,7 @@ function registerHarness(
   const registrations: Array<{
     method: string;
     handler: never;
-    options: { scope: "operator.read" | "operator.write" };
+    options: { scope: "operator.read" | "operator.write" | "operator.admin" };
   }> = [];
   const store = options.store ?? {
     registerIfAbsent: async (key: string, value: unknown) => {
@@ -332,7 +332,7 @@ function registerHarness(
       registrations.push({
         method,
         handler: handler as never,
-        options: registrationOptions as { scope: "operator.read" | "operator.write" },
+        options: registrationOptions as { scope: "operator.read" | "operator.write" | "operator.admin" },
       });
     },
   });
@@ -385,7 +385,7 @@ async function dispatch(params: {
             forceSyntheticClient: true,
             requireAuthenticatedRequest: true,
             requireScopedClient: true,
-            syntheticScopes: ["operator.read", "operator.write"],
+            syntheticScopes: ["operator.read", "operator.write", "operator.admin"],
           }),
       ),
   );
@@ -406,7 +406,7 @@ async function dispatchWithoutAuthenticatedRequest(params: {
         forceSyntheticClient: true,
         requireAuthenticatedRequest: true,
         requireScopedClient: true,
-        syntheticScopes: ["operator.read", "operator.write"],
+        syntheticScopes: ["operator.read", "operator.write", "operator.admin"],
       }),
   );
 }
@@ -426,6 +426,7 @@ describe("P-02 Outcome Gateway admission", () => {
       ["outcomes.verifyCriterion", "operator.write"],
       ["outcomes.accept", "operator.write"],
       ["outcomes.cancel", "operator.write"],
+      ["outcomes.delete", "operator.admin"],
     ] as const;
     expect(
       registrations
@@ -458,6 +459,50 @@ describe("P-02 Outcome Gateway admission", () => {
       expect(handler).not.toHaveBeenCalled();
     }
     expect(records).toEqual(new Map());
+  });
+
+  it("requires operator.admin for deletion and dispatches an authorized owner atomically", async () => {
+    const { context, records } = registerHarness();
+    const createRequest = {
+      id: outcomeId,
+      title: "Delete safely",
+      objective: "Allow only an authorized quiescent Outcome deletion",
+      criteria: [
+        {
+          id: "123e4567-e89b-42d3-a456-426614174001",
+          text: "Deletion has a bounded authorization contract",
+          required: true,
+        },
+      ],
+    };
+    await expect(
+      dispatch({
+        client: createOperatorClient("manager-a", ["operator.write"]),
+        context,
+        method: "outcomes.create",
+        request: createRequest,
+      }),
+    ).resolves.toMatchObject({ outcome: { id: outcomeId } });
+
+    await expect(
+      dispatch({
+        client: createOperatorClient("manager-a", ["operator.write"]),
+        context,
+        method: "outcomes.delete",
+        request: { id: outcomeId, expectedRevision: 1 },
+      }),
+    ).rejects.toThrow(/scope/i);
+    expect(records.has(outcomeId)).toBe(true);
+
+    await expect(
+      dispatch({
+        client: createOperatorClient("manager-a", ["operator.admin"]),
+        context,
+        method: "outcomes.delete",
+        request: { id: outcomeId, expectedRevision: 1 },
+      }),
+    ).resolves.toEqual({ deleted: true, id: outcomeId });
+    expect(records.has(outcomeId)).toBe(false);
   });
 
   it("refuses a missing authenticated request authority before the Outcome handler", async () => {

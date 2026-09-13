@@ -70,9 +70,15 @@ export function createHarness(
       writes += 1;
       return true;
     },
-    deleteIf: async () => {
+    deleteIf: async (id: string, predicate: (current: OutcomeRecord) => boolean) => {
       storeCalls.deleteIf += 1;
-      return false;
+      const current = records.get(id);
+      if (current === undefined || !predicate(current)) {
+        return false;
+      }
+      records.delete(id);
+      writes += 1;
+      return true;
     },
   };
   const gatewayRequest = vi.fn(async () => {
