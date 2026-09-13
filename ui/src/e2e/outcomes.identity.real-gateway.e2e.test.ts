@@ -56,6 +56,7 @@ type IdentityProxy = {
   close: () => Promise<void>;
   connections: readonly ProxyConnectionEvidence[];
   disconnectBrowserConnections: () => void;
+  probeOrigin: string;
   probeUrl: (principal: ProxyPrincipal) => string;
   setBrowserPrincipal: (principal: ProxyPrincipal) => void;
 };
@@ -276,6 +277,11 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
     throw new Error("Outcome identity proxy did not bind a TCP port");
   }
   const baseUrl = `ws://localhost:${address.port}`;
+  const controlUiUrl = new URL(gatewayUrl);
+  controlUiUrl.protocol = controlUiUrl.protocol === "wss:" ? "https:" : "http:";
+  controlUiUrl.pathname = "/";
+  controlUiUrl.search = "";
+  controlUiUrl.hash = "";
   return {
     browserUrl: `${baseUrl}/browser`,
     close: async () => {
@@ -298,6 +304,7 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
         }
       }
     },
+    probeOrigin: controlUiUrl.origin,
     probeUrl: (principal) => `${baseUrl}/probe?principal=${encodeURIComponent(principal)}`,
     setBrowserPrincipal: (principal) => {
       browserPrincipal = principal;
@@ -307,10 +314,11 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
 
 async function proxyGatewayCall(
   proxyUrl: string,
+  origin: string,
   method: string,
   params: JsonRecord,
 ): Promise<ProxiedGatewayResponse> {
-  const socket = new WebSocket(proxyUrl);
+  const socket = new WebSocket(proxyUrl, { origin });
   const probeInstanceId = `outcome-identity-probe-${randomUUID()}`;
   return await new Promise<ProxiedGatewayResponse>((resolve, reject) => {
     let hello: HelloOk | undefined;
@@ -541,6 +549,7 @@ identitySuite.define(() => {
     const identityProxy = proxy;
     const aliceCard = await proxyGatewayCall(
       identityProxy.probeUrl(aliceIdentity),
+      identityProxy.probeOrigin,
       "workboard.cards.create",
       {
         priority: "normal",
@@ -551,12 +560,18 @@ identitySuite.define(() => {
     const cardId = requireString(requireObject(aliceCard.payload, "card"), "id");
     const aliceSelf = await proxyGatewayCall(
       identityProxy.probeUrl(aliceIdentity),
+      identityProxy.probeOrigin,
       "users.self",
       {},
     );
     expect(aliceSelf.ok).toBe(true);
     const aliceProfileId = requireString(requireObject(aliceSelf.payload, "profile"), "id");
-    const bobSelf = await proxyGatewayCall(identityProxy.probeUrl(bobIdentity), "users.self", {});
+    const bobSelf = await proxyGatewayCall(
+      identityProxy.probeUrl(bobIdentity),
+      identityProxy.probeOrigin,
+      "users.self",
+      {},
+    );
     expect(bobSelf.ok).toBe(true);
     const bobProfileId = requireString(requireObject(bobSelf.payload, "profile"), "id");
     expect(aliceSelf.selfUserId).toBe(aliceProfileId);
@@ -607,6 +622,7 @@ identitySuite.define(() => {
         await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
         const proof = await proxyGatewayCall(
           identityProxy.probeUrl(aliceIdentity),
+          identityProxy.probeOrigin,
           "workboard.cards.proof",
           {
             id: cardId,
@@ -666,9 +682,12 @@ identitySuite.define(() => {
           });
         }
 
-        const bobGet = await proxyGatewayCall(identityProxy.probeUrl(bobIdentity), "outcomes.get", {
-          id: outcomeId,
-        });
+        const bobGet = await proxyGatewayCall(
+          identityProxy.probeUrl(bobIdentity),
+          identityProxy.probeOrigin,
+          "outcomes.get",
+          { id: outcomeId },
+        );
         expect(bobGet.selfUserId).toBe(bobProfileId);
         expect(bobGet.ok).toBe(false);
         expect(stringValue(bobGet.error?.code)).toBe("OUTCOME_NOT_FOUND");

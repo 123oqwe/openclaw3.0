@@ -441,6 +441,8 @@ suite.define(() => {
             | null;
           return app?.runtime?.context?.gateway?.connectionRevision ?? null;
         });
+        expect(Number.isFinite(gatewayConnectionRevisionBeforeExpiry)).toBe(true);
+        const gatewayWebSocketCloseCountBeforeExpiry = gatewayWebSocketCloseCount;
         // Keep Gateway's wall-clock silence checks at the current time while
         // still advancing the page's monotonic freshness timer.
         await page.clock.setFixedTime(await page.evaluate(() => Date.now()));
@@ -452,7 +454,8 @@ suite.define(() => {
         expect(freshnessClockAfterExpiry - freshnessClockBeforeExpiry).toBeGreaterThanOrEqual(
           twentyFourHoursMs,
         );
-        expect(gatewayWebSocketCloseCount).toBe(0);
+        await detail.locator('[data-outcome-readiness="stale"]').waitFor({ state: "visible" });
+        expect(gatewayWebSocketCloseCount).toBe(gatewayWebSocketCloseCountBeforeExpiry);
         await expect
           .poll(() =>
             page.evaluate(() => {
@@ -465,7 +468,6 @@ suite.define(() => {
             }),
           )
           .toBe(gatewayConnectionRevisionBeforeExpiry);
-        await detail.locator('[data-outcome-readiness="stale"]').waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,
           path: path.join(suite.artifactDir, "outcomes-stale-observation.png"),
@@ -509,6 +511,9 @@ suite.define(() => {
           .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
           .waitFor({ state: "visible" });
         await page.locator("[data-outcome-select]").click();
+        const disabledRefreshRequestCount = refreshRequestIds.size;
+        await detail.locator('[data-outcome-action="refresh"]').click();
+        await expect.poll(() => refreshRequestIds.size).toBe(disabledRefreshRequestCount + 1);
         await page.getByText("Workboard disabled", { exact: true }).waitFor({ state: "visible" });
         await page.screenshot({
           fullPage: true,
