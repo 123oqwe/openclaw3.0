@@ -84,7 +84,9 @@ describe("P-06 Outcome export Gateway handler", () => {
     const id = await createLinkedOutcome(harness, outcomeIds[0]!);
     const record = structuredClone(harness.records.get(id)!);
     const writes = harness.writes();
-    harness.gatewayRequest.mockRejectedValue(Object.assign(new Error("owner timeout"), { code: "TIMEOUT" }));
+    harness.gatewayRequest.mockRejectedValue(
+      Object.assign(new Error("owner timeout"), { code: "TIMEOUT" }),
+    );
     harness.gatewayRequest.mockClear();
 
     expect(await harness.call("outcomes.export", { id })).toMatchObject([
@@ -154,32 +156,87 @@ describe("P-06 Outcome export Gateway handler", () => {
         { id: secondaryCriterionId, text: "Optional source", required: false },
       ],
     });
-    await harness.call("outcomes.linkWorkboard", { id, expectedRevision: 1, criterionId, cardId: "card-a" });
-    await harness.call("outcomes.linkWorkboard", { id, expectedRevision: 2, criterionId: secondaryCriterionId, cardId: "card-b" });
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 1,
+      criterionId,
+      cardId: "card-a",
+    });
+    await harness.call("outcomes.linkWorkboard", {
+      id,
+      expectedRevision: 2,
+      criterionId: secondaryCriterionId,
+      cardId: "card-b",
+    });
     await harness.call("outcomes.activate", { id, expectedRevision: 3 });
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 4 });
-    const outcome = (refreshed[1] as { outcome: { revision: number; planHash: string; criteria: Array<{ evidenceSetHash: string }> } }).outcome;
-    expect(await harness.call("outcomes.verifyCriterion", { id, expectedRevision: outcome.revision, decisionId: "123e4567-e89b-42d3-a456-426614174094", criterionId, status: "verified", planHash: outcome.planHash, evidenceSetHash: outcome.criteria[0]!.evidenceSetHash })).toMatchObject([true, { outcome: { phase: "active" } }]);
+    const outcome = (
+      refreshed[1] as {
+        outcome: {
+          revision: number;
+          planHash: string;
+          criteria: Array<{ evidenceSetHash: string }>;
+        };
+      }
+    ).outcome;
+    expect(
+      await harness.call("outcomes.verifyCriterion", {
+        id,
+        expectedRevision: outcome.revision,
+        decisionId: "123e4567-e89b-42d3-a456-426614174094",
+        criterionId,
+        status: "verified",
+        planHash: outcome.planHash,
+        evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+      }),
+    ).toMatchObject([true, { outcome: { phase: "active" } }]);
     const verified = harness.records.get(id)!;
     const detail = (await harness.call("outcomes.get", { id }))[1] as {
       outcome: { closureHash: string };
     };
-    expect(await harness.call("outcomes.accept", { id, expectedRevision: verified.revision, acceptanceId: "123e4567-e89b-42d3-a456-426614174095", planHash: verified.planHash!, closureHash: detail.outcome.closureHash })).toMatchObject([true, { outcome: { phase: "accepted", acceptances: [expect.any(Object)] } }]);
+    expect(
+      await harness.call("outcomes.accept", {
+        id,
+        expectedRevision: verified.revision,
+        acceptanceId: "123e4567-e89b-42d3-a456-426614174095",
+        planHash: verified.planHash!,
+        closureHash: detail.outcome.closureHash,
+      }),
+    ).toMatchObject([true, { outcome: { phase: "accepted", acceptances: [expect.any(Object)] } }]);
     const accepted = harness.records.get(id)!;
     const acceptedPlan = structuredClone(accepted.acceptances[0]!.acceptedPlan);
     const acceptedPlanHash = accepted.acceptances[0]!.planHash;
-    expect(acceptedPlan.criteria.find((criterion) => criterion.id === secondaryCriterionId)?.workRefs).toHaveLength(1);
-    expect(await harness.call("outcomes.unlinkWorkboard", { id, expectedRevision: accepted.revision, criterionId: secondaryCriterionId, cardId: "card-b" })).toMatchObject([true, { outcome: { phase: "active" } }]);
+    expect(
+      acceptedPlan.criteria.find((criterion) => criterion.id === secondaryCriterionId)?.workRefs,
+    ).toHaveLength(1);
+    expect(
+      await harness.call("outcomes.unlinkWorkboard", {
+        id,
+        expectedRevision: accepted.revision,
+        criterionId: secondaryCriterionId,
+        cardId: "card-b",
+      }),
+    ).toMatchObject([true, { outcome: { phase: "active" } }]);
     const unlinked = harness.records.get(id)!;
     const baseline = structuredClone(unlinked);
-    expect(unlinked.criteria.find((criterion) => criterion.id === secondaryCriterionId)?.workRefs).toEqual([]);
+    expect(
+      unlinked.criteria.find((criterion) => criterion.id === secondaryCriterionId)?.workRefs,
+    ).toEqual([]);
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
     const exported = await harness.call("outcomes.export", { id });
     expect(exported[0]).toBe(true);
-    expect(parseOutcomeExport(JSON.parse(JSON.stringify(exported[1])))).toEqual({ schemaVersion: 1, exportedAt: expect.any(Number), record: baseline });
-    expect((exported[1] as { record: typeof baseline }).record.acceptances[0]!.acceptedPlan).toEqual(acceptedPlan);
-    expect((exported[1] as { record: typeof baseline }).record.acceptances[0]!.planHash).toBe(acceptedPlanHash);
+    expect(parseOutcomeExport(JSON.parse(JSON.stringify(exported[1])))).toEqual({
+      schemaVersion: 1,
+      exportedAt: expect.any(Number),
+      record: baseline,
+    });
+    expect(
+      (exported[1] as { record: typeof baseline }).record.acceptances[0]!.acceptedPlan,
+    ).toEqual(acceptedPlan);
+    expect((exported[1] as { record: typeof baseline }).record.acceptances[0]!.planHash).toBe(
+      acceptedPlanHash,
+    );
     expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
     expect(harness.writes()).toBe(writes);
     harness.gatewayRequest.mockResolvedValue({
@@ -198,7 +255,11 @@ describe("P-06 Outcome export Gateway handler", () => {
       ],
     });
     harness.gatewayRequest.mockClear();
-    expect(await harness.call("outcomes.export", { id })).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_UNAVAILABLE" }]);
+    expect(await harness.call("outcomes.export", { id })).toMatchObject([
+      false,
+      undefined,
+      { code: "OUTCOME_OWNER_UNAVAILABLE" },
+    ]);
     expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
     expect(harness.records.get(id)).toEqual(baseline);
     expect(harness.writes()).toBe(writes);

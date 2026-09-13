@@ -61,30 +61,61 @@ describe("Outcome export codec", () => {
 
   it("collects every current and historical Workboard identity without truncating snapshots", () => {
     const record = draftRecord();
-    const current = { owner: "workboard" as const, cardId: "current", cardCreatedAt: 1, boardIdAtLink: "b" };
-    const projection = { owner: "workboard" as const, cardId: "projection", cardCreatedAt: 2, boardIdAtLink: "b" };
-    const evidence = { owner: "workboard" as const, cardId: "evidence", cardCreatedAt: 3, boardIdAtLink: "b" };
-    const operation = { owner: "workboard" as const, cardId: "operation", cardCreatedAt: 4, boardIdAtLink: "b" };
-    const decision = { owner: "workboard" as const, cardId: "decision", cardCreatedAt: 5, boardIdAtLink: "b" };
-    const acceptance = { owner: "workboard" as const, cardId: "acceptance", cardCreatedAt: 6, boardIdAtLink: "b" };
+    const current = {
+      owner: "workboard" as const,
+      cardId: "current",
+      cardCreatedAt: 1,
+      boardIdAtLink: "b",
+    };
+    const projection = {
+      owner: "workboard" as const,
+      cardId: "projection",
+      cardCreatedAt: 2,
+      boardIdAtLink: "b",
+    };
+    const evidence = {
+      owner: "workboard" as const,
+      cardId: "evidence",
+      cardCreatedAt: 3,
+      boardIdAtLink: "b",
+    };
+    const operation = {
+      owner: "workboard" as const,
+      cardId: "operation",
+      cardCreatedAt: 4,
+      boardIdAtLink: "b",
+    };
+    const decision = {
+      owner: "workboard" as const,
+      cardId: "decision",
+      cardCreatedAt: 5,
+      boardIdAtLink: "b",
+    };
+    const acceptance = {
+      owner: "workboard" as const,
+      cardId: "acceptance",
+      cardCreatedAt: 6,
+      boardIdAtLink: "b",
+    };
     record.criteria[0]!.workRefs = [current];
     record.projections = [{ ref: projection } as OutcomeRecord["projections"][number]];
     record.evidence = [{ workRef: evidence } as OutcomeRecord["evidence"][number]];
     record.operations = [{ target: operation } as OutcomeRecord["operations"][number]];
     record.decisions = [
-      { decidedPlan: { criteria: [{ workRefs: [decision] }] } } as OutcomeRecord["decisions"][number],
+      {
+        decidedPlan: { criteria: [{ workRefs: [decision] }] },
+      } as OutcomeRecord["decisions"][number],
     ];
     record.acceptances = [
-      { acceptedPlan: { criteria: [{ workRefs: [acceptance] }] } } as OutcomeRecord["acceptances"][number],
+      {
+        acceptedPlan: { criteria: [{ workRefs: [acceptance] }] },
+      } as OutcomeRecord["acceptances"][number],
     ];
 
-    expect(outcomeExportWorkRefs(record).map((ref) => ref.cardId).toSorted()).toEqual([
-      "acceptance",
-      "current",
-      "decision",
-      "evidence",
-      "operation",
-      "projection",
-    ]);
+    expect(
+      outcomeExportWorkRefs(record)
+        .map((ref) => ref.cardId)
+        .toSorted(),
+    ).toEqual(["acceptance", "current", "decision", "evidence", "operation", "projection"]);
   });
 });

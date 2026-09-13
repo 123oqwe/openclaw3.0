@@ -2,7 +2,6 @@ import type { OpenClawPluginApi } from "../../api.js";
 import { OUTCOME_MAX_ENTRIES, OUTCOME_OVERFLOW_POLICY } from "../domain/constants.js";
 import { createRequestHash } from "../domain/hash.js";
 import { toOutcomeDetail, toOutcomeSummary } from "../domain/read-model.js";
-import { encodeOutcomeExport, outcomeExportWorkRefs } from "../export/export.js";
 import {
   reduceOutcomeActivate,
   reduceOutcomeCancel,
@@ -11,6 +10,7 @@ import {
   reduceOutcomeUnlink,
 } from "../domain/reducer.js";
 import type { OutcomeRecord } from "../domain/types.js";
+import { encodeOutcomeExport, outcomeExportWorkRefs } from "../export/export.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { admitOutcomeOwner } from "./admission.js";
 import { registerOutcomeAssuranceMethods } from "./assurance-methods.js";
@@ -249,7 +249,13 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.export",
     async ({ client, params: rawParams, respond }) => {
-      const admission = admitOutcomeOwner({ client, missingOwnerCode: "NOT_FOUND", request: rawParams, respond, schema: outcomeExportParamsSchema });
+      const admission = admitOutcomeOwner({
+        client,
+        missingOwnerCode: "NOT_FOUND",
+        request: rawParams,
+        respond,
+        schema: outcomeExportParamsSchema,
+      });
       if (!admission) return;
       const { owner, request: params } = admission;
       const id = normalizedUuid(params.id);
@@ -260,11 +266,16 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         const refs = outcomeExportWorkRefs(record);
         if (refs.length > 0) {
           let cards: Awaited<ReturnType<typeof readAuthorizedWorkboardCards>>;
-          try { cards = await readAuthorizedWorkboardCards(api); } catch (error) { return respond(false, undefined, outcomeError(outcomeOwnerError(error))); }
+          try {
+            cards = await readAuthorizedWorkboardCards(api);
+          } catch (error) {
+            return respond(false, undefined, outcomeError(outcomeOwnerError(error)));
+          }
           for (const ref of refs) {
             const matches = cards.filter((card) => card.id === ref.cardId);
             if (matches.length === 0) return fail(respond, "OWNER_UNAVAILABLE");
-            if (matches.length !== 1 || matches[0]!.createdAt !== ref.cardCreatedAt) return fail(respond, "IDENTITY_CONFLICT");
+            if (matches.length !== 1 || matches[0]!.createdAt !== ref.cardCreatedAt)
+              return fail(respond, "IDENTITY_CONFLICT");
           }
         }
         respond(true, encodeOutcomeExport(record, Date.now()));
