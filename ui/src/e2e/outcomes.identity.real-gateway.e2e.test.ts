@@ -53,6 +53,7 @@ type TransportPair = {
 
 type IdentityProxy = {
   browserUrl: string;
+  clientBuildId: string;
   close: () => Promise<void>;
   connections: readonly ProxyConnectionEvidence[];
   disconnectBrowserConnections: () => void;
@@ -280,6 +281,25 @@ async function waitForTransportPairsToClose(pairs: readonly TransportPair[]): Pr
   }
 }
 
+async function readServedControlUiBuildId(gatewayUrl: string): Promise<string> {
+  const controlUiUrl = new URL(gatewayUrl);
+  controlUiUrl.protocol = controlUiUrl.protocol === "wss:" ? "https:" : "http:";
+  controlUiUrl.pathname = "/";
+  controlUiUrl.search = "";
+  controlUiUrl.hash = "";
+  const response = await fetch(controlUiUrl);
+  if (!response.ok) {
+    throw new Error(`Control UI build metadata request failed with ${response.status}`);
+  }
+  const html = await response.text();
+  const cacheId = /data-openclaw-control-ui-build-id="([a-zA-Z0-9._-]{1,161})"/u.exec(html)?.[1];
+  const buildId = cacheId?.replace(/-[a-f0-9]{64}$/u, "");
+  if (!buildId) {
+    throw new Error("Control UI document omitted its bundled build identity");
+  }
+  return buildId;
+}
+
 async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
   let browserPrincipal: ProxyPrincipal = aliceIdentity;
   const connections: ProxyConnectionEvidence[] = [];
@@ -320,8 +340,10 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
   controlUiUrl.pathname = "/";
   controlUiUrl.search = "";
   controlUiUrl.hash = "";
+  const clientBuildId = await readServedControlUiBuildId(gatewayUrl);
   return {
     browserUrl: `${baseUrl}/browser`,
+    clientBuildId,
     close: async () => {
       const activePairs = [...pairs];
       for (const pair of activePairs) {
@@ -353,6 +375,7 @@ async function startIdentityProxy(gatewayUrl: string): Promise<IdentityProxy> {
 async function proxyGatewayCall(
   proxyUrl: string,
   origin: string,
+  clientBuildId: string,
   method: string,
   params: JsonRecord,
 ): Promise<ProxiedGatewayResponse> {
@@ -394,6 +417,7 @@ async function proxyGatewayCall(
             params: {
               client: {
                 id: "openclaw-control-ui",
+                buildId: clientBuildId,
                 instanceId: probeInstanceId,
                 mode: "webchat",
                 platform: "test",
@@ -554,6 +578,7 @@ identitySuite.define(() => {
     const aliceCard = await proxyGatewayCall(
       identityProxy.probeUrl(aliceIdentity),
       identityProxy.probeOrigin,
+      identityProxy.clientBuildId,
       "workboard.cards.create",
       {
         priority: "normal",
@@ -565,6 +590,7 @@ identitySuite.define(() => {
     const aliceSelf = await proxyGatewayCall(
       identityProxy.probeUrl(aliceIdentity),
       identityProxy.probeOrigin,
+      identityProxy.clientBuildId,
       "users.self",
       {},
     );
@@ -573,6 +599,7 @@ identitySuite.define(() => {
     const bobSelf = await proxyGatewayCall(
       identityProxy.probeUrl(bobIdentity),
       identityProxy.probeOrigin,
+      identityProxy.clientBuildId,
       "users.self",
       {},
     );
@@ -627,6 +654,7 @@ identitySuite.define(() => {
         const proof = await proxyGatewayCall(
           identityProxy.probeUrl(aliceIdentity),
           identityProxy.probeOrigin,
+          identityProxy.clientBuildId,
           "workboard.cards.proof",
           {
             id: cardId,
@@ -689,6 +717,7 @@ identitySuite.define(() => {
         const bobGet = await proxyGatewayCall(
           identityProxy.probeUrl(bobIdentity),
           identityProxy.probeOrigin,
+          identityProxy.clientBuildId,
           "outcomes.get",
           { id: outcomeId },
         );

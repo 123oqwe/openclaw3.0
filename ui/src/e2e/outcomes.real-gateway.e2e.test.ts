@@ -339,6 +339,7 @@ suite.define(() => {
         await page.clock.install();
         const refreshRequestIds = new Set<string>();
         const refreshReplies = new Map<string, RefreshResponseSummary>();
+        const gatewayHelloMethods: string[][] = [];
         let gatewayWebSocketCloseCount = 0;
         page.on("websocket", (socket) => {
           socket.on("close", () => {
@@ -356,6 +357,18 @@ suite.define(() => {
           });
           socket.on("framereceived", ({ payload }) => {
             const frame = gatewayFrame(payload);
+            const hello = isGatewayCallResult(frame?.payload) ? frame.payload : undefined;
+            const features = hello && isGatewayCallResult(hello.features) ? hello.features : undefined;
+            if (
+              frame?.type === "res" &&
+              frame.ok === true &&
+              hello?.type === "hello-ok" &&
+              Array.isArray(features?.methods)
+            ) {
+              gatewayHelloMethods.push(
+                features.methods.filter((method): method is string => typeof method === "string"),
+              );
+            }
             if (
               frame?.type === "res" &&
               typeof frame.id === "string" &&
@@ -539,6 +552,11 @@ suite.define(() => {
         await waitForControlUiGatewayReady(page);
         await page.reload();
         await waitForControlUiGatewayReady(page);
+        await expect
+          .poll(() =>
+            gatewayHelloMethods.some((methods) => !methods.includes("workboard.cards.list")),
+          )
+          .toBe(true);
         await page
           .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
           .waitFor({ state: "visible" });
@@ -558,9 +576,11 @@ suite.define(() => {
         expect(disabledRefresh?.revision).toEqual(expect.any(Number));
         expect(disabledRefresh?.sourceIssueReasons).toContain("forbidden");
         await page.getByText("Linked source unavailable", { exact: true }).waitFor({ state: "visible" });
+        await expect.poll(() => detail.locator(`[data-outcome-work-card="${cardId}"]`).count()).toBe(0);
+        await expect.poll(() => detail.locator(`[data-outcome-evidence="${proofId}"]`).count()).toBe(0);
         await page.screenshot({
           fullPage: true,
-          path: path.join(suite.artifactDir, "outcomes-workboard-disabled.png"),
+          path: path.join(suite.artifactDir, "outcomes-workboard-unavailable.png"),
         });
 
         await instance.stopGateway();
