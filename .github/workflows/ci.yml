@@ -2074,7 +2074,19 @@ jobs:
             src/plugins/contracts/plugin-sdk-runtime-api-guardrails.test.ts \
             test/scripts/ci-workflow-guards.test.ts \
             test/scripts/outcome-artifact-policy.test.ts \
-            ui/src/e2e/browser-bootstrap.e2e.test.ts
+            ui/src/test-helpers/control-ui-e2e.test.ts \
+            ui/src/test-helpers/control-ui-e2e.ts \
+            ui/src/e2e/browser-bootstrap.e2e.test.ts \
+            ui/src/i18n/locales/en.ts \
+            ui/src/pages/outcomes/client.ts \
+            ui/src/pages/outcomes/freshness.test.ts \
+            ui/src/pages/outcomes/freshness.ts \
+            ui/src/pages/outcomes/outcomes-page.test.ts \
+            ui/src/pages/outcomes/outcomes-page.ts \
+            ui/src/pages/outcomes/view.ts \
+            ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts \
+            ui/src/e2e/outcomes.real-gateway.e2e.test.ts \
+            ui/src/styles/outcomes.css
           {
             git diff --name-only -z HEAD
             git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'
@@ -2791,6 +2803,7 @@ jobs:
         env:
           OPENCLAW_CAPTURE_UI_PROOF: ${{ github.event_name == 'workflow_dispatch' && inputs.capture_ui_proof && '1' || '0' }}
           OPENCLAW_UI_E2E_ARTIFACT_DIR: .artifacts/control-ui-e2e/real-gateway
+          OPENCLAW_UI_E2E_DIAGNOSTIC_DIR: .artifacts/control-ui-e2e-timeouts/real-gateway-attempt-${{ github.run_attempt }}
         run: >-
           node scripts/run-vitest.mjs run
           --config test/vitest/vitest.ui-e2e.config.ts
@@ -2801,10 +2814,21 @@ jobs:
           ui/src/e2e/logs-lifecycle.e2e.test.ts
           ui/src/e2e/agent-file-lifecycle.real-gateway.e2e.test.ts
           ui/src/e2e/cron-duration-save.real-gateway.e2e.test.ts
+          ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts
+          ui/src/e2e/outcomes.real-gateway.e2e.test.ts
           ui/src/e2e/session-progress-hovercard.real-gateway.e2e.test.ts
           extensions/qa-lab/src/control-ui-media-transcript.real-gateway.e2e.test.ts
           extensions/qa-lab/src/session-host-command-state.real-gateway.e2e.test.ts
           extensions/qa-lab/src/control-ui-openclaw-delegation.real-gateway.e2e.test.ts
+
+      - name: Upload Control UI real-Gateway failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: control-ui-real-gateway-timeout-${{ github.run_attempt }}
+          path: .artifacts/control-ui-e2e-timeouts/real-gateway-attempt-${{ github.run_attempt }}/**/*.json
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload sanitized Control UI real-Gateway proof
         if: always() && github.event_name == 'workflow_dispatch' && inputs.capture_ui_proof

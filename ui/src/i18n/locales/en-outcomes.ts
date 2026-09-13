@@ -1,0 +1,113 @@
+import type { TranslationMap } from "../lib/types.ts";
+import { en } from "./en.ts";
+
+// Outcome-only copy is registered when the lazy Outcomes page loads, keeping
+// its workflow labels out of the Control UI startup bundle.
+const enOutcomes = {
+  outcomesPage: {
+    listLabel: "Outcomes",
+    phaseLabel: "Phase",
+    readinessLabel: "Readiness",
+    acceptanceLabel: "Acceptance",
+    workLabel: "Linked work",
+    workStatus: "Status: {status}",
+    workStale: "Source is stale",
+    evidenceLabel: "Evidence",
+    proofStatus: "Proof status: {status}",
+    loadingDetail: "Loading details",
+    revalidatingDetail: "Checking outcome details",
+    detailsExpired: "Outcome details need refreshing before tracking can start.",
+    empty: "No outcomes",
+    loadFailed: "Couldn't load outcomes: {error}",
+    loadMore: "Load more outcomes",
+    loadDetailFailed: "Couldn't load outcome details: {error}",
+    mutationFailed: "Request failed: {error}",
+    createOutcome: "Create outcome",
+    retryCreateOutcome: "Retry the same outcome",
+    abandonPendingCreate: "Start a different outcome",
+    pendingCreateHelp:
+      "The previous request may have been accepted. Retry it before changing these fields, or explicitly start a different outcome.",
+    createHelp: "Start an Outcome with its first required criterion.",
+    title: "Title",
+    objective: "Objective",
+    criterion: "Criterion",
+    criterionNumber: "Criterion {number}",
+    addCriterion: "Add criterion",
+    removeCriterion: "Remove criterion",
+    editOutcome: "Edit outcome",
+    editHelp: "Update this Outcome contract before tracking begins.",
+    linkWork: "Link work",
+    unlinkWork: "Unlink",
+    linkWorkHelp: "Choose a Workboard card for an Outcome criterion.",
+    card: "Card",
+    selectCard: "Select a card",
+    loadCardsFailed: "Couldn't load Workboard cards: {error}",
+    cancelOutcome: "Cancel outcome",
+    cancelHelp: "Stops tracking permanently.",
+    cancelling: "Cancelling",
+    disconnected: "Outcome connection unavailable",
+    unauthorized: "Outcome access unavailable",
+    viewOutcome: "View",
+    viewOutcomeNamed: "View {title}",
+    criteria: "Criteria",
+    requiredCriterion: "Required",
+    optionalCriterion: "Optional",
+    linkedCards: "Linked cards",
+    linkedCard: "Card {cardId}",
+    sourceIssue: {
+      workboardDisabled: "Workboard disabled",
+      unavailable: "Linked source unavailable",
+    },
+    attentionLabel: "Attention",
+    nextActionsLabel: "Next actions",
+    attention: {
+      ownerUnavailable: "Owner unavailable",
+      stale: "Information is stale",
+      blocked: "A linked card is blocked",
+      contractIncomplete: "The Outcome contract is incomplete",
+      evidenceMissing: "Evidence is missing",
+      verificationRequired: "Verification is required",
+      rejected: "A decision was rejected",
+      readyForAcceptance: "Ready for acceptance",
+      acceptanceNeedsReview: "Acceptance needs review",
+      unknownOperation: "An operation needs observation",
+    },
+    acceptance: {
+      none: "Not accepted",
+      current: "Current",
+      needsReview: "Needs review",
+    },
+    evidence: {
+      proof: "Proof",
+      artifact: "Artifact",
+    },
+    nextAction: {
+      editContract: "Edit contract",
+      linkWork: "Link work",
+      unlinkWork: "Unlink work",
+      activate: "Start tracking",
+      reviewEvidence: "Review evidence",
+      accept: "Accept",
+      observeOperation: "Observe operation",
+    },
+    phase: {
+      draft: "Draft",
+      accepted: "Accepted",
+      cancelled: "Cancelled",
+    },
+    readiness: {
+      incomplete: "Incomplete",
+      blocked: "Blocked",
+      ready: "Ready",
+      stale: "Stale",
+      unavailable: "Unavailable",
+    },
+  },
+} satisfies TranslationMap;
+
+export const registerOutcomesEnglish = Object.assign(
+  () => {
+    en.outcomesPage = enOutcomes.outcomesPage;
+  },
+  { catalog: enOutcomes },
+);

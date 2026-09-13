@@ -211,6 +211,7 @@ function p02Guidance(
   }
   if (hasLinkedWork) {
     addAction("unlink-work");
+    addAction("refresh");
   }
   if (
     record.phase === "draft" &&

@@ -55,6 +55,63 @@ describe("shared proof capture", () => {
     expect(readFileSync(path.join(parent, "prior.png"), "utf8")).toBe("prior-proof");
   });
 
+  it("redacts secrets from retained failure diagnostics", async () => {
+    const parent = tempDirs.make("control-ui-failure-redaction-");
+    const secret = "diagnostic-secret-must-not-be-retained";
+    vi.stubEnv("OPENCLAW_UI_E2E_DIAGNOSTIC_DIR", parent);
+    // SAFETY: this fixture implements the Page boundary used by failure diagnostics.
+    const page = {
+      evaluate: async () => ({
+        hello: { bootstrapToken: secret, phase: "ready" },
+        observedAt: 42,
+        resource: `wss://user:${secret}@example.invalid/socket?token=${secret}`,
+      }),
+      isClosed: () => false,
+      url: () => `http://127.0.0.1/outcomes#bootstrapToken=${secret}`,
+      screenshot: async (options: { path: string }) => {
+        writeFileSync(options.path, "failure-proof");
+        return Buffer.from("failure-proof");
+      },
+    } as unknown as Page;
+
+    await captureControlUiE2eFailureDiagnostics(page, {
+      error: new Error(JSON.stringify({ token: secret, type: "gateway-failure" })),
+      label: "outcomes.refresh",
+      pageErrors: [
+        JSON.stringify({ token: secret }),
+        `wss://user:${secret}@example.invalid/?token=${secret}#bootstrapToken=${secret}`,
+      ],
+      pageEvents: [
+        {
+          at: "2026-01-01T00:00:00.000Z",
+          details: {
+            authorization: `Bearer ${secret}`,
+            text: JSON.stringify({ token: secret }),
+            url: `wss://user:${secret}@example.invalid/?token=${secret}`,
+          },
+          source: "console",
+        },
+      ],
+    });
+
+    const directory = readdirSync(parent, { withFileTypes: true }).find((entry) =>
+      entry.isDirectory(),
+    );
+    expect(directory).toBeDefined();
+    const reportPath = readdirSync(path.join(parent, directory!.name)).find((file) =>
+      file.endsWith(".json"),
+    );
+    expect(reportPath).toBeDefined();
+    const report = readFileSync(path.join(parent, directory!.name, reportPath!), "utf8");
+    expect(report).not.toContain(secret);
+    expect(report).toContain("outcomes.refresh");
+    expect(report).toContain("ready");
+    expect(report).toContain("42");
+    expect(report).toContain("gateway-failure");
+    expect(report).toContain('"url": "http://127.0.0.1/outcomes"');
+    expect(report).toContain("wss://example.invalid/");
+  });
+
   it("keeps shared capture disabled until its gate is enabled and uses the supplied owner", async () => {
     const parent = tempDirs.make("control-ui-proof-capture-");
     vi.stubEnv("OPENCLAW_UI_E2E_ARTIFACT_DIR", parent);

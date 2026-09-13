@@ -12033,6 +12033,8 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       "ui/src/e2e/cron-duration-save.real-gateway.e2e.test.ts",
       "ui/src/e2e/mobile-chat-session-menu.e2e.test.ts",
       "ui/src/e2e/mobile-sidebar-session-menu.e2e.test.ts",
+      "ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts",
+      "ui/src/e2e/outcomes.real-gateway.e2e.test.ts",
       "ui/src/e2e/session-management.delete.e2e.test.ts",
       "ui/src/e2e/sidebar-account-footer.e2e.test.ts",
     ]);
@@ -12648,8 +12650,27 @@ printf '%s\n' "\${CURL_SUCCESS_IP:-203.0.113.7}"
       OPENCLAW_CAPTURE_UI_PROOF:
         "${{ github.event_name == 'workflow_dispatch' && inputs.capture_ui_proof && '1' || '0' }}",
       OPENCLAW_UI_E2E_ARTIFACT_DIR: proofUpload.with.path,
+      OPENCLAW_UI_E2E_DIAGNOSTIC_DIR:
+        ".artifacts/control-ui-e2e-timeouts/real-gateway-attempt-${{ github.run_attempt }}",
     });
     expect(proofUploadIndex).toBeGreaterThan(realGatewayIndex);
+    const realGatewayDiagnostics = expectDefined(
+      uiE2eRealGateway.steps.find(
+        (step: WorkflowStep) => step.name === "Upload Control UI real-Gateway failure diagnostics",
+      ),
+      "real-Gateway Control UI E2E failure diagnostic upload",
+    );
+    expect(realGatewayDiagnostics).toEqual({
+      name: "Upload Control UI real-Gateway failure diagnostics",
+      if: "failure()",
+      uses: UPLOAD_ARTIFACT_V7,
+      with: {
+        name: "control-ui-real-gateway-timeout-${{ github.run_attempt }}",
+        path: ".artifacts/control-ui-e2e-timeouts/real-gateway-attempt-${{ github.run_attempt }}/**/*.json",
+        "if-no-files-found": "ignore",
+        "retention-days": 7,
+      },
+    });
   });
 
   it("builds artifacts once and smoke-tests the built CLI with Node and Bun", () => {
@@ -16373,6 +16394,8 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs admission");
   expect(bodies).toContain("pnpm install --frozen-lockfile --ignore-scripts");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
+  expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.test.ts");
+  expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.ts");
   expect(bodies).toContain(
     "git ls-files --others --exclude-standard -z -- . ':(exclude).ci-harness/**'",
   );
