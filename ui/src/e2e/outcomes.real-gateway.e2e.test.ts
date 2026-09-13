@@ -729,6 +729,49 @@ suite.define(() => {
         await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(3);
         await detail.locator('[data-outcome-action="accept"]').click();
         await detail.locator('[data-outcome-acceptance="current"]').waitFor({ state: "visible" });
+
+        if (!instance) {
+          throw new Error("Outcome Gateway fixture was not started");
+        }
+        const outcomeInstance = instance;
+        try {
+          await outcomeInstance.stopGateway();
+          await page
+            .getByText("Outcome connection unavailable", { exact: true })
+            .waitFor({ state: "visible" });
+          await outcomeInstance.state.writeConfig(outcomeGatewayConfig(outcomeInstance, false));
+          await outcomeInstance.startGateway();
+          await waitForControlUiGatewayReady(page);
+          await page.reload();
+          await waitForControlUiGatewayReady(page);
+          await page
+            .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+            .locator("[data-outcome-select]")
+            .click();
+          const unavailableDetail = page.locator("[data-outcome-detail-id]");
+          await unavailableDetail.locator('[data-outcome-acceptance="needs-review"]').waitFor({
+            state: "visible",
+          });
+          await expect
+            .poll(() => unavailableDetail.locator('[data-outcome-action="accept"]').count())
+            .toBe(0);
+          await expect
+            .poll(() => unavailableDetail.locator(`[data-outcome-evidence="${proofId}"]`).count())
+            .toBe(0);
+        } finally {
+          await outcomeInstance.stopGateway();
+          await outcomeInstance.state.writeConfig(outcomeGatewayConfig(outcomeInstance, true));
+          await outcomeInstance.startGateway();
+          await waitForControlUiGatewayReady(page);
+          await page.reload();
+          await waitForControlUiGatewayReady(page);
+        }
+        await page
+          .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+          .locator("[data-outcome-select]")
+          .click();
+        const restoredDetail = page.locator("[data-outcome-detail-id]");
+        await restoredDetail.locator('[data-outcome-acceptance="current"]').waitFor({ state: "visible" });
       },
     );
   });
