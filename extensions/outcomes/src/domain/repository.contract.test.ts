@@ -946,11 +946,22 @@ describe("Outcome repository atomic contract", () => {
     }
     const decisionSnapshot = structuredClone(first(accepted.record.decisions).decidedPlan);
     const acceptanceSnapshot = structuredClone(first(accepted.record.acceptances).acceptedPlan);
-    const changed = reduceOutcomeContract(accepted.record, {
+    const renamed = reduceOutcomeTitle(accepted.record, {
       expectedRevision: accepted.record.revision,
-      objective: "Revised after acceptance",
-      criteria: accepted.record.criteria,
+      title: "Renamed after acceptance",
       serverTime: 44,
+    });
+    if (renamed.kind !== "updated") {
+      throw new Error("fixture title update did not commit");
+    }
+    expect(renamed.record.phase).toBe("accepted");
+    expect(first(renamed.record.decisions).decidedPlan).toEqual(decisionSnapshot);
+    expect(first(renamed.record.acceptances).acceptedPlan).toEqual(acceptanceSnapshot);
+    const changed = reduceOutcomeContract(renamed.record, {
+      expectedRevision: renamed.record.revision,
+      objective: "Revised after acceptance",
+      criteria: renamed.record.criteria,
+      serverTime: 45,
     });
     if (changed.kind !== "updated") {
       throw new Error("fixture contract update did not commit");
@@ -959,7 +970,7 @@ describe("Outcome repository atomic contract", () => {
       expectedRevision: changed.record.revision,
       criterionId: "c-1",
       cardId: "card-1",
-      serverTime: 45,
+      serverTime: 46,
     });
     if (unlinked.kind !== "updated") {
       throw new Error("fixture unlink did not commit");
