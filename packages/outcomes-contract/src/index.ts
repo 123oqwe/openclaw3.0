@@ -281,6 +281,10 @@ export type OutcomeMutationResult = { outcome: OutcomeDetail };
 
 export type OutcomeDeleteResult = { deleted: true; id: string };
 
+export type OutcomeExportParams = { id: string };
+/** Persisted record stays opaque to ordinary client DTO consumers. */
+export type OutcomeExportResult = { schemaVersion: 1; exportedAt: number; record: unknown };
+
 export type OutcomeAssuranceMutationResult = {
   outcome: OutcomeDetail;
   replayed: boolean;

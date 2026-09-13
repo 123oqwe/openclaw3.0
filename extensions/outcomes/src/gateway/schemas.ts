@@ -37,6 +37,8 @@ export const outcomeIdParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const outcomeExportParamsSchema = outcomeIdParamsSchema;
+
 export const outcomeListParamsSchema = Type.Object(
   {
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),

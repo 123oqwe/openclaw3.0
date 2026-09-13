@@ -8,6 +8,8 @@ import {
   OUTCOME_REFRESH_STATUSES,
   type OutcomeDeleteParams,
   type OutcomeDeleteResult,
+  type OutcomeExportParams,
+  type OutcomeExportResult,
   type OutcomeHealthParams,
   type OutcomeHealthResult,
   type OutcomeDetail,
@@ -33,6 +35,15 @@ describe("outcomes public contract", () => {
   it("publishes the exact admin deletion request and response shape", () => {
     expectTypeOf<OutcomeDeleteParams>().toEqualTypeOf<OutcomeRevisionParams>();
     expectTypeOf<OutcomeDeleteResult>().toEqualTypeOf<{ deleted: true; id: string }>();
+  });
+
+  it("keeps lossless export records opaque to ordinary public DTO consumers", () => {
+    expectTypeOf<OutcomeExportParams>().toEqualTypeOf<{ id: string }>();
+    expectTypeOf<OutcomeExportResult>().toEqualTypeOf<{
+      schemaVersion: 1;
+      exportedAt: number;
+      record: unknown;
+    }>();
   });
 
   it("exports only the P-01 view surface and bounded list constants", () => {
