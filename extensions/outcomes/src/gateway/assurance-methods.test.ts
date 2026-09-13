@@ -426,7 +426,11 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
     const outcome = (
       refreshed[1] as {
-        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
       }
     ).outcome;
     const writes = harness.writes();
@@ -456,9 +460,7 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     const id = await createLinkedOutcome(harness);
     await harness.call("outcomes.activate", { id, expectedRevision: 2 });
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
-    const outcome = (
-      refreshed[1] as { outcome: { planHash: string; revision: number } }
-    ).outcome;
+    const outcome = (refreshed[1] as { outcome: { planHash: string; revision: number } }).outcome;
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
 
@@ -495,7 +497,11 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
     const outcome = (
       refreshed[1] as {
-        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
       }
     ).outcome;
     const writes = harness.writes();
