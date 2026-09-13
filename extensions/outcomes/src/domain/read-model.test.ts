@@ -618,6 +618,13 @@ describe("Outcome P-01 read model", () => {
     const current = first(input.decisions);
     input.decisions = [{ ...current, id: "decision-current-rejected", status: "rejected" }];
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
+    expect(toOutcomeDetail(valid(input), 10)).toMatchObject({
+      attention: expect.arrayContaining([
+        { code: "rejected" },
+        { code: "verification-required", criterionId: "c-1" },
+      ]),
+      nextActions: expect.arrayContaining(["review-evidence"]),
+    });
 
     input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");

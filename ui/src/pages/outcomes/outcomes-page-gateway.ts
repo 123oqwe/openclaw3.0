@@ -15,6 +15,16 @@ import {
 import { OutcomesPageState } from "./outcomes-page-state.ts";
 
 export abstract class OutcomesPageGateway extends OutcomesPageState {
+  protected clearAssuranceState() {
+    this.assuranceRequestSequence += 1;
+    this.verificationDialogOpen = false;
+    this.verifying = false;
+    this.verificationError = null;
+    this.verificationCriterionId = "";
+    this.verificationStatus = "verified";
+    this.verificationNote = "";
+  }
+
   protected readonly handleVisibilityChange = () => {
     if (document.visibilityState === "visible") {
       this.revalidateAfterPageResume();
@@ -153,6 +163,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.linkCriterionId = "";
     this.linkCardId = "";
     this.linkRequestSequence += 1;
+    this.clearAssuranceState();
     this.mutationSequence += 1;
     this.detailLoading = preserveSelection && this.selectedOutcomeId !== null;
     this.detailRevalidating = this.detailLoading;
@@ -267,6 +278,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.linkCriterionId = "";
     this.linkCardId = "";
     this.linkRequestSequence += 1;
+    this.clearAssuranceState();
     void this.loadSelectedOutcome();
   }
 
@@ -296,6 +308,7 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.linkCriterionId = "";
     this.linkCardId = "";
     this.linkRequestSequence += 1;
+    this.clearAssuranceState();
     this.mutationSequence += 1;
     if (focusId) {
       this.restoreListFocus(focusId);

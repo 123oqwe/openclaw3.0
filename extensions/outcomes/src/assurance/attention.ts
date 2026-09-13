@@ -91,7 +91,7 @@ export function deriveOutcomeAttention(
     if (sourceDigests.length === 0) {
       addAttention("evidence-missing", criterion.id);
       addAction("refresh");
-    } else if (currentOutcomeDecision(record, criterion, projections, observedAt) === undefined) {
+    } else if (record.phase === "active" || record.phase === "accepted") {
       addAttention("verification-required", criterion.id);
       addAction("review-evidence");
     }
@@ -124,6 +124,25 @@ export function deriveOutcomeAttention(
         acceptance.planHash === record.planHash &&
         acceptance.closureHash === closureHash,
     );
+  if (
+    record.criteria.some(
+      (criterion) =>
+        currentOutcomeDecision(record, criterion, projections, observedAt)?.decision.status ===
+        "rejected",
+    )
+  ) {
+    addAttention("rejected");
+  }
+  if (record.acceptances.length > 0 && !hasCurrentAcceptance) {
+    addAttention("acceptance-needs-review");
+  }
+  if (
+    record.operations.some((operation) =>
+      ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
+    )
+  ) {
+    addAttention("unknown-operation");
+  }
   if (closureHash !== null && !hasCurrentAcceptance) {
     addAttention("ready-for-acceptance");
     addAction("review-evidence");

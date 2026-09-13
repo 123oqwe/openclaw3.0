@@ -20,6 +20,76 @@ afterEach(() => {
 });
 
 describe("OutcomesPage mutations", () => {
+  it("clears a pending verification dialog and its private rejection note when selection changes", async () => {
+    const detailFor = (id: string, title: string) => ({
+      ...outcomeDetail(id, title),
+      criteria: [
+        {
+          ...outcomeDetail(id, title).criteria[0]!,
+          evidenceSetHash: "e".repeat(64),
+        },
+      ],
+      nextActions: ["review-evidence"] as const,
+      phase: "active" as const,
+      planGeneration: 1,
+      planHash: "a".repeat(64),
+    });
+    const request = vi.fn((method: string, params?: { id?: string }) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({
+          outcomes: [outcomeSummary("outcome-a", "Outcome A"), outcomeSummary("outcome-b", "Outcome B")],
+        });
+      }
+      if (method === "outcomes.get" && params?.id === "outcome-a") {
+        return Promise.resolve({ outcome: detailFor("outcome-a", "Outcome A") });
+      }
+      if (method === "outcomes.get" && params?.id === "outcome-b") {
+        return Promise.resolve({ outcome: detailFor("outcome-b", "Outcome B") });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.verifyCriterion"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    const status = page.querySelector<HTMLSelectElement>('[data-outcome-verification-form] select[name="status"]');
+    if (!status) {
+      throw new Error("Verification status selector missing");
+    }
+    status.value = "rejected";
+    status.dispatchEvent(new Event("change", { bubbles: true }));
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-verification-form] textarea[name="note"]')).not.toBeNull();
+    });
+    const note = page.querySelector<HTMLTextAreaElement>('[data-outcome-verification-form] textarea[name="note"]');
+    note!.value = "private A rejection";
+    note!.dispatchEvent(new InputEvent("input", { bubbles: true }));
+    page.querySelector<HTMLButtonElement>(".outcome-detail__back")?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-select="outcome-b"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-b"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-detail-id="outcome-b"]')).not.toBeNull();
+    });
+    expect(page.querySelector("[data-outcome-verification-form]")).toBeNull();
+    expect(page.textContent).not.toContain("private A rejection");
+  });
+
   it("submits a human verification only through the advertised Gateway method", async () => {
     const detail = {
       ...outcomeDetail("outcome-a", "Outcome A"),
