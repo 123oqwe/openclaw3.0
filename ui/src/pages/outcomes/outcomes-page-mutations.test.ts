@@ -20,6 +20,69 @@ afterEach(() => {
 });
 
 describe("OutcomesPage mutations", () => {
+  it("replays the same verification payload only after an explicit user retry", async () => {
+    let rejectVerification: ((reason?: unknown) => void) | undefined;
+    const verificationParams: Array<Record<string, unknown>> = [];
+    const detail = {
+      ...outcomeDetail("outcome-a", "Outcome A"),
+      criteria: [
+        {
+          ...outcomeDetail("outcome-a", "Outcome A").criteria[0]!,
+          evidenceSetHash: "e".repeat(64),
+        },
+      ],
+      nextActions: ["review-evidence"] as const,
+      phase: "active" as const,
+      planGeneration: 1,
+      planHash: "a".repeat(64),
+      revision: 4,
+    };
+    const request = vi.fn((method: string, params: Record<string, unknown>) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({ outcome: detail });
+      }
+      if (method === "outcomes.verifyCriterion") {
+        verificationParams.push(params);
+        if (verificationParams.length === 1) {
+          return new Promise((_resolve, reject) => {
+            rejectVerification = reject;
+          });
+        }
+        return Promise.resolve({ outcome: { ...detail, revision: 5 } });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.verifyCriterion"],
+      ["operator.read", "operator.write"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-select="outcome-a"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    const form = page.querySelector<HTMLFormElement>("[data-outcome-verification-form]");
+    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(verificationParams).toHaveLength(1));
+    rejectVerification?.(new Error("response lost"));
+    await vi.waitFor(() => expect(page.textContent).toContain("Request failed"));
+    form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
+    await vi.waitFor(() => expect(verificationParams).toHaveLength(2));
+    expect(verificationParams[1]).toEqual(verificationParams[0]);
+  });
+
   it("clears a pending verification dialog and its private rejection note when selection changes", async () => {
     const detailFor = (id: string, title: string) => ({
       ...outcomeDetail(id, title),
