@@ -20,6 +20,8 @@ afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
+
+describe("OutcomesPage lifecycle", () => {
   it("does not treat a connected transport without an authenticated self user as Outcome access", async () => {
     const request = vi.fn(async () => ({ outcomes: [] }));
     const client = { request } as unknown as GatewayBrowserClient;
