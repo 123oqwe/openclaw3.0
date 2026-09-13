@@ -27,12 +27,18 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       return;
     }
     const criterion = detail.criteria.find((item) => item.evidenceSetHash !== null);
-    if (!criterion) {
+    if (!criterion && this.verificationRequest === null) {
       return;
     }
-    this.verificationCriterionId = criterion.id;
-    this.verificationStatus = "verified";
-    this.verificationNote = "";
+    if (this.verificationRequest) {
+      this.verificationCriterionId = this.verificationRequest.criterionId;
+      this.verificationStatus = this.verificationRequest.status;
+      this.verificationNote = this.verificationRequest.note ?? "";
+    } else {
+      this.verificationCriterionId = criterion!.id;
+      this.verificationStatus = "verified";
+      this.verificationNote = "";
+    }
     this.verificationError = null;
     this.verificationDialogOpen = true;
   }
@@ -71,6 +77,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
     const snapshot = this.gateway.snapshot;
     const client = this.gateway.client;
     const scope = this.gateway.capture();
+    const pendingRequest = this.verificationRequest;
     const criterion = detail?.criteria.find((item) => item.id === this.verificationCriterionId);
     const note = this.verificationNote.trim();
     if (
@@ -78,9 +85,10 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       !detail ||
       !id ||
       detail.id !== id ||
-      !detail.planHash ||
-      !criterion?.evidenceSetHash ||
-      (this.verificationStatus === "rejected" && !note) ||
+      (pendingRequest === null &&
+        (!detail.planHash ||
+          !criterion?.evidenceSetHash ||
+          (this.verificationStatus === "rejected" && !note))) ||
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
@@ -90,8 +98,21 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       return;
     }
     const ownerId = snapshot.selfUser.id;
+    const request =
+      pendingRequest ??
+      ({
+        id,
+        expectedRevision: detail.revision,
+        decisionId: crypto.randomUUID(),
+        criterionId: criterion!.id,
+        status: this.verificationStatus,
+        planHash: detail.planHash!,
+        evidenceSetHash: criterion!.evidenceSetHash!,
+        ...(note ? { note } : {}),
+      } satisfies OutcomeVerifyCriterionParams);
+    this.verificationRequest = request;
     const sequence = ++this.assuranceRequestSequence;
-    const expectedRevision = detail.revision;
+    const expectedRevision = request.expectedRevision;
     this.verificationError = null;
     this.verifying = true;
     this.detailRequestSequence += 1;
@@ -99,16 +120,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
     const requestStartedAt = performance.now();
     let mutationResultWasCurrent = false;
     try {
-      const outcome = await verifyOutcomeCriterion(client, {
-        id,
-        expectedRevision,
-        decisionId: crypto.randomUUID(),
-        criterionId: criterion.id,
-        status: this.verificationStatus,
-        planHash: detail.planHash,
-        evidenceSetHash: criterion.evidenceSetHash,
-        ...(note ? { note } : {}),
-      });
+      const outcome = await verifyOutcomeCriterion(client, request);
       if (
         sequence === this.assuranceRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -119,6 +131,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         this.detailRequestSequence += 1;
         this.replaceOutcome(outcome, requestStartedAt);
         this.verificationDialogOpen = false;
+        this.verificationRequest = null;
       }
     } catch (error) {
       if (
@@ -154,8 +167,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       !detail ||
       !id ||
       detail.id !== id ||
-      !detail.planHash ||
-      !detail.closureHash ||
+      (this.acceptanceRequest === null && (!detail.planHash || !detail.closureHash)) ||
       !snapshot?.selfUser?.id ||
       !client ||
       !scope ||
@@ -165,21 +177,25 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
       return;
     }
     const ownerId = snapshot.selfUser.id;
+    const request =
+      this.acceptanceRequest ??
+      ({
+        id,
+        expectedRevision: detail.revision,
+        acceptanceId: crypto.randomUUID(),
+        planHash: detail.planHash!,
+        closureHash: detail.closureHash!,
+      } satisfies OutcomeAcceptParams);
+    this.acceptanceRequest = request;
     const sequence = ++this.assuranceRequestSequence;
-    const expectedRevision = detail.revision;
+    const expectedRevision = request.expectedRevision;
     this.mutationError = null;
     this.detailRequestSequence += 1;
     const mutationLock = this.beginOutcomeMutation(id, ownerId);
     const requestStartedAt = performance.now();
     let mutationResultWasCurrent = false;
     try {
-      const outcome = await acceptOutcome(client, {
-        id,
-        expectedRevision,
-        acceptanceId: crypto.randomUUID(),
-        planHash: detail.planHash,
-        closureHash: detail.closureHash,
-      });
+      const outcome = await acceptOutcome(client, request);
       if (
         sequence === this.assuranceRequestSequence &&
         id === this.selectedOutcomeId &&
@@ -189,6 +205,7 @@ export abstract class OutcomesPageMutations extends OutcomesPageGateway {
         mutationResultWasCurrent = true;
         this.detailRequestSequence += 1;
         this.replaceOutcome(outcome, requestStartedAt);
+        this.acceptanceRequest = null;
       }
     } catch (error) {
       if (

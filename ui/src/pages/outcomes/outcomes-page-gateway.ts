@@ -23,6 +23,8 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.verificationCriterionId = "";
     this.verificationStatus = "verified";
     this.verificationNote = "";
+    this.verificationRequest = null;
+    this.acceptanceRequest = null;
   }
 
   protected readonly handleVisibilityChange = () => {

@@ -1,9 +1,11 @@
 import { consume } from "@lit/context";
 import type {
   OutcomeCreateParams,
+  OutcomeAcceptParams,
   OutcomeCriterionInput,
   OutcomeDetail,
   OutcomeSummary,
+  OutcomeVerifyCriterionParams,
 } from "@openclaw/outcomes-contract";
 import type { WorkboardCard } from "@openclaw/workboard-contract";
 import { state } from "lit/decorators.js";
@@ -71,6 +73,8 @@ export abstract class OutcomesPageState extends OpenClawLightDomElement {
   protected linkRequestSequence = 0;
   protected assuranceRequestSequence = 0;
   protected createRequest: OutcomeCreateParams | null = null;
+  protected verificationRequest: OutcomeVerifyCriterionParams | null = null;
+  protected acceptanceRequest: OutcomeAcceptParams | null = null;
   protected gatewayIdentity: OutcomeGatewayIdentity | null = null;
   protected pendingListFocusId: string | null = null;
   protected pendingCreateFocus = false;
