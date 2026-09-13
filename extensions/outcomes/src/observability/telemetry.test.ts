@@ -1,4 +1,3 @@
-import { metrics } from "@opentelemetry/api";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createHarness, createParams, outcomeIds } from "../gateway/methods.test-support.js";
 
@@ -9,11 +8,12 @@ const telemetry = vi.hoisted(() => {
     createCounter: vi.fn(() => counter),
     createHistogram: vi.fn(() => histogram),
   };
-  return { counter, histogram, meter };
+  const getMeter = vi.fn(() => meter);
+  return { counter, getMeter, histogram, meter };
 });
 
 vi.mock("@opentelemetry/api", () => ({
-  metrics: { getMeter: vi.fn(() => telemetry.meter) },
+  metrics: { getMeter: telemetry.getMeter },
 }));
 
 describe("Outcome Gateway telemetry", () => {
@@ -22,7 +22,7 @@ describe("Outcome Gateway telemetry", () => {
     telemetry.histogram.record.mockClear();
     telemetry.meter.createCounter.mockClear();
     telemetry.meter.createHistogram.mockClear();
-    vi.mocked(metrics.getMeter).mockClear();
+    telemetry.getMeter.mockClear();
   });
 
   it("records a successful mutation using only low-cardinality labels", async () => {
@@ -34,7 +34,7 @@ describe("Outcome Gateway telemetry", () => {
       expect.objectContaining({ outcome: expect.objectContaining({ id }) }),
     ]);
 
-    expect(metrics.getMeter).toHaveBeenCalledWith("openclaw.outcomes");
+    expect(telemetry.getMeter).toHaveBeenCalledWith("openclaw.outcomes");
     expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
       method: "create",
       result: "success",
