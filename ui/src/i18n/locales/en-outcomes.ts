@@ -16,6 +16,8 @@ const enOutcomes = {
     decisionHistoryLabel: "Decision history",
     acceptanceHistoryLabel: "Acceptance history",
     acceptedAt: "Accepted at {time}",
+    historicalPlan: "Original plan",
+    historicalSourcesRestricted: "Some linked cards are no longer available to you.",
     proofStatus: "Proof status: {status}",
     loadingDetail: "Loading details",
     revalidatingDetail: "Checking outcome details",

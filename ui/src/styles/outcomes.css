@@ -89,6 +89,19 @@
   overflow-wrap: anywhere;
 }
 
+.outcome-detail__historical-plan {
+  margin-top: var(--space-2);
+}
+
+.outcome-detail__historical-plan h4,
+.outcome-detail__historical-plan p {
+  margin: var(--space-2) 0 0;
+}
+
+.outcome-detail__historical-restricted {
+  color: var(--muted);
+}
+
 .outcome-detail__actions button {
   min-height: 44px;
 }

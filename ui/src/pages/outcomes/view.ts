@@ -122,6 +122,46 @@ function sourceIssueLabel(reason: OutcomeSourceIssueReason): string {
   }
 }
 
+function renderHistoricalPlan(
+  plan: OutcomeDetail["decisions"][number]["decidedPlan"],
+  decisionCriterionId?: string,
+) {
+  const criteria =
+    decisionCriterionId === undefined
+      ? plan.criteria
+      : plan.criteria.filter((criterion) => criterion.id === decisionCriterionId);
+  return html`<div class="outcome-detail__historical-plan">
+    <p><strong>${t("outcomesPage.objective")}</strong>: ${plan.objective}</p>
+    <h4>${t("outcomesPage.criteria")}</h4>
+    <ul>
+      ${criteria.map(
+        (criterion) => html`<li data-outcome-history-criterion=${criterion.id}>
+          <strong>${criterion.text}</strong>
+          <span class="outcome-detail__criterion-kind">
+            ${criterion.required
+              ? t("outcomesPage.requiredCriterion")
+              : t("outcomesPage.optionalCriterion")}
+          </span>
+          ${criterion.workRefs.length > 0
+            ? html`<ul aria-label=${t("outcomesPage.linkedCards")}>
+                ${criterion.workRefs.map(
+                  (ref) => html`<li data-outcome-history-card=${ref.cardId}>
+                    ${t("outcomesPage.linkedCard", { cardId: ref.cardId })}
+                  </li>`,
+                )}
+              </ul>`
+            : nothing}
+          ${criterion.sourcesVisibility === "restricted"
+            ? html`<p class="outcome-detail__historical-restricted">
+                ${t("outcomesPage.historicalSourcesRestricted")}
+              </p>`
+            : nothing}
+        </li>`,
+      )}
+    </ul>
+  </div>`;
+}
+
 export function renderOutcomeDetail(data: OutcomeDetailViewData) {
   if (!data.selectedOutcomeId) {
     return nothing;
@@ -255,10 +295,16 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           <ul>
             ${data.detail.decisions.map(
               (decision) => html`<li data-outcome-decision=${decision.id}>
-                ${decision.status === "verified"
-                  ? t("outcomesPage.verified")
-                  : t("outcomesPage.rejected")}
-                ${decision.note === undefined ? nothing : html`<p>${decision.note}</p>`}
+                <details>
+                  <summary>
+                    ${decision.status === "verified"
+                      ? t("outcomesPage.verified")
+                      : t("outcomesPage.rejected")}
+                    — ${t("outcomesPage.historicalPlan")}
+                  </summary>
+                  ${decision.note === undefined ? nothing : html`<p>${decision.note}</p>`}
+                  ${renderHistoricalPlan(decision.decidedPlan, decision.criterionId)}
+                </details>
               </li>`,
             )}
           </ul>
@@ -270,7 +316,13 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           <ul>
             ${data.detail.acceptances.map(
               (acceptance) => html`<li data-outcome-acceptance-history=${acceptance.id}>
-                ${t("outcomesPage.acceptedAt", { time: String(acceptance.acceptedAt) })}
+                <details>
+                  <summary>
+                    ${t("outcomesPage.acceptedAt", { time: String(acceptance.acceptedAt) })}
+                    — ${t("outcomesPage.historicalPlan")}
+                  </summary>
+                  ${renderHistoricalPlan(acceptance.acceptedPlan)}
+                </details>
               </li>`,
             )}
           </ul>

@@ -21,7 +21,7 @@ afterEach(() => {
 });
 
 describe("OutcomesPage", () => {
-  it("renders an Outcome decision's own review note", async () => {
+  it("renders authorized historical decision and acceptance plans without restoring restricted refs", async () => {
     const request = vi.fn((method: string) => {
       if (method === "outcomes.list") {
         return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
@@ -31,19 +31,23 @@ describe("OutcomesPage", () => {
         return Promise.resolve({
           outcome: {
             ...detail,
+            objective: "Current Outcome objective after the contract changed",
             decisions: [
               {
                 criterionId: "criterion-1",
                 decidedAt: 2,
                 decidedPlan: {
                   contractRevision: 1,
-                  criteria: detail.criteria.map((criterion) => ({
-                    id: criterion.id,
-                    required: criterion.required,
-                    text: criterion.text,
-                    workRefs: criterion.workRefs,
-                  })),
-                  objective: detail.objective,
+                  criteria: [
+                    {
+                      id: "criterion-1",
+                      required: true,
+                      sourcesVisibility: "complete" as const,
+                      text: "Original release criterion",
+                      workRefs: detail.criteria[0]!.workRefs,
+                    },
+                  ],
+                  objective: "Original Outcome objective",
                   outcomeId: detail.id,
                   planGeneration: 0,
                 },
@@ -54,6 +58,31 @@ describe("OutcomesPage", () => {
                 planGeneration: 0,
                 planHash: "p".repeat(64),
                 status: "rejected" as const,
+              },
+            ],
+            acceptances: [
+              {
+                acceptedAt: 3,
+                acceptedPlan: {
+                  contractRevision: 1,
+                  criteria: [
+                    {
+                      id: "criterion-1",
+                      required: true,
+                      sourcesVisibility: "restricted" as const,
+                      text: "Original acceptance criterion",
+                      workRefs: [],
+                    },
+                  ],
+                  objective: "Original accepted objective",
+                  outcomeId: detail.id,
+                  planGeneration: 0,
+                },
+                acceptedRevision: 3,
+                closureHash: "c".repeat(64),
+                id: "acceptance-a",
+                planGeneration: 0,
+                planHash: "p".repeat(64),
               },
             ],
           },
@@ -71,9 +100,24 @@ describe("OutcomesPage", () => {
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
     await vi.waitFor(() => {
-      expect(page.querySelector('[data-outcome-decision="decision-a"]')?.textContent).toContain(
-        "The reviewer found a release blocker.",
+      const decision = page.querySelector<HTMLElement>('[data-outcome-decision="decision-a"]');
+      expect(decision?.textContent).toContain("The reviewer found a release blocker.");
+      expect(decision?.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
+      expect(decision?.textContent).toContain("Original Outcome objective");
+      expect(decision?.textContent).toContain("Original release criterion");
+      expect(decision?.querySelector('[data-outcome-history-card="card-1"]')).not.toBeNull();
+      const decisionSummary = decision?.querySelector<HTMLElement>("summary");
+      decisionSummary?.focus();
+      expect(document.activeElement).toBe(decisionSummary);
+
+      const acceptance = page.querySelector<HTMLElement>(
+        '[data-outcome-acceptance-history="acceptance-a"]',
       );
+      expect(acceptance?.querySelector<HTMLDetailsElement>("details")?.open).toBe(false);
+      expect(acceptance?.textContent).toContain("Original accepted objective");
+      expect(acceptance?.textContent).toContain("Original acceptance criterion");
+      expect(acceptance?.querySelector("[data-outcome-history-card]")).toBeNull();
+      expect(acceptance?.textContent).toContain("Some linked cards are no longer available to you.");
     });
   });
 
