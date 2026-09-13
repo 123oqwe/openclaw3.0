@@ -748,6 +748,15 @@ suite.define(() => {
         await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(3);
         await detail.locator('[data-outcome-action="accept"]').click();
         await detail.locator('[data-outcome-acceptance="current"]').waitFor({ state: "visible" });
+        await detail.locator('[data-outcome-action="edit-contract"]').click();
+        const editForm = page.locator("[data-outcome-edit-form]");
+        await editForm.locator('textarea[name="objective"]').fill("Revised accepted objective");
+        await editForm.locator("[data-outcome-confirm-edit]").click();
+        await detail.getByText("Revised accepted objective", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await detail.locator('[data-outcome-phase="active"]').waitFor({ state: "visible" });
+        await detail.locator("[data-outcome-acceptance-history]").waitFor({ state: "visible" });
 
         if (!instance) {
           throw new Error("Outcome Gateway fixture was not started");
