@@ -908,6 +908,69 @@ describe("Outcome repository atomic contract", () => {
     ).toMatchObject({ kind: "conflict", replayed: false, record: committed.record });
   });
 
+  it("preserves actual decision and acceptance snapshots across later contract changes and unlink", () => {
+    const initial = assuredActiveRecord();
+    const verified = reduceOutcomeDecision(initial, {
+      expectedRevision: initial.revision,
+      id: "decision-history",
+      requestHash: "d".repeat(64),
+      criterionId: "c-1",
+      status: "verified",
+      planHash: initial.planHash!,
+      evidenceSetHash: evidenceSetHash({
+        criterionId: "c-1",
+        planGeneration: initial.planGeneration,
+        sourceDigests: ["proof-digest-1"],
+      }),
+      profileId: initial.managerProfileId,
+      serverTime: 42,
+    });
+    if (verified.kind !== "updated") {
+      throw new Error("fixture decision did not commit");
+    }
+    const closureHash = deriveOutcomeClosure(verified.record, verified.record.projections, 42);
+    if (closureHash === null || verified.record.planHash === null) {
+      throw new Error("fixture closure was not complete");
+    }
+    const accepted = reduceOutcomeAcceptance(verified.record, {
+      expectedRevision: verified.record.revision,
+      id: "acceptance-history",
+      requestHash: "a".repeat(64),
+      planHash: verified.record.planHash,
+      closureHash,
+      profileId: verified.record.managerProfileId,
+      serverTime: 43,
+    });
+    if (accepted.kind !== "updated") {
+      throw new Error("fixture acceptance did not commit");
+    }
+    const decisionSnapshot = structuredClone(first(accepted.record.decisions).decidedPlan);
+    const acceptanceSnapshot = structuredClone(first(accepted.record.acceptances).acceptedPlan);
+    const changed = reduceOutcomeContract(accepted.record, {
+      expectedRevision: accepted.record.revision,
+      objective: "Revised after acceptance",
+      criteria: accepted.record.criteria,
+      serverTime: 44,
+    });
+    if (changed.kind !== "updated") {
+      throw new Error("fixture contract update did not commit");
+    }
+    const unlinked = reduceOutcomeUnlink(changed.record, {
+      expectedRevision: changed.record.revision,
+      criterionId: "c-1",
+      cardId: "card-1",
+      serverTime: 45,
+    });
+    if (unlinked.kind !== "updated") {
+      throw new Error("fixture unlink did not commit");
+    }
+
+    expect(unlinked.record.phase).toBe("active");
+    expect(first(unlinked.record.decisions).decidedPlan).toEqual(decisionSnapshot);
+    expect(first(unlinked.record.acceptances).acceptedPlan).toEqual(acceptanceSnapshot);
+    expect(parseOutcomeRecord(unlinked.record)).toEqual(unlinked.record);
+  });
+
   it("rejects a decision whose client plan guard differs without changing the record", () => {
     const record = assuredActiveRecord();
     const result = reduceOutcomeDecision(record, {
