@@ -368,7 +368,11 @@ describe("Outcome P-01 read model", () => {
           attemptedAt: 1,
         },
       ];
-      expect(toOutcomeSummary(valid(input), 10).readiness).toBe("blocked");
+      const detail = toOutcomeDetail(valid(input), 10);
+      expect(detail.readiness).toBe("blocked");
+      expect(detail.nextActions).not.toEqual(
+        expect.arrayContaining(["edit-contract", "link-work", "unlink-work"]),
+      );
     },
   );
 
@@ -619,6 +623,9 @@ describe("Outcome P-01 read model", () => {
       criterionId: "c-1",
     });
     expect(detail.nextActions).toContain("review-evidence");
+    expect(detail.nextActions).toEqual(
+      expect.arrayContaining(["edit-contract", "link-work", "unlink-work"]),
+    );
   });
 
   it("reports the earliest successful check across every linked source of a current acceptance", () => {

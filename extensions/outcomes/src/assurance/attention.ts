@@ -44,6 +44,9 @@ export function deriveOutcomeAttention(
   const projectionsByRef = new Map(
     projections.map((projection) => [workRefIdentity(projection.ref), projection]),
   );
+  const hasUncertainOperation = record.operations.some((operation) =>
+    ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
+  );
   let hasLinkedWork = false;
   for (const criterion of record.criteria) {
     const missingRequiredLink = criterion.required && criterion.workRefs.length === 0;
@@ -106,8 +109,17 @@ export function deriveOutcomeAttention(
     }
   }
   if (hasLinkedWork) {
-    addAction("unlink-work");
     addAction("refresh");
+    if (!hasUncertainOperation) {
+      addAction("unlink-work");
+    }
+  }
+  if (
+    !hasUncertainOperation &&
+    (record.phase === "draft" || record.phase === "active" || record.phase === "accepted")
+  ) {
+    addAction("edit-contract");
+    addAction("link-work");
   }
   if (
     record.phase === "draft" &&
@@ -119,9 +131,7 @@ export function deriveOutcomeAttention(
   }
   if (
     (record.phase === "draft" || record.phase === "active") &&
-    !record.operations.some((operation) =>
-      ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
-    )
+    !hasUncertainOperation
   ) {
     addAction("cancel");
   }
@@ -145,11 +155,7 @@ export function deriveOutcomeAttention(
   if (record.acceptances.length > 0 && !hasCurrentAcceptance) {
     addAttention("acceptance-needs-review");
   }
-  if (
-    record.operations.some((operation) =>
-      ["prepared", "may-have-crossed", "unknown"].includes(operation.state),
-    )
-  ) {
+  if (hasUncertainOperation) {
     addAttention("unknown-operation");
   }
   if (closureHash !== null && !hasCurrentAcceptance) {

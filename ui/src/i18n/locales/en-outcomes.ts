@@ -9,6 +9,7 @@ const enOutcomes = {
     phaseLabel: "Phase",
     readinessLabel: "Readiness",
     acceptanceLabel: "Acceptance",
+    lastSuccessfulCheck: "Last checked at {time}",
     workLabel: "Linked work",
     workStatus: "Status: {status}",
     workStale: "Source is stale",

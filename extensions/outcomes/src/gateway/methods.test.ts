@@ -1096,6 +1096,67 @@ describe("P-02 Outcome handlers", () => {
     expect(harness.gatewayRequest).toHaveBeenCalledOnce();
   });
 
+  it.each([
+    ["outcomes.verifyCriterion", "123e4567-e89b-42d3-a456-426614174040"],
+    ["outcomes.accept", "123e4567-e89b-42d3-a456-426614174041"],
+  ] as const)(
+    "rejects an over-capacity evidence refresh from %s without writing",
+    async (method, mutationId) => {
+      const harness = createHarness({
+        workboardCards: [
+          {
+            id: "card-a",
+            status: "done",
+            createdAt: 1,
+            updatedAt: 2,
+            metadata: {
+              automation: { boardId: "board-a" },
+              proof: Array.from({ length: 101 }, (_unused, index) => ({
+                id: `proof-${index}`,
+                status: "passed",
+                createdAt: index + 1,
+                label: `Proof ${index}`,
+              })),
+              artifacts: [],
+            },
+          },
+        ],
+      });
+      const id = await createLinkedOutcome(harness);
+      await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+      const record = harness.records.get(id);
+      if (record?.planHash === null || record === undefined) {
+        throw new Error("fixture must be active with a plan hash");
+      }
+      const writes = harness.writes();
+      const params =
+        method === "outcomes.verifyCriterion"
+          ? {
+              id,
+              expectedRevision: record.revision,
+              decisionId: mutationId,
+              criterionId,
+              status: "verified",
+              planHash: record.planHash,
+              evidenceSetHash: "e".repeat(64),
+            }
+          : {
+              id,
+              expectedRevision: record.revision,
+              acceptanceId: mutationId,
+              planHash: record.planHash,
+              closureHash: "c".repeat(64),
+            };
+
+      expect(await harness.call(method, params)).toMatchObject([
+        false,
+        undefined,
+        { code: "OUTCOME_CAPACITY_EXCEEDED" },
+      ]);
+      expect(harness.writes()).toBe(writes);
+    },
+  );
+
   it("does not treat an empty-evidence rejection as current after new proof arrives", async () => {
     const cards = [
       {

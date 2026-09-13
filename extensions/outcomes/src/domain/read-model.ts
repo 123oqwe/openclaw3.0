@@ -23,6 +23,28 @@ function withObservedEvidence(
   return evidence === record.evidence ? record : { ...record, evidence };
 }
 
+function currentSourceLastSuccessfulAt(
+  record: OutcomeRecord,
+  projections: CurrentProjection[],
+): number | undefined {
+  const linkedIdentities = new Set(
+    record.criteria.flatMap((criterion) => criterion.workRefs.map(workRefIdentity)),
+  );
+  if (linkedIdentities.size === 0) {
+    return undefined;
+  }
+  const successfulChecks = new Map<string, number>();
+  for (const projection of projections) {
+    const identity = workRefIdentity(projection.ref);
+    if (linkedIdentities.has(identity) && projection.lastSuccessfulAt !== undefined) {
+      successfulChecks.set(identity, projection.lastSuccessfulAt);
+    }
+  }
+  return successfulChecks.size === linkedIdentities.size
+    ? Math.min(...successfulChecks.values())
+    : undefined;
+}
+
 /**
  * Ephemeral data from one authorized Workboard read. It is deliberately not a
  * persisted DTO: callers that have no current owner read pass no material and
@@ -272,6 +294,10 @@ export function toOutcomeDetail(
       null,
     );
   const closureHash = deriveOutcomeClosure(observedRecord, observedProjections, observedAt);
+  const lastSuccessfulAt =
+    summary.acceptanceValidity === "current"
+      ? currentSourceLastSuccessfulAt(observedRecord, observedProjections)
+      : undefined;
   return {
     ...summary,
     objective: record.objective,
@@ -287,6 +313,7 @@ export function toOutcomeDetail(
     sourceIssues,
     acceptance: {
       acceptanceValidity: summary.acceptanceValidity,
+      ...(lastSuccessfulAt === undefined ? {} : { lastSuccessfulAt }),
       ...(summary.acceptanceValidity === "needs-review"
         ? {
             reason: summary.readiness === "stale" ? ("stale" as const) : ("not-rechecked" as const),

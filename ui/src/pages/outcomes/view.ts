@@ -9,6 +9,7 @@ import { html, nothing } from "lit";
 import "../../components/modal-dialog.ts";
 import { t } from "../../i18n/index.ts";
 import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
+import { formatDateTimeMs } from "../../lib/format.ts";
 import "../../styles/outcomes.css";
 import {
   acceptanceValidityLabel,
@@ -199,6 +200,18 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
     <p class="outcome-detail__acceptance" data-outcome-acceptance=${acceptanceValidity}>
       ${t("outcomesPage.acceptanceLabel")}: ${acceptanceValidityLabel(acceptanceValidity)}
     </p>
+    ${data.detail.acceptance.lastSuccessfulAt === undefined
+      ? nothing
+      : html`<time
+          data-outcome-last-successful-check
+          datetime=${new Date(data.detail.acceptance.lastSuccessfulAt).toISOString()}
+          >${t("outcomesPage.lastSuccessfulCheck", {
+            time: formatDateTimeMs(data.detail.acceptance.lastSuccessfulAt, {
+              dateStyle: "medium",
+              timeStyle: "short",
+            }),
+          })}</time
+        >`}
     <p class="outcome-detail__readiness" data-outcome-readiness=${readiness}>
       ${readinessLabel(readiness)}
     </p>

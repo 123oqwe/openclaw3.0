@@ -88,6 +88,11 @@ export type OutcomeRefreshMutation = {
   serverTime: number;
 };
 
+export type OutcomeRefreshResult =
+  | { kind: "conflict"; record: OutcomeRecord }
+  | { kind: "rejected"; record: OutcomeRecord; reason?: "capacity-exceeded" }
+  | { kind: "updated"; record: OutcomeRecord };
+
 export type OutcomeDecisionMutation = {
   expectedRevision: number;
   id: string;
@@ -482,7 +487,7 @@ export function reduceOutcomeUnlink(
 export function reduceOutcomeRefresh(
   current: OutcomeRecord,
   mutation: OutcomeRefreshMutation,
-): OutcomeMutationResult {
+): OutcomeRefreshResult {
   assertServerTime(mutation.serverTime);
   if (mutation.expectedRevision !== current.revision) {
     return { kind: "conflict", record: current };
@@ -527,7 +532,7 @@ export function reduceOutcomeRefresh(
     left.id < right.id ? -1 : left.id > right.id ? 1 : 0,
   );
   if (evidence.length > 100) {
-    return { kind: "rejected", record: current };
+    return { kind: "rejected", reason: "capacity-exceeded", record: current };
   }
   const previousProjections = new Map(
     current.projections.map((projection) => [workRefIdentity(projection.ref), projection]),
@@ -626,7 +631,15 @@ export function reduceOutcomeDecision(
           serverTime: mutation.serverTime,
         });
   if (refreshed !== undefined && refreshed.kind !== "updated") {
-    return { kind: "rejected", reason: "revision-conflict", record: current, replayed: false };
+    return {
+      kind: "rejected",
+      reason:
+        refreshed.kind === "rejected" && refreshed.reason === "capacity-exceeded"
+          ? "capacity-exceeded"
+          : "revision-conflict",
+      record: current,
+      replayed: false,
+    };
   }
   const observed =
     refreshed === undefined
@@ -726,7 +739,15 @@ export function reduceOutcomeAcceptance(
           serverTime: mutation.serverTime,
         });
   if (refreshed !== undefined && refreshed.kind !== "updated") {
-    return { kind: "rejected", reason: "revision-conflict", record: current, replayed: false };
+    return {
+      kind: "rejected",
+      reason:
+        refreshed.kind === "rejected" && refreshed.reason === "capacity-exceeded"
+          ? "capacity-exceeded"
+          : "revision-conflict",
+      record: current,
+      replayed: false,
+    };
   }
   const observed =
     refreshed === undefined
