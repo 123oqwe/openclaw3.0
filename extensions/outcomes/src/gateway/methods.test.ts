@@ -812,6 +812,36 @@ describe("P-02 Outcome handlers", () => {
     ]);
     const verifiedOutcome = (verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }).outcome;
 
+    const originalProofs = [...cards[0]!.metadata.proof];
+    cards[0]!.metadata.proof = [];
+    const afterRemovedProof = await harness.call("outcomes.get", { id });
+    expect(afterRemovedProof).toMatchObject([true, { outcome: { closureHash: null, evidence: [] } }]);
+    const removedProofOutcome = (
+      afterRemovedProof[1] as { outcome: { criteria: Array<{ evidenceSetHash: string | null }> } }
+    ).outcome;
+    expect(removedProofOutcome.criteria[0]?.evidenceSetHash).not.toBe(criterion.evidenceSetHash);
+    const writesBeforeRemovedProofReplay = harness.writes();
+    expect(
+      await harness.call("outcomes.verifyCriterion", {
+        id,
+        expectedRevision: refreshedOutcome.revision,
+        decisionId: "123e4567-e89b-42d3-a456-426614174020",
+        criterionId,
+        status: "verified",
+        planHash: refreshedOutcome.planHash,
+        evidenceSetHash: criterion.evidenceSetHash,
+      }),
+    ).toMatchObject([
+      true,
+      {
+        replayed: true,
+        receipt: { kind: "verify-criterion", committedRevision: 5 },
+        outcome: { closureHash: null, revision: 5 },
+      },
+    ]);
+    expect(harness.writes()).toBe(writesBeforeRemovedProofReplay);
+    cards[0]!.metadata.proof = originalProofs;
+
     cards[0]!.metadata.proof.push({
       id: "proof-added-after-verification",
       status: "passed",
