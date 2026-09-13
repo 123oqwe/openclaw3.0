@@ -456,11 +456,31 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
   });
 
   it("rejects an acceptance when a required criterion is not verified without writing", async () => {
-    const harness = createHarness();
+    const harness = createHarness({
+      workboardCards: [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 2,
+          metadata: {
+            automation: { boardId: "board-a" },
+            proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Claimed proof" }],
+            artifacts: [],
+          },
+        },
+      ],
+    });
     const id = await createLinkedOutcome(harness);
     await harness.call("outcomes.activate", { id, expectedRevision: 2 });
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
-    const outcome = (refreshed[1] as { outcome: { planHash: string; revision: number } }).outcome;
+    const outcome = (
+      refreshed[1] as {
+        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+      }
+    ).outcome;
+    expect(outcome.criteria[0]!.evidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(harness.records.get(id)).toMatchObject({ decisions: [], evidence: [{ criterionId }] });
     const writes = harness.writes();
     harness.gatewayRequest.mockClear();
 
@@ -507,6 +527,7 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
         };
       }
     ).outcome;
+    let closureHash = "c".repeat(64);
     if (state === "rejected") {
       expect(
         await harness.call("outcomes.verifyCriterion", {
@@ -517,9 +538,32 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
           status: "rejected",
           planHash: outcome.planHash,
           evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+          note: "The current evidence was rejected by the operator",
         }),
       ).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
+      expect(harness.records.get(id)?.decisions).toMatchObject([
+        {
+          criterionId,
+          status: "rejected",
+          planHash: outcome.planHash,
+          evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+        },
+      ]);
     } else {
+      const verified = await harness.call("outcomes.verifyCriterion", {
+        id,
+        expectedRevision: outcome.revision,
+        decisionId: "123e4567-e89b-42d3-a456-426614174051",
+        criterionId,
+        status: "verified",
+        planHash: outcome.planHash,
+        evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+      });
+      expect(verified).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
+      const verifiedOutcome = (
+        verified[1] as { outcome: { closureHash: string; planHash: string } }
+      ).outcome;
+      closureHash = verifiedOutcome.closureHash;
       const record = harness.records.get(id);
       if (record === undefined) {
         throw new Error("fixture Outcome must exist");
@@ -536,6 +580,7 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
             requestHash: "a".repeat(64),
             state: "unknown",
             target: record.criteria[0]!.workRefs[0]!,
+            attemptedAt: 123,
           },
         ],
       });
@@ -553,7 +598,7 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
         expectedRevision: current.revision,
         acceptanceId,
         planHash: current.planHash,
-        closureHash: "c".repeat(64),
+        closureHash,
       }),
     ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
     expect(harness.gatewayRequest).toHaveBeenCalledOnce();
@@ -645,6 +690,7 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
       }
     ).outcome;
     const writes = harness.writes();
+    let winningRecord: unknown;
     harness.gatewayRequest.mockClear();
     harness.gatewayRequest.mockImplementationOnce(async () => {
       expect(
@@ -654,6 +700,7 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
           patch: { title: "Competing owner mutation" },
         }),
       ).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
+      winningRecord = structuredClone(harness.records.get(id));
       return { cards };
     });
 
@@ -669,10 +716,6 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
       }),
     ).toMatchObject([false, undefined, { code: "OUTCOME_REVISION_CONFLICT" }]);
     expect(harness.writes()).toBe(writes + 1);
-    expect(harness.records.get(id)).toMatchObject({
-      title: "Competing owner mutation",
-      revision: outcome.revision + 1,
-      decisions: [],
-    });
+    expect(harness.records.get(id)).toEqual(winningRecord);
   });
 });
