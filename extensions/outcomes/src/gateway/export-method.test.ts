@@ -117,7 +117,21 @@ describe("P-06 Outcome export Gateway handler", () => {
     expect((exported[1] as { record: typeof baseline }).record.acceptances[0]!.planHash).toBe(acceptedPlanHash);
     expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
     expect(harness.writes()).toBe(writes);
-    harness.gatewayRequest.mockResolvedValue({ cards: [{ id: "card-a", status: "done", createdAt: 1, updatedAt: 2, metadata: { automation: { boardId: "board-a" }, proof: [], artifacts: [] } }] });
+    harness.gatewayRequest.mockResolvedValue({
+      cards: [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 2,
+          metadata: {
+            automation: { boardId: "board-a" },
+            proof: [{ id: "proof-a", status: "passed", createdAt: 2 }],
+            artifacts: [],
+          },
+        },
+      ],
+    });
     harness.gatewayRequest.mockClear();
     expect(await harness.call("outcomes.export", { id })).toMatchObject([false, undefined, { code: "OUTCOME_OWNER_UNAVAILABLE" }]);
     expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
