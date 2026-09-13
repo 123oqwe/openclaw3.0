@@ -12,6 +12,7 @@ import {
 import type { OutcomeRecord } from "../domain/types.js";
 import { encodeOutcomeExport, outcomeExportWorkRefs } from "../export/export.js";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
+import { recordOutcomeTelemetry } from "../observability/telemetry.js";
 import { admitOutcomeOwner } from "./admission.js";
 import { registerOutcomeAssuranceMethods } from "./assurance-methods.js";
 import { decodeOutcomeCursor, encodeOutcomeCursor } from "./cursor.js";
@@ -103,6 +104,7 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
   api.registerGatewayMethod(
     "outcomes.create",
     async ({ client, params: rawParams, respond }) => {
+      const telemetryStartedAt = Date.now();
       const admission = admitOutcomeOwner({
         client,
         missingOwnerCode: "INVALID_REQUEST",
@@ -148,8 +150,10 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
           replayed: result.replayed,
           receipt: { kind: "create", id: result.record.id, committedRevision: 1 },
         });
+        recordOutcomeTelemetry("create", "success", telemetryStartedAt);
       } catch (error) {
         respond(false, undefined, outcomeError(outcomeStorageError(error, "create")));
+        recordOutcomeTelemetry("create", "failure", telemetryStartedAt);
       }
     },
     { scope: "operator.write" },
