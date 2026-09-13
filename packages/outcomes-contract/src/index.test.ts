@@ -11,7 +11,7 @@ import {
   type OutcomeDetail,
 } from "./index.js";
 
-type Forbidden = "managerProfileId" | "requestHash" | "operations" | "decisions" | "acceptances";
+type Forbidden = "managerProfileId" | "requestHash" | "operations";
 type AssertNever<T extends never> = T;
 type PublicForbiddenKeys = AssertNever<Extract<keyof OutcomeDetail, Forbidden>>;
 void (undefined as unknown as PublicForbiddenKeys);

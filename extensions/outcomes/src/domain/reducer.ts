@@ -1,5 +1,10 @@
 import { stableStringify } from "openclaw/plugin-sdk/normalization-runtime";
+import {
+  currentOutcomeEvidenceSourceDigests,
+  deriveOutcomeClosure,
+} from "../assurance/closure.js";
 import { planHash } from "./canonical-plan.js";
+import { evidenceSetHash } from "./hash.js";
 import {
   OUTCOME_MAX_DISTINCT_WORK_REFS,
   OUTCOME_MAX_WORK_REFS_PER_CRITERION,
@@ -7,6 +12,7 @@ import {
 import type {
   Criterion,
   EvidenceRef,
+  OutcomePlanSnapshot,
   OutcomeRecord,
   WorkProjection,
   WorkboardRef,
@@ -82,6 +88,38 @@ export type OutcomeRefreshMutation = {
   serverTime: number;
 };
 
+export type OutcomeDecisionMutation = {
+  expectedRevision: number;
+  id: string;
+  requestHash: string;
+  criterionId: string;
+  status: "verified" | "rejected";
+  evidenceSetHash: string;
+  profileId: string;
+  note?: string;
+  projections?: WorkProjection[];
+  evidence?: EvidenceRef[];
+  serverTime: number;
+};
+
+export type OutcomeAcceptanceMutation = {
+  expectedRevision: number;
+  id: string;
+  requestHash: string;
+  planHash: string;
+  closureHash: string;
+  profileId: string;
+  projections?: WorkProjection[];
+  evidence?: EvidenceRef[];
+  serverTime: number;
+};
+
+export type OutcomeDecisionResult =
+  | { kind: "conflict" | "rejected" | "updated"; record: OutcomeRecord; replayed: boolean };
+
+export type OutcomeAcceptanceResult =
+  | { kind: "conflict" | "rejected" | "updated"; record: OutcomeRecord; replayed: boolean };
+
 function workRefIdentity(ref: WorkboardRef): string {
   return `${ref.cardId}\0${ref.cardCreatedAt}`;
 }
@@ -127,6 +165,26 @@ function assertServerTime(serverTime: number): void {
   if (!Number.isFinite(serverTime)) {
     throw new Error("serverTime must be finite");
   }
+}
+
+function currentPlanSnapshot(record: OutcomeRecord): OutcomePlanSnapshot {
+  return {
+    outcomeId: record.id,
+    objective: record.objective,
+    contractRevision: record.contractRevision,
+    planGeneration: record.planGeneration,
+    criteria: record.criteria.map((criterion) => ({
+      id: criterion.id,
+      text: criterion.text,
+      required: criterion.required,
+      workRefs: criterion.workRefs.map((ref) => ({
+        owner: ref.owner,
+        cardId: ref.cardId,
+        cardCreatedAt: ref.cardCreatedAt,
+        boardIdAtLink: ref.boardIdAtLink,
+      })),
+    })),
+  };
 }
 
 /** Update the contract with an ABA-safe CAS and a new plan generation. */
@@ -509,6 +567,179 @@ export function reduceOutcomeRefresh(
         .toSorted((left, right) => canonicalRefOrder(left.ref, right.ref)),
       evidence,
       revision: current.revision + 1,
+      updatedAt: mutation.serverTime,
+    },
+  };
+}
+
+/** Append one immutable human decision without deriving it from a later record state. */
+export function reduceOutcomeDecision(
+  current: OutcomeRecord,
+  mutation: OutcomeDecisionMutation,
+): OutcomeDecisionResult {
+  assertServerTime(mutation.serverTime);
+  const previous = current.decisions.find((decision) => decision.id === mutation.id);
+  if (previous !== undefined) {
+    return {
+      kind: previous.requestHash === mutation.requestHash ? "updated" : "conflict",
+      record: current,
+      replayed: previous.requestHash === mutation.requestHash,
+    };
+  }
+  if (mutation.expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current, replayed: false };
+  }
+  if ((mutation.projections === undefined) !== (mutation.evidence === undefined)) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const refreshed =
+    mutation.projections === undefined || mutation.evidence === undefined
+      ? undefined
+      : reduceOutcomeRefresh(current, {
+          expectedRevision: current.revision,
+          projections: mutation.projections,
+          evidence: mutation.evidence,
+          serverTime: mutation.serverTime,
+        });
+  if (refreshed !== undefined && refreshed.kind !== "updated") {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const observed =
+    refreshed === undefined
+      ? current
+      : { ...refreshed.record, revision: current.revision, updatedAt: current.updatedAt };
+  if (observed.phase !== "active" && observed.phase !== "accepted") {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const criterion = observed.criteria.find((item) => item.id === mutation.criterionId);
+  if (criterion === undefined || observed.planHash === null) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const sourceDigests = currentOutcomeEvidenceSourceDigests(
+    observed,
+    criterion,
+    observed.projections,
+    mutation.serverTime,
+  );
+  if (sourceDigests === undefined) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const currentEvidenceSetHash = evidenceSetHash({
+    criterionId: criterion.id,
+    planGeneration: observed.planGeneration,
+    sourceDigests,
+  });
+  if (
+    mutation.evidenceSetHash !== currentEvidenceSetHash ||
+    (mutation.status === "verified" && sourceDigests.length === 0) ||
+    (mutation.status === "rejected" && mutation.note === undefined)
+  ) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  if (observed.decisions.length >= 100) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const decidedRevision = current.revision + 1;
+  const decision = {
+    id: mutation.id,
+    requestHash: mutation.requestHash,
+    criterionId: criterion.id,
+    status: mutation.status,
+    evidenceSetHash: mutation.evidenceSetHash,
+    profileId: mutation.profileId,
+    decidedAt: mutation.serverTime,
+    decidedRevision,
+    planGeneration: observed.planGeneration,
+    planHash: observed.planHash,
+    decidedPlan: currentPlanSnapshot(observed),
+    ...(mutation.note === undefined ? {} : { note: mutation.note }),
+  };
+  return {
+    kind: "updated",
+    replayed: false,
+    record: {
+      ...observed,
+      decisions: [...observed.decisions, decision],
+      revision: decidedRevision,
+      updatedAt: mutation.serverTime,
+    },
+  };
+}
+
+/** Append one accepted closure snapshot after a fresh server-side closure check. */
+export function reduceOutcomeAcceptance(
+  current: OutcomeRecord,
+  mutation: OutcomeAcceptanceMutation,
+): OutcomeAcceptanceResult {
+  assertServerTime(mutation.serverTime);
+  const previous = current.acceptances.find((acceptance) => acceptance.id === mutation.id);
+  if (previous !== undefined) {
+    return {
+      kind: previous.requestHash === mutation.requestHash ? "updated" : "conflict",
+      record: current,
+      replayed: previous.requestHash === mutation.requestHash,
+    };
+  }
+  if (mutation.expectedRevision !== current.revision) {
+    return { kind: "conflict", record: current, replayed: false };
+  }
+  if ((mutation.projections === undefined) !== (mutation.evidence === undefined)) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const refreshed =
+    mutation.projections === undefined || mutation.evidence === undefined
+      ? undefined
+      : reduceOutcomeRefresh(current, {
+          expectedRevision: current.revision,
+          projections: mutation.projections,
+          evidence: mutation.evidence,
+          serverTime: mutation.serverTime,
+        });
+  if (refreshed !== undefined && refreshed.kind !== "updated") {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const observed =
+    refreshed === undefined
+      ? current
+      : { ...refreshed.record, revision: current.revision, updatedAt: current.updatedAt };
+  if ((observed.phase !== "active" && observed.phase !== "accepted") || observed.planHash === null) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const closureHash = deriveOutcomeClosure(observed, observed.projections, mutation.serverTime);
+  if (
+    closureHash === null ||
+    mutation.planHash !== observed.planHash ||
+    mutation.closureHash !== closureHash ||
+    observed.acceptances.some(
+      (acceptance) =>
+        acceptance.planGeneration === observed.planGeneration &&
+        acceptance.planHash === observed.planHash &&
+        acceptance.closureHash === closureHash,
+    ) ||
+    observed.acceptances.length >= 20
+  ) {
+    return { kind: "rejected", record: current, replayed: false };
+  }
+  const acceptedRevision = current.revision + 1;
+  const acceptance = {
+    id: mutation.id,
+    requestHash: mutation.requestHash,
+    acceptedRevision,
+    profileId: mutation.profileId,
+    acceptedAt: mutation.serverTime,
+    planGeneration: observed.planGeneration,
+    planHash: observed.planHash,
+    closureHash,
+    acceptedPlan: currentPlanSnapshot(observed),
+  };
+  return {
+    kind: "updated",
+    replayed: false,
+    record: {
+      ...observed,
+      phase: "accepted",
+      acceptances: [...observed.acceptances, acceptance],
+      revision: acceptedRevision,
       updatedAt: mutation.serverTime,
     },
   };

@@ -217,7 +217,9 @@ export function registerOutcomeFirstPackageMethods(api: OpenClawPluginApi): void
         const page = eligible.slice(0, params.limit ?? 25);
         const now = Date.now();
         respond(true, {
-          outcomes: page.map((record) => toOutcomeSummary(record, now)),
+          // List intentionally has no per-record authorized Workboard read.
+          // It must therefore not promote persisted observations to current.
+          outcomes: page.map((record) => toOutcomeSummary(record, now, [])),
           ...(eligible.length > page.length && page.at(-1)
             ? { nextCursor: encodeOutcomeCursor(owner, page.at(-1)!) }
             : {}),

@@ -525,6 +525,83 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
   });
 
+  it("does not restore an older verified decision after evidence changes back", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const verified = first(input.decisions);
+    const currentDigest = "proof-digest-2";
+    input.revision = 3;
+    input.projections[0]!.proofs[0]!.digest = currentDigest;
+    input.evidence[0]!.sourceDigest = currentDigest;
+    input.decisions = [
+      verified,
+      {
+        ...verified,
+        id: "decision-newer-rejected",
+        decidedRevision: 3,
+        status: "rejected",
+        evidenceSetHash: evidenceSetHash({
+          criterionId: "c-1",
+          planGeneration: 1,
+          sourceDigests: [currentDigest],
+        }),
+      },
+    ];
+    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+
+    input.projections[0]!.proofs[0]!.digest = "proof-digest-1";
+    input.evidence[0]!.sourceDigest = "proof-digest-1";
+    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+  });
+
+  it("does not derive a closure from an empty verified evidence set", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    input.projections[0]!.proofs = [];
+    input.evidence = [];
+    first(input.decisions).evidenceSetHash = evidenceSetHash({
+      criterionId: "c-1",
+      planGeneration: 1,
+      sourceDigests: [],
+    });
+
+    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+  });
+
+  it("does not derive a closure while an optional criterion is currently rejected", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const ref = first(first(input.criteria).workRefs);
+    const optional = { id: "c-optional", text: "Optional", required: false, workRefs: [ref] };
+    input.criteria.push(optional);
+    input.planHash = planHash({
+      outcomeId: input.id,
+      objective: input.objective,
+      contractRevision: input.contractRevision,
+      planGeneration: input.planGeneration,
+      criteria: input.criteria,
+    });
+    const verified = first(input.decisions);
+    const decidedPlan = {
+      outcomeId: input.id,
+      objective: input.objective,
+      contractRevision: input.contractRevision,
+      planGeneration: input.planGeneration,
+      criteria: input.criteria,
+    };
+    input.decisions = [
+      { ...verified, planHash: input.planHash, decidedPlan },
+      {
+        ...verified,
+        id: "decision-optional-rejected",
+        criterionId: optional.id,
+        status: "rejected",
+        planHash: input.planHash,
+        decidedPlan,
+      },
+    ];
+    input.evidence.push({ ...first(input.evidence), id: "evidence-optional", criterionId: optional.id });
+
+    expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
+  });
+
   it("blocks only a current rejected decision whose evidence still matches", () => {
     const input = withCurrentVerifiedEvidence(record());
     const current = first(input.decisions);

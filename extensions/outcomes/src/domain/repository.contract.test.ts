@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import { createOutcomeRepository } from "../store/plugin-state-repository.js";
+import { deriveOutcomeClosure } from "../assurance/closure.js";
 import { planHash } from "./canonical-plan.js";
-import { createRequestHash } from "./hash.js";
+import { createRequestHash, evidenceSetHash } from "./hash.js";
 import {
+  reduceOutcomeAcceptance,
   reduceOutcomeActivate,
   reduceOutcomeCancel,
   reduceOutcomeContract,
+  reduceOutcomeDecision,
   reduceOutcomeLink,
   reduceOutcomeUnlink,
   reduceOutcomePatch,
@@ -86,6 +89,44 @@ describe("Outcome repository atomic contract", () => {
         },
       ],
     };
+  };
+
+  const assuredActiveRecord = (id = "assured-1") => {
+    const record = linkedActiveRecord(id);
+    const ref = first(first(record.criteria).workRefs);
+    record.planHash = planHash({
+      outcomeId: record.id,
+      objective: record.objective,
+      contractRevision: record.contractRevision,
+      planGeneration: record.planGeneration,
+      criteria: record.criteria,
+    });
+    record.projections = [
+      {
+        ref,
+        availability: "available",
+        currentBoardId: "board-current",
+        status: "done",
+        observedAt: 10,
+        lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
+        proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+        artifacts: [],
+      },
+    ];
+    record.evidence = [
+      {
+        id: "evidence-1",
+        criterionId: "c-1",
+        planGeneration: 1,
+        workRef: ref,
+        kind: "workboard-proof",
+        sourceId: "proof-1",
+        sourceDigest: "proof-digest-1",
+        observedAt: 10,
+      },
+    ];
+    return record;
   };
 
   function fixture() {
@@ -780,6 +821,89 @@ describe("Outcome repository atomic contract", () => {
     expect(decision.kind).toBe("updated");
     expect(writes()).toBe(2);
     await expect(repository.get(record.id)).resolves.toMatchObject({ title: "new", revision: 3 });
+  });
+
+  it("appends an immutable verified decision before accepting its current closure", () => {
+    const record = assuredActiveRecord();
+    const evidenceHash = evidenceSetHash({
+      criterionId: "c-1",
+      planGeneration: record.planGeneration,
+      sourceDigests: ["proof-digest-1"],
+    });
+    const verified = reduceOutcomeDecision(record, {
+      expectedRevision: record.revision,
+      id: "decision-1",
+      requestHash: "d".repeat(64),
+      criterionId: "c-1",
+      status: "verified",
+      evidenceSetHash: evidenceHash,
+      profileId: record.managerProfileId,
+      serverTime: 42,
+    });
+    expect(verified).toMatchObject({ kind: "updated", replayed: false });
+    if (verified.kind !== "updated") {
+      return;
+    }
+    const decision = first(verified.record.decisions);
+    expect(decision).toMatchObject({
+      decidedRevision: 2,
+      planGeneration: 1,
+      planHash: verified.record.planHash,
+    });
+    const closureHash = deriveOutcomeClosure(verified.record, verified.record.projections, 42);
+    expect(closureHash).toMatch(/^[0-9a-f]{64}$/);
+    if (closureHash === null || verified.record.planHash === null) {
+      return;
+    }
+    const accepted = reduceOutcomeAcceptance(verified.record, {
+      expectedRevision: verified.record.revision,
+      id: "acceptance-1",
+      requestHash: "a".repeat(64),
+      planHash: verified.record.planHash,
+      closureHash,
+      profileId: verified.record.managerProfileId,
+      serverTime: 43,
+    });
+    expect(accepted).toMatchObject({ kind: "updated", replayed: false });
+    if (accepted.kind !== "updated") {
+      return;
+    }
+    expect(accepted.record).toMatchObject({ phase: "accepted", revision: 3 });
+    expect(first(accepted.record.acceptances)).toMatchObject({
+      acceptedRevision: 3,
+      acceptedPlan: decision.decidedPlan,
+      closureHash,
+    });
+  });
+
+  it("replays the same decision ID without a write and conflicts on a changed payload", () => {
+    const record = assuredActiveRecord();
+    const mutation = {
+      expectedRevision: record.revision,
+      id: "decision-replay",
+      requestHash: "d".repeat(64),
+      criterionId: "c-1",
+      status: "verified" as const,
+      evidenceSetHash: evidenceSetHash({
+        criterionId: "c-1",
+        planGeneration: record.planGeneration,
+        sourceDigests: ["proof-digest-1"],
+      }),
+      profileId: record.managerProfileId,
+      serverTime: 42,
+    };
+    const committed = reduceOutcomeDecision(record, mutation);
+    if (committed.kind !== "updated") {
+      throw new Error("fixture decision did not commit");
+    }
+    expect(reduceOutcomeDecision(committed.record, mutation)).toMatchObject({
+      kind: "updated",
+      replayed: true,
+      record: committed.record,
+    });
+    expect(
+      reduceOutcomeDecision(committed.record, { ...mutation, requestHash: "e".repeat(64) }),
+    ).toMatchObject({ kind: "conflict", replayed: false, record: committed.record });
   });
 
   it("rejects title updates for cancelled outcomes", () => {
