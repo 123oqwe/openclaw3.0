@@ -36,10 +36,12 @@ describe("P-06 Outcome export Gateway handler", () => {
   });
 
   it("refuses the whole export when a current Workboard reference is no longer visible", async () => {
-    const harness = createHarness({ workboardCards: [] });
+    const harness = createHarness();
     const id = await createLinkedOutcome(harness, outcomeIds[0]!);
     const record = harness.records.get(id)!;
     const writes = harness.writes();
+    harness.gatewayRequest.mockResolvedValue({ cards: [] });
+    harness.gatewayRequest.mockClear();
 
     expect(await harness.call("outcomes.export", { id })).toMatchObject([
       false,
