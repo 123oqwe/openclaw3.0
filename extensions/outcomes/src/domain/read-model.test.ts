@@ -137,6 +137,20 @@ function withCurrentVerifiedEvidence(input: OutcomeRecord): OutcomeRecord {
   return valid(input);
 }
 
+function authorizedSources(input: OutcomeRecord) {
+  const projection = first(input.projections);
+  return [
+    {
+      ref: projection.ref,
+      currentBoardId: projection.currentBoardId ?? "",
+      status: projection.status ?? "",
+      sourceUpdatedAt: projection.sourceUpdatedAt ?? 0,
+      upstreamStale: projection.upstreamStale === true,
+      evidence: input.evidence,
+    },
+  ];
+}
+
 function syncCurrentDecisionPlan(input: OutcomeRecord): OutcomeRecord {
   input.planHash = planHash({
     outcomeId: input.id,
@@ -523,6 +537,45 @@ describe("Outcome P-01 read model", () => {
 
     input.projections[0]!.proofs[0]!.digest = "changed-proof-digest";
     expect(toOutcomeSummary(valid(input), 10).readiness).toBe("incomplete");
+  });
+
+  it("does not expose a criterion evidence guard while cancelled", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    input.phase = "cancelled";
+    const parsed = valid(input);
+
+    expect(toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash).toBeNull();
+  });
+
+  it("does not expose a criterion evidence guard while draft", () => {
+    const active = withCurrentVerifiedEvidence(record());
+    const input = {
+      ...active,
+      phase: "draft" as const,
+      planGeneration: 0,
+      planHash: null,
+      evidence: active.evidence.map((evidence) => ({ ...evidence, planGeneration: 0 })),
+      decisions: [],
+    };
+    const parsed = parseOutcomeRecord(input);
+
+    expect(toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash).toBeNull();
+  });
+
+  it("does not expose a criterion evidence guard from a stale owner observation", () => {
+    const input = withCurrentVerifiedEvidence(record());
+    const parsed = valid(input);
+
+    expect(toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash).toMatch(
+      /^[0-9a-f]{64}$/,
+    );
+    expect(
+      toOutcomeDetail(
+        parsed,
+        10 + OUTCOME_PROJECTION_MAX_AGE_MS,
+        authorizedSources(parsed),
+      ).criteria[0]?.evidenceSetHash,
+    ).toBeNull();
   });
 
   it("keeps an accepted current closure reviewable without falsely requiring verification", () => {
