@@ -477,7 +477,11 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
     const outcome = (
       refreshed[1] as {
-        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
       }
     ).outcome;
     expect(outcome.criteria[0]!.evidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
@@ -501,115 +505,118 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
   it.each([
     ["rejected", "123e4567-e89b-42d3-a456-426614174045"],
     ["unknown operation", "123e4567-e89b-42d3-a456-426614174046"],
-  ] as const)("rejects a new acceptance with a current %s without writing", async (state, acceptanceId) => {
-    const cards = [
-      {
-        id: "card-a",
-        status: "done",
-        createdAt: 1,
-        updatedAt: 2,
-        metadata: {
-          automation: { boardId: "board-a" },
-          proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
-          artifacts: [],
+  ] as const)(
+    "rejects a new acceptance with a current %s without writing",
+    async (state, acceptanceId) => {
+      const cards = [
+        {
+          id: "card-a",
+          status: "done",
+          createdAt: 1,
+          updatedAt: 2,
+          metadata: {
+            automation: { boardId: "board-a" },
+            proof: [{ id: "proof-a", status: "passed", createdAt: 2, label: "Release verified" }],
+            artifacts: [],
+          },
         },
-      },
-    ];
-    const harness = createHarness({ workboardCards: cards });
-    const id = await createLinkedOutcome(harness);
-    await harness.call("outcomes.activate", { id, expectedRevision: 2 });
-    const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
-    const outcome = (
-      refreshed[1] as {
-        outcome: {
-          criteria: Array<{ evidenceSetHash: string }>;
-          planHash: string;
-          revision: number;
-        };
-      }
-    ).outcome;
-    let closureHash = "c".repeat(64);
-    if (state === "rejected") {
-      expect(
-        await harness.call("outcomes.verifyCriterion", {
+      ];
+      const harness = createHarness({ workboardCards: cards });
+      const id = await createLinkedOutcome(harness);
+      await harness.call("outcomes.activate", { id, expectedRevision: 2 });
+      const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
+      const outcome = (
+        refreshed[1] as {
+          outcome: {
+            criteria: Array<{ evidenceSetHash: string }>;
+            planHash: string;
+            revision: number;
+          };
+        }
+      ).outcome;
+      let closureHash = "c".repeat(64);
+      if (state === "rejected") {
+        expect(
+          await harness.call("outcomes.verifyCriterion", {
+            id,
+            expectedRevision: outcome.revision,
+            decisionId: "123e4567-e89b-42d3-a456-426614174047",
+            criterionId,
+            status: "rejected",
+            planHash: outcome.planHash,
+            evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+            note: "The current evidence was rejected by the operator",
+          }),
+        ).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
+        expect(harness.records.get(id)?.decisions).toMatchObject([
+          {
+            criterionId,
+            status: "rejected",
+            planHash: outcome.planHash,
+            evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
+          },
+        ]);
+      } else {
+        const verified = await harness.call("outcomes.verifyCriterion", {
           id,
           expectedRevision: outcome.revision,
-          decisionId: "123e4567-e89b-42d3-a456-426614174047",
+          decisionId: "123e4567-e89b-42d3-a456-426614174051",
           criterionId,
-          status: "rejected",
+          status: "verified",
           planHash: outcome.planHash,
           evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
-          note: "The current evidence was rejected by the operator",
-        }),
-      ).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
-      expect(harness.records.get(id)?.decisions).toMatchObject([
-        {
-          criterionId,
-          status: "rejected",
+        });
+        expect(verified).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
+        const verifiedOutcome = (
+          verified[1] as { outcome: { closureHash: string; planHash: string } }
+        ).outcome;
+        expect(verifiedOutcome).toMatchObject({
           planHash: outcome.planHash,
-          evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
-        },
-      ]);
-    } else {
-      const verified = await harness.call("outcomes.verifyCriterion", {
-        id,
-        expectedRevision: outcome.revision,
-        decisionId: "123e4567-e89b-42d3-a456-426614174051",
-        criterionId,
-        status: "verified",
-        planHash: outcome.planHash,
-        evidenceSetHash: outcome.criteria[0]!.evidenceSetHash,
-      });
-      expect(verified).toMatchObject([true, { outcome: { revision: outcome.revision + 1 } }]);
-      const verifiedOutcome = (
-        verified[1] as { outcome: { closureHash: string; planHash: string } }
-      ).outcome;
-      expect(verifiedOutcome).toMatchObject({
-        planHash: outcome.planHash,
-        closureHash: expect.stringMatching(/^[0-9a-f]{64}$/),
-      });
-      closureHash = verifiedOutcome.closureHash;
-      const record = harness.records.get(id);
-      if (record === undefined) {
-        throw new Error("fixture Outcome must exist");
+          closureHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        });
+        closureHash = verifiedOutcome.closureHash;
+        const record = harness.records.get(id);
+        if (record === undefined) {
+          throw new Error("fixture Outcome must exist");
+        }
+        harness.records.set(id, {
+          ...record,
+          operations: [
+            {
+              id: "123e4567-e89b-42d3-a456-426614174048",
+              kind: "workboard-card-start",
+              criterionId,
+              planGeneration: record.planGeneration,
+              createdRevision: record.revision,
+              requestHash: "a".repeat(64),
+              state: "unknown",
+              target: record.criteria[0]!.workRefs[0]!,
+              attemptedAt: 123,
+            },
+          ],
+        });
       }
-      harness.records.set(id, {
-        ...record,
-        operations: [
-          {
-            id: "123e4567-e89b-42d3-a456-426614174048",
-            kind: "workboard-card-start",
-            criterionId,
-            planGeneration: record.planGeneration,
-            createdRevision: record.revision,
-            requestHash: "a".repeat(64),
-            state: "unknown",
-            target: record.criteria[0]!.workRefs[0]!,
-            attemptedAt: 123,
-          },
-        ],
-      });
-    }
-    const current = harness.records.get(id);
-    if (current?.planHash === null || current === undefined) {
-      throw new Error("fixture Outcome must have an active plan");
-    }
-    expect(parseOutcomeRecord(current)).toEqual(current);
-    const writes = harness.writes();
-    harness.gatewayRequest.mockClear();
+      const current = harness.records.get(id);
+      if (current?.planHash === null || current === undefined) {
+        throw new Error("fixture Outcome must have an active plan");
+      }
+      expect(parseOutcomeRecord(current)).toEqual(current);
+      const writes = harness.writes();
+      harness.gatewayRequest.mockClear();
 
-    expect(
-      await harness.call("outcomes.accept", {
-        id,
-        expectedRevision: current.revision,
-        acceptanceId,
-        planHash: current.planHash,
-        closureHash,
-      }),
-    ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
-    expect(harness.gatewayRequest).toHaveBeenCalledOnce();
-    expect(harness.writes()).toBe(writes);
-  });
+      expect(
+        await harness.call("outcomes.accept", {
+          id,
+          expectedRevision: current.revision,
+          acceptanceId,
+          planHash: current.planHash,
+          closureHash,
+        }),
+      ).toMatchObject([false, undefined, { code: "OUTCOME_CLOSURE_INCOMPLETE" }]);
+      expect(harness.gatewayRequest).toHaveBeenCalledOnce();
+      expect(harness.writes()).toBe(writes);
+    },
+  );
 
   it("rejects an acceptance bound to evidence that changed after verification without writing", async () => {
     const cards = [
@@ -647,7 +654,10 @@ describe("P-05 Outcome assurance Gateway handlers", () => {
       planHash: refreshedOutcome.planHash,
       evidenceSetHash: refreshedOutcome.criteria[0]!.evidenceSetHash,
     });
-    expect(verified).toMatchObject([true, { outcome: { revision: refreshedOutcome.revision + 1 } }]);
+    expect(verified).toMatchObject([
+      true,
+      { outcome: { revision: refreshedOutcome.revision + 1 } },
+    ]);
     const verifiedOutcome = (
       verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }
     ).outcome;
