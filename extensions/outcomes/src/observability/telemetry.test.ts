@@ -23,11 +23,11 @@ function recordUntrustedTelemetry(method: string, result: string, startedAt: num
 
 describe("Outcome Gateway telemetry", () => {
   beforeEach(() => {
-    telemetry.counter.add.mockClear();
-    telemetry.histogram.record.mockClear();
-    telemetry.meter.createCounter.mockClear();
-    telemetry.meter.createHistogram.mockClear();
-    telemetry.getMeter.mockClear();
+    telemetry.counter.add.mockReset();
+    telemetry.histogram.record.mockReset();
+    telemetry.meter.createCounter.mockReset().mockReturnValue(telemetry.counter);
+    telemetry.meter.createHistogram.mockReset().mockReturnValue(telemetry.histogram);
+    telemetry.getMeter.mockReset().mockReturnValue(telemetry.meter);
   });
 
   it("records a successful mutation using only low-cardinality labels", async () => {
@@ -145,6 +145,48 @@ describe("Outcome Gateway telemetry", () => {
       method: "export",
       result: "success",
     });
+  });
+
+  it.each([
+    [
+      "meter lookup",
+      () =>
+        telemetry.getMeter.mockImplementationOnce(() => {
+          throw new Error("provider unavailable");
+        }),
+    ],
+    [
+      "counter creation",
+      () =>
+        telemetry.meter.createCounter.mockImplementationOnce(() => {
+          throw new Error("counter unavailable");
+        }),
+    ],
+    [
+      "counter write",
+      () =>
+        telemetry.counter.add.mockImplementationOnce(() => {
+          throw new Error("counter unavailable");
+        }),
+    ],
+    [
+      "histogram creation",
+      () =>
+        telemetry.meter.createHistogram.mockImplementationOnce(() => {
+          throw new Error("histogram unavailable");
+        }),
+    ],
+    [
+      "histogram write",
+      () =>
+        telemetry.histogram.record.mockImplementationOnce(() => {
+          throw new Error("histogram unavailable");
+        }),
+    ],
+  ])("does not throw when %s fails", (_name, makeTelemetryFail) => {
+    makeTelemetryFail();
+
+    expect(() => recordOutcomeTelemetry("export", "failure", Date.now())).not.toThrow();
   });
 
   it("preserves the Gateway response when the telemetry provider throws", async () => {
