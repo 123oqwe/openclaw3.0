@@ -297,9 +297,11 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               (decision) => html`<li data-outcome-decision=${decision.id}>
                 <details>
                   <summary>
-                    ${decision.status === "verified"
-                      ? t("outcomesPage.verified")
-                      : t("outcomesPage.rejected")}
+                    <span data-outcome-decision-status=${decision.status}>
+                      ${decision.status === "verified"
+                        ? t("outcomesPage.verified")
+                        : t("outcomesPage.rejected")}
+                    </span>
                     — ${t("outcomesPage.historicalPlan")}
                   </summary>
                   ${decision.note === undefined ? nothing : html`<p>${decision.note}</p>`}

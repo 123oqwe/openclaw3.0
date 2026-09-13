@@ -703,6 +703,19 @@ suite.define(() => {
         await detail.locator("[data-outcome-decision]").getByText("Verified", { exact: true }).waitFor({
           state: "visible",
         });
+        const firstDecision = detail.locator("[data-outcome-decision]").first();
+        const firstDecisionDetails = firstDecision.locator("details");
+        await firstDecision.locator("summary").focus();
+        await page.keyboard.press("Enter");
+        await expect.poll(() => firstDecisionDetails.getAttribute("open")).toBe("");
+        await firstDecision.getByText("Prove human acceptance", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await firstDecision.getByText("Proof is reviewed", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await page.keyboard.press("Space");
+        await expect.poll(() => firstDecisionDetails.getAttribute("open")).toBeNull();
         await detail.locator('[data-outcome-action="accept"]').click();
         await detail.locator('[data-outcome-phase="accepted"]').waitFor({ state: "visible" });
         await detail.locator("[data-outcome-acceptance-history]").waitFor({ state: "visible" });
