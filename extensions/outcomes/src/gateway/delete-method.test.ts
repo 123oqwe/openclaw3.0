@@ -93,11 +93,17 @@ describe("P-06 Outcome delete Gateway handler", () => {
         },
       ],
     });
-    const { id: activeId, record: draft } = await createOutcome(harness, outcomeIds[0]!);
-    harness.records.set(activeId, { ...draft, phase: "active" });
+    const activeId = await createLinkedOutcome(harness, outcomeIds[0]!);
+    await expect(
+      harness.call("outcomes.activate", { id: activeId, expectedRevision: 2 }),
+    ).resolves.toMatchObject([true, { outcome: { phase: "active", acceptances: [] } }]);
+    const active = harness.records.get(activeId)!;
+    const writesBeforeActiveDelete = harness.writes();
     expect(
-      await harness.call("outcomes.delete", { id: activeId, expectedRevision: 1 }),
+      await harness.call("outcomes.delete", { id: activeId, expectedRevision: active.revision }),
     ).toMatchObject([false, undefined, { code: "OUTCOME_INVALID_STATE" }]);
+    expect(harness.records.get(activeId)).toEqual(active);
+    expect(harness.writes()).toBe(writesBeforeActiveDelete);
 
     const decisionOnlyId = await createLinkedOutcome(harness, outcomeIds[1]!);
     await harness.call("outcomes.activate", { id: decisionOnlyId, expectedRevision: 2 });
