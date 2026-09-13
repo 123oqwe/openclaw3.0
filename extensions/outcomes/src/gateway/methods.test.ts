@@ -954,7 +954,12 @@ describe("P-02 Outcome handlers", () => {
         updatedAt: 2,
         metadata: {
           automation: { boardId: "board-a" },
-          proof: [],
+          proof: [] as Array<{
+            id: string;
+            status: "passed";
+            createdAt: number;
+            label: string;
+          }>,
           artifacts: [],
         },
       },
