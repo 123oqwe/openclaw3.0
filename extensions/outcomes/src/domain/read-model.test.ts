@@ -508,9 +508,12 @@ describe("Outcome P-01 read model", () => {
     expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
   });
 
-  it("does not promote persisted verification to ready before P-02 source authorization", () => {
+  it("derives a current closure only from fresh verified evidence", () => {
     const input = withCurrentVerifiedEvidence(record());
-    expect(toOutcomeSummary(input, 10).readiness).toBe("incomplete");
+    const current = toOutcomeDetail(input, 10);
+    expect(current.readiness).toBe("ready");
+    expect(current.closureHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(current.attention).toContainEqual({ code: "ready-for-acceptance" });
 
     input.projections[0]!.ref = {
       ...input.projections[0]!.ref,
