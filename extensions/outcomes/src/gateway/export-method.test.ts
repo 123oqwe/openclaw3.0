@@ -97,6 +97,30 @@ describe("P-06 Outcome export Gateway handler", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("exports the stored snapshot when an authorized source changes content", async () => {
+    const harness = createHarness();
+    const id = await createLinkedOutcome(harness, outcomeIds[0]!);
+    const record = structuredClone(harness.records.get(id)!);
+    const writes = harness.writes();
+    harness.gatewayRequest.mockResolvedValue({
+      cards: [
+        {
+          id: "card-a",
+          status: "blocked",
+          createdAt: 1,
+          updatedAt: 99,
+          metadata: { automation: { boardId: "moved" }, proof: [], artifacts: [] },
+        },
+      ],
+    });
+    harness.gatewayRequest.mockClear();
+
+    expect(await harness.call("outcomes.export", { id })).toMatchObject([true, { record }]);
+    expect(harness.gatewayRequest).toHaveBeenCalledTimes(1);
+    expect(harness.records.get(id)).toEqual(record);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("keeps an optional no-proof accepted snapshot subject to current owner authorization", async () => {
     const harness = createHarness({
       workboardCards: [
