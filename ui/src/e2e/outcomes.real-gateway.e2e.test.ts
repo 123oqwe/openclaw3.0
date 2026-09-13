@@ -716,6 +716,19 @@ suite.define(() => {
           .locator('[data-outcome-acceptance="needs-review"]')
           .waitFor({ state: "visible" });
         await expect.poll(() => detail.locator('[data-outcome-action="accept"]').count()).toBe(0);
+        await detail.locator('[data-outcome-action="review-evidence"]').click();
+        await verificationForm.locator('select[name="status"]').selectOption("rejected");
+        await verificationForm.locator('textarea[name="note"]').fill("The new proof needs review");
+        await verificationForm.locator("[data-outcome-confirm-verification]").click();
+        await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(2);
+        await detail.locator("[data-outcome-decision]").getByText("Rejected", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await detail.locator('[data-outcome-action="review-evidence"]').click();
+        await verificationForm.locator("[data-outcome-confirm-verification]").click();
+        await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(3);
+        await detail.locator('[data-outcome-action="accept"]').click();
+        await detail.locator('[data-outcome-acceptance="current"]').waitFor({ state: "visible" });
       },
     );
   });
