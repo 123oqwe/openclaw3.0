@@ -860,6 +860,15 @@ describe("P-02 Outcome handlers", () => {
       },
     ]);
     expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
+    harness.gatewayRequest.mockClear();
+    expect(
+      await harness.call("outcomes.accept", {
+        ...acceptanceParams,
+        closureHash: "f".repeat(64),
+      }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_REVISION_CONFLICT" }]);
+    expect(harness.gatewayRequest).not.toHaveBeenCalled();
+    expect(harness.writes()).toBe(writesBeforeAcceptanceReplay);
   });
 
   it("does not write when cancellation is terminal or an operation is in flight", async () => {
