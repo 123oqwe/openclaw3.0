@@ -700,9 +700,12 @@ suite.define(() => {
         const verificationForm = page.locator("[data-outcome-verification-form]");
         await verificationForm.waitFor({ state: "visible" });
         await verificationForm.locator("[data-outcome-confirm-verification]").click();
-        await detail.locator("[data-outcome-decision]").getByText("Verified", { exact: true }).waitFor({
-          state: "visible",
-        });
+        await detail
+          .locator("[data-outcome-decision]")
+          .getByText("Verified", { exact: true })
+          .waitFor({
+            state: "visible",
+          });
         const firstDecision = detail.locator("[data-outcome-decision]").first();
         const firstDecisionDetails = firstDecision.locator("details");
         await firstDecision.locator("summary").focus();
@@ -734,9 +737,12 @@ suite.define(() => {
         await verificationForm.locator('textarea[name="note"]').fill("The new proof needs review");
         await verificationForm.locator("[data-outcome-confirm-verification]").click();
         await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(2);
-        await detail.locator("[data-outcome-decision]").getByText("Rejected", { exact: true }).waitFor({
-          state: "visible",
-        });
+        await detail
+          .locator("[data-outcome-decision]")
+          .getByText("Rejected", { exact: true })
+          .waitFor({
+            state: "visible",
+          });
         await detail.locator('[data-outcome-action="review-evidence"]').click();
         await verificationForm.locator("[data-outcome-confirm-verification]").click();
         await expect.poll(() => detail.locator("[data-outcome-decision]").count()).toBe(3);
@@ -784,7 +790,9 @@ suite.define(() => {
           .locator("[data-outcome-select]")
           .click();
         const restoredDetail = page.locator("[data-outcome-detail-id]");
-        await restoredDetail.locator('[data-outcome-acceptance="current"]').waitFor({ state: "visible" });
+        await restoredDetail
+          .locator('[data-outcome-acceptance="current"]')
+          .waitFor({ state: "visible" });
       },
     );
   });

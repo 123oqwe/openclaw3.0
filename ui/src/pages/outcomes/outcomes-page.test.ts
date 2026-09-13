@@ -91,11 +91,15 @@ describe("OutcomesPage", () => {
       throw new Error(`Unexpected method: ${method}`);
     });
     const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
-    page.context = { gateway: createGateway({ request } as unknown as GatewayBrowserClient) } as ApplicationContext;
+    page.context = {
+      gateway: createGateway({ request } as unknown as GatewayBrowserClient),
+    } as ApplicationContext;
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 
@@ -117,7 +121,9 @@ describe("OutcomesPage", () => {
       expect(acceptance?.textContent).toContain("Original accepted objective");
       expect(acceptance?.textContent).toContain("Original acceptance criterion");
       expect(acceptance?.querySelector("[data-outcome-history-card]")).toBeNull();
-      expect(acceptance?.textContent).toContain("Some linked cards are no longer available to you.");
+      expect(acceptance?.textContent).toContain(
+        "Some linked cards are no longer available to you.",
+      );
     });
   });
 
@@ -145,7 +151,9 @@ describe("OutcomesPage", () => {
     document.body.append(page);
 
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
 

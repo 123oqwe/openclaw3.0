@@ -303,7 +303,10 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
         </section>`
       : nothing}
     ${data.detail.decisions.length > 0
-      ? html`<section class="outcome-detail__section" aria-label=${t("outcomesPage.decisionHistoryLabel")}>
+      ? html`<section
+          class="outcome-detail__section"
+          aria-label=${t("outcomesPage.decisionHistoryLabel")}
+        >
           <h3>${t("outcomesPage.decisionHistoryLabel")}</h3>
           <ul>
             ${data.detail.decisions.map(
@@ -326,15 +329,18 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
         </section>`
       : nothing}
     ${data.detail.acceptances.length > 0
-      ? html`<section class="outcome-detail__section" aria-label=${t("outcomesPage.acceptanceHistoryLabel")}>
+      ? html`<section
+          class="outcome-detail__section"
+          aria-label=${t("outcomesPage.acceptanceHistoryLabel")}
+        >
           <h3>${t("outcomesPage.acceptanceHistoryLabel")}</h3>
           <ul>
             ${data.detail.acceptances.map(
               (acceptance) => html`<li data-outcome-acceptance-history=${acceptance.id}>
                 <details>
                   <summary>
-                    ${t("outcomesPage.acceptedAt", { time: String(acceptance.acceptedAt) })}
-                    — ${t("outcomesPage.historicalPlan")}
+                    ${t("outcomesPage.acceptedAt", { time: String(acceptance.acceptedAt) })} —
+                    ${t("outcomesPage.historicalPlan")}
                   </summary>
                   ${renderHistoricalPlan(acceptance.acceptedPlan)}
                 </details>
@@ -442,7 +448,9 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
             ?disabled=${data.mutationInFlight}
             @click=${data.onAccept}
           >
-            ${data.acceptanceReplayPending ? t("common.retry") : t("outcomesPage.nextAction.accept")}
+            ${data.acceptanceReplayPending
+              ? t("common.retry")
+              : t("outcomesPage.nextAction.accept")}
           </button>
           ${data.acceptanceReplayPending
             ? html`<p>${t("outcomesPage.assuranceReplayHelp")}</p>`
@@ -694,7 +702,9 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
               >
                 ${data.detail.criteria
                   .filter((criterion) => criterion.evidenceSetHash !== null)
-                  .map((criterion) => html`<option value=${criterion.id}>${criterion.text}</option>`)}
+                  .map(
+                    (criterion) => html`<option value=${criterion.id}>${criterion.text}</option>`,
+                  )}
               </select>
             </label>
             <label>

@@ -60,7 +60,8 @@ function workRefIdentity(ref: WorkboardRef): string {
 
 function uniqueWorkRefs(refs: WorkboardRef[]): WorkboardRef[] {
   return refs.filter(
-    (ref, index) => refs.findIndex((item) => workRefIdentity(item) === workRefIdentity(ref)) === index,
+    (ref, index) =>
+      refs.findIndex((item) => workRefIdentity(item) === workRefIdentity(ref)) === index,
   );
 }
 
@@ -75,8 +76,10 @@ function historicalWorkRefs(record: OutcomeRecord): WorkboardRef[] {
 }
 
 export function hasOutcomeSourcePresentationRefs(record: OutcomeRecord): boolean {
-  return record.criteria.some((criterion) => criterion.workRefs.length > 0) ||
-    historicalWorkRefs(record).length > 0;
+  return (
+    record.criteria.some((criterion) => criterion.workRefs.length > 0) ||
+    historicalWorkRefs(record).length > 0
+  );
 }
 
 function uniqueSourcePairs(items: Array<{ sourceId: string; digest: string }>) {

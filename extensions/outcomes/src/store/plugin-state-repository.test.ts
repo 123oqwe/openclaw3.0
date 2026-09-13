@@ -6,6 +6,8 @@ import {
 } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { withOpenClawTestState } from "openclaw/plugin-sdk/test-state";
 import { afterEach, describe, expect, it } from "vitest";
+import { deriveOutcomeClosure } from "../assurance/closure.js";
+import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "../domain/assurance-reducer.js";
 import { OUTCOME_MAX_ENTRIES } from "../domain/constants.js";
 import {
   reduceOutcomeActivate,
@@ -15,16 +17,11 @@ import {
   type OutcomeMutationResult,
 } from "../domain/reducer.js";
 import {
-  reduceOutcomeAcceptance,
-  reduceOutcomeDecision,
-} from "../domain/assurance-reducer.js";
-import {
   createRequestHash,
   evidenceSetHash,
   planHash,
   workboardProjectionFingerprint,
 } from "../domain/schema.js";
-import { deriveOutcomeClosure } from "../assurance/closure.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import {
   OutcomeRepositoryConflictError,
@@ -733,23 +730,28 @@ describe("Outcome repository host adapter", () => {
         if (closureHash === null) {
           throw new Error("fixture closure must be complete");
         }
-        const acceptanceResult = await acceptanceRepository.transact(fullAcceptances.id, (current) => {
-          const decision = reduceOutcomeAcceptance(current!, {
-            expectedRevision: current!.revision,
-            id: "acceptance-21",
-            requestHash: "f".repeat(64),
-            planHash: current!.planHash!,
-            closureHash,
-            profileId: "alice",
-            serverTime: 102,
-          });
-          return decision.kind === "updated"
-            ? { result: decision, next: decision.record }
-            : { result: decision };
-        });
+        const acceptanceResult = await acceptanceRepository.transact(
+          fullAcceptances.id,
+          (current) => {
+            const decision = reduceOutcomeAcceptance(current!, {
+              expectedRevision: current!.revision,
+              id: "acceptance-21",
+              requestHash: "f".repeat(64),
+              planHash: current!.planHash!,
+              closureHash,
+              profileId: "alice",
+              serverTime: 102,
+            });
+            return decision.kind === "updated"
+              ? { result: decision, next: decision.record }
+              : { result: decision };
+          },
+        );
         expect(acceptanceResult).toMatchObject({ kind: "rejected", reason: "capacity-exceeded" });
         expect(acceptanceUpdates).toEqual([verified.record, undefined]);
-        await expect(acceptanceRepository.get(fullAcceptances.id)).resolves.toEqual(verified.record);
+        await expect(acceptanceRepository.get(fullAcceptances.id)).resolves.toEqual(
+          verified.record,
+        );
       },
     );
   });

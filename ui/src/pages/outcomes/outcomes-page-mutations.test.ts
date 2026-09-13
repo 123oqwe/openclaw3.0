@@ -52,7 +52,9 @@ describe("OutcomesPage mutations", () => {
       if (method === "outcomes.verifyCriterion") {
         verificationParams.push(params);
         if (verificationParams.length === 1) {
-          return Promise.reject(Object.assign(new Error("changed"), { code: "OUTCOME_REVISION_CONFLICT" }));
+          return Promise.reject(
+            Object.assign(new Error("changed"), { code: "OUTCOME_REVISION_CONFLICT" }),
+          );
         }
         return Promise.resolve({ outcome: { ...freshDetail, revision: 6 } });
       }
@@ -87,7 +89,10 @@ describe("OutcomesPage mutations", () => {
     expect(verificationParams).toHaveLength(1);
     page.querySelector<HTMLButtonElement>('[data-outcome-action="refresh"]')?.click();
     await vi.waitFor(() => {
-      expect(request).toHaveBeenCalledWith("outcomes.refresh", { id: "outcome-a", expectedRevision: 4 });
+      expect(request).toHaveBeenCalledWith("outcomes.refresh", {
+        id: "outcome-a",
+        expectedRevision: 4,
+      });
     });
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(2));
@@ -144,7 +149,9 @@ describe("OutcomesPage mutations", () => {
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
     await vi.waitFor(() => {
-      expect(page.querySelector<HTMLButtonElement>('[data-outcome-action="accept"]')).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="accept"]'),
+      ).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="accept"]')?.click();
     await vi.waitFor(() => expect(acceptanceParams).toHaveLength(1));
@@ -214,8 +221,9 @@ describe("OutcomesPage mutations", () => {
     rejectVerification?.(new Error("response lost"));
     await vi.waitFor(() => expect(page.textContent).toContain("Request failed"));
     expect(
-      page.querySelector<HTMLSelectElement>('[data-outcome-verification-form] select[name="status"]')
-        ?.disabled,
+      page.querySelector<HTMLSelectElement>(
+        '[data-outcome-verification-form] select[name="status"]',
+      )?.disabled,
     ).toBe(true);
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(2));
@@ -298,7 +306,9 @@ describe("OutcomesPage mutations", () => {
   });
 
   it("does not let a late verification response overwrite a newly selected outcome", async () => {
-    let resolveVerification: ((value: { outcome: ReturnType<typeof outcomeDetail> }) => void) | undefined;
+    let resolveVerification:
+      | ((value: { outcome: ReturnType<typeof outcomeDetail> }) => void)
+      | undefined;
     const detailFor = (id: string, title: string) => ({
       ...outcomeDetail(id, title),
       criteria: [
@@ -318,7 +328,10 @@ describe("OutcomesPage mutations", () => {
     const request = vi.fn((method: string, params: { id?: string }) => {
       if (method === "outcomes.list") {
         return Promise.resolve({
-          outcomes: [outcomeSummary("outcome-a", "Outcome A"), outcomeSummary("outcome-b", "Outcome B")],
+          outcomes: [
+            outcomeSummary("outcome-a", "Outcome A"),
+            outcomeSummary("outcome-b", "Outcome B"),
+          ],
         });
       }
       if (method === "outcomes.get" && params.id === "outcome-a") {
@@ -329,7 +342,9 @@ describe("OutcomesPage mutations", () => {
       }
       if (method === "outcomes.verifyCriterion") {
         return new Promise((resolve) => {
-          resolveVerification = resolve as (value: { outcome: ReturnType<typeof outcomeDetail> }) => void;
+          resolveVerification = resolve as (value: {
+            outcome: ReturnType<typeof outcomeDetail>;
+          }) => void;
         });
       }
       throw new Error(`Unexpected method: ${method}`);
@@ -386,7 +401,10 @@ describe("OutcomesPage mutations", () => {
     const request = vi.fn((method: string, params?: { id?: string }) => {
       if (method === "outcomes.list") {
         return Promise.resolve({
-          outcomes: [outcomeSummary("outcome-a", "Outcome A"), outcomeSummary("outcome-b", "Outcome B")],
+          outcomes: [
+            outcomeSummary("outcome-a", "Outcome A"),
+            outcomeSummary("outcome-b", "Outcome B"),
+          ],
         });
       }
       if (method === "outcomes.get" && params?.id === "outcome-a") {
@@ -415,16 +433,22 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
-    const status = page.querySelector<HTMLSelectElement>('[data-outcome-verification-form] select[name="status"]');
+    const status = page.querySelector<HTMLSelectElement>(
+      '[data-outcome-verification-form] select[name="status"]',
+    );
     if (!status) {
       throw new Error("Verification status selector missing");
     }
     status.value = "rejected";
     status.dispatchEvent(new Event("change", { bubbles: true }));
     await vi.waitFor(() => {
-      expect(page.querySelector('[data-outcome-verification-form] textarea[name="note"]')).not.toBeNull();
+      expect(
+        page.querySelector('[data-outcome-verification-form] textarea[name="note"]'),
+      ).not.toBeNull();
     });
-    const note = page.querySelector<HTMLTextAreaElement>('[data-outcome-verification-form] textarea[name="note"]');
+    const note = page.querySelector<HTMLTextAreaElement>(
+      '[data-outcome-verification-form] textarea[name="note"]',
+    );
     note!.value = "private A rejection";
     note!.dispatchEvent(new InputEvent("input", { bubbles: true }));
     page.querySelector<HTMLButtonElement>(".outcome-detail__back")?.click();

@@ -193,10 +193,22 @@ export function normalizeAccept(params: unknown): PublicAccept | undefined {
   const acceptanceId = normalizedUuid(input.acceptanceId);
   const planHash = normalizedHash(input.planHash);
   const closureHash = normalizedHash(input.closureHash);
-  if (!id || !acceptanceId || !planHash || !closureHash || !positiveSafeInteger(input.expectedRevision)) {
+  if (
+    !id ||
+    !acceptanceId ||
+    !planHash ||
+    !closureHash ||
+    !positiveSafeInteger(input.expectedRevision)
+  ) {
     return undefined;
   }
-  const result = { id, expectedRevision: input.expectedRevision, acceptanceId, planHash, closureHash };
+  const result = {
+    id,
+    expectedRevision: input.expectedRevision,
+    acceptanceId,
+    planHash,
+    closureHash,
+  };
   return withinBudget(result) ? result : undefined;
 }
 

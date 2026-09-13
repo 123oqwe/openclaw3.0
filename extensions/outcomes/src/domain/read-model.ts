@@ -1,5 +1,9 @@
 import { OUTCOME_PROJECTION_MAX_AGE_MS } from "@openclaw/outcomes-contract";
-import type { OutcomeDetail, OutcomePlanSnapshotView, OutcomeSummary } from "@openclaw/outcomes-contract";
+import type {
+  OutcomeDetail,
+  OutcomePlanSnapshotView,
+  OutcomeSummary,
+} from "@openclaw/outcomes-contract";
 import { deriveOutcomeAttention } from "../assurance/attention.js";
 import {
   currentOutcomeDecision,
@@ -77,7 +81,8 @@ function toOutcomePlanSnapshotView(
         text: criterion.text,
         required: criterion.required,
         workRefs,
-        sourcesVisibility: workRefs.length === criterion.workRefs.length ? "complete" : "restricted",
+        sourcesVisibility:
+          workRefs.length === criterion.workRefs.length ? "complete" : "restricted",
       };
     }),
   };
@@ -108,7 +113,8 @@ export function toOutcomeSummary(
   );
   const hasCurrentRejectedDecision = observedRecord.criteria.some(
     (criterion) =>
-      currentOutcomeDecision(observedRecord, criterion, projections, observedAt)?.decision.status === "rejected",
+      currentOutcomeDecision(observedRecord, criterion, projections, observedAt)?.decision
+        .status === "rejected",
   );
   const readiness = hasUnavailableSource
     ? "unavailable"
@@ -167,11 +173,11 @@ export function toOutcomeDetail(
     observedProjections.map((projection) => [workRefIdentity(projection.ref), projection]),
   );
   const criteria = record.criteria.map((criterion) => {
-      const visibleRefs = criterion.workRefs.filter((ref) =>
-        sourcesByRef.has(workRefIdentity(ref)),
-      );
-      const sourcesComplete = visibleRefs.length === criterion.workRefs.length;
-      const sourcesCurrent = sourcesComplete && visibleRefs.every((ref) => {
+    const visibleRefs = criterion.workRefs.filter((ref) => sourcesByRef.has(workRefIdentity(ref)));
+    const sourcesComplete = visibleRefs.length === criterion.workRefs.length;
+    const sourcesCurrent =
+      sourcesComplete &&
+      visibleRefs.every((ref) => {
         const projection = projectionsByRef.get(workRefIdentity(ref));
         return (
           projection !== undefined &&
@@ -179,17 +185,17 @@ export function toOutcomeDetail(
           !isStaleOutcomeProjection(projection, observedAt)
         );
       });
-      const sourceDigests = sourcesComplete
-        ? visibleRefs.flatMap((ref) =>
-            (sourcesByRef.get(workRefIdentity(ref))?.evidence ?? [])
-              .filter(
-                (evidence) =>
-                  evidence.criterionId === criterion.id &&
-                  evidence.planGeneration === record.planGeneration,
-              )
-              .map((evidence) => evidence.sourceDigest),
-          )
-        : [];
+    const sourceDigests = sourcesComplete
+      ? visibleRefs.flatMap((ref) =>
+          (sourcesByRef.get(workRefIdentity(ref))?.evidence ?? [])
+            .filter(
+              (evidence) =>
+                evidence.criterionId === criterion.id &&
+                evidence.planGeneration === record.planGeneration,
+            )
+            .map((evidence) => evidence.sourceDigest),
+        )
+      : [];
     return {
       id: criterion.id,
       text: criterion.text,
@@ -260,7 +266,10 @@ export function toOutcomeDetail(
       planGeneration: acceptance.planGeneration,
       planHash: acceptance.planHash,
       closureHash: acceptance.closureHash,
-      acceptedPlan: toOutcomePlanSnapshotView(acceptance.acceptedPlan, visibleSnapshotRefIdentities),
+      acceptedPlan: toOutcomePlanSnapshotView(
+        acceptance.acceptedPlan,
+        visibleSnapshotRefIdentities,
+      ),
     }));
   const sourceIssues = observedProjections
     .flatMap((projection) => {

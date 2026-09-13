@@ -22,7 +22,10 @@ function workRefIdentity(ref: OutcomeRecord["criteria"][number]["workRefs"][numb
   return `${ref.cardId}\0${ref.cardCreatedAt}`;
 }
 
-export function isStaleOutcomeProjection(projection: CurrentProjection, observedAt: number): boolean {
+export function isStaleOutcomeProjection(
+  projection: CurrentProjection,
+  observedAt: number,
+): boolean {
   return (
     projection.upstreamStale === true ||
     projection.lastSuccessfulAt === undefined ||

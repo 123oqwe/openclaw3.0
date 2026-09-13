@@ -548,7 +548,9 @@ describe("Outcome P-01 read model", () => {
     input.phase = "cancelled";
     const parsed = valid(input);
 
-    expect(toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash).toBeNull();
+    expect(
+      toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash,
+    ).toBeNull();
   });
 
   it("does not expose a criterion evidence guard while draft", () => {
@@ -572,7 +574,9 @@ describe("Outcome P-01 read model", () => {
     };
     const parsed = parseOutcomeRecord(input);
 
-    expect(toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash).toBeNull();
+    expect(
+      toOutcomeDetail(parsed, 10, authorizedSources(parsed)).criteria[0]?.evidenceSetHash,
+    ).toBeNull();
   });
 
   it("does not expose a criterion evidence guard from a stale owner observation", () => {
@@ -586,11 +590,8 @@ describe("Outcome P-01 read model", () => {
     }
     expect(freshEvidenceSetHash).toMatch(/^[0-9a-f]{64}$/);
     expect(
-      toOutcomeDetail(
-        parsed,
-        10 + OUTCOME_PROJECTION_MAX_AGE_MS,
-        authorizedSources(parsed),
-      ).criteria[0]?.evidenceSetHash,
+      toOutcomeDetail(parsed, 10 + OUTCOME_PROJECTION_MAX_AGE_MS, authorizedSources(parsed))
+        .criteria[0]?.evidenceSetHash,
     ).toBeNull();
   });
 
@@ -764,10 +765,7 @@ describe("Outcome P-01 read model", () => {
 
     expect(detail.acceptanceValidity).toBe("needs-review");
     expect(detail.attention).toEqual(
-      expect.arrayContaining([
-        { code: "acceptance-needs-review" },
-        { code: "rejected" },
-      ]),
+      expect.arrayContaining([{ code: "acceptance-needs-review" }, { code: "rejected" }]),
     );
     expect(detail.attention).not.toContainEqual({
       code: "verification-required",
@@ -859,7 +857,11 @@ describe("Outcome P-01 read model", () => {
         decidedPlan,
       },
     ];
-    input.evidence.push({ ...first(input.evidence), id: "evidence-optional", criterionId: optional.id });
+    input.evidence.push({
+      ...first(input.evidence),
+      id: "evidence-optional",
+      criterionId: optional.id,
+    });
 
     expect(toOutcomeDetail(input, 10).closureHash).toBeNull();
   });

@@ -108,7 +108,8 @@ class OutcomesPage extends OutcomesPageMutations {
         canUnlink: this.canOutcomeAction("unlink-work", "outcomes.unlinkWorkboard"),
         canVerify:
           this.canOutcomeAction("review-evidence", "outcomes.verifyCriterion", true) ||
-          (this.verificationReplayPending && this.canReplayOutcomeAssurance("outcomes.verifyCriterion")),
+          (this.verificationReplayPending &&
+            this.canReplayOutcomeAssurance("outcomes.verifyCriterion")),
         canAccept:
           this.canOutcomeAction("accept", "outcomes.accept", true) ||
           (this.acceptanceReplayPending && this.canReplayOutcomeAssurance("outcomes.accept")),

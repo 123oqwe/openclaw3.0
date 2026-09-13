@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { createOutcomeRepository } from "../store/plugin-state-repository.js";
 import { deriveOutcomeClosure } from "../assurance/closure.js";
+import { createOutcomeRepository } from "../store/plugin-state-repository.js";
+import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "./assurance-reducer.js";
 import { planHash } from "./canonical-plan.js";
 import { createRequestHash, evidenceSetHash } from "./hash.js";
 import {
@@ -14,7 +15,6 @@ import {
   reduceOutcomeTitle,
   type OutcomeMutationResult,
 } from "./reducer.js";
-import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "./assurance-reducer.js";
 import { parseOutcomeRecord } from "./schema.js";
 import type { OutcomeRecord } from "./types.js";
 

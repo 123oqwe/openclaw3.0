@@ -1,12 +1,6 @@
 import type { OpenClawPluginApi } from "../../api.js";
-import {
-  outcomeAcceptanceRequestHash,
-  outcomeDecisionRequestHash,
-} from "../assurance/closure.js";
-import {
-  reduceOutcomeAcceptance,
-  reduceOutcomeDecision,
-} from "../domain/assurance-reducer.js";
+import { outcomeAcceptanceRequestHash, outcomeDecisionRequestHash } from "../assurance/closure.js";
+import { reduceOutcomeAcceptance, reduceOutcomeDecision } from "../domain/assurance-reducer.js";
 import { toOutcomeDetail } from "../domain/read-model.js";
 import type { OutcomeRecord } from "../domain/types.js";
 import type { OutcomeRepository } from "../store/outcome-repository.js";
@@ -199,7 +193,8 @@ export function registerOutcomeAssuranceMethods(
           };
         });
         const committed = decision.replayed
-          ? decision.record.decisions.find((item) => item.id === request.decisionId)?.decidedRevision
+          ? decision.record.decisions.find((item) => item.id === request.decisionId)
+              ?.decidedRevision
           : decision.record.revision;
         if (committed === undefined) {
           respond(false, undefined, outcomeError(OutcomeErrorCodes.INTERNAL));
@@ -251,7 +246,9 @@ export function registerOutcomeAssuranceMethods(
         return fail(respond, "NOT_FOUND");
       }
       const now = Date.now();
-      const existing = record.acceptances.find((acceptance) => acceptance.id === request.acceptanceId);
+      const existing = record.acceptances.find(
+        (acceptance) => acceptance.id === request.acceptanceId,
+      );
       if (existing !== undefined) {
         if (existing.requestHash !== requestHash) {
           return fail(respond, "OPERATION_CONFLICT");
@@ -289,7 +286,8 @@ export function registerOutcomeAssuranceMethods(
           };
         });
         const committed = decision.replayed
-          ? decision.record.acceptances.find((item) => item.id === request.acceptanceId)?.acceptedRevision
+          ? decision.record.acceptances.find((item) => item.id === request.acceptanceId)
+              ?.acceptedRevision
           : decision.record.revision;
         if (committed === undefined) {
           respond(false, undefined, outcomeError(OutcomeErrorCodes.INTERNAL));

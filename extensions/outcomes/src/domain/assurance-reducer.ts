@@ -1,7 +1,4 @@
-import {
-  currentOutcomeEvidenceSourceDigests,
-  deriveOutcomeClosure,
-} from "../assurance/closure.js";
+import { currentOutcomeEvidenceSourceDigests, deriveOutcomeClosure } from "../assurance/closure.js";
 import { evidenceSetHash } from "./hash.js";
 import {
   assertOutcomeServerTime,
@@ -131,7 +128,10 @@ export function reduceOutcomeDecision(
     planGeneration: observed.planGeneration,
     sourceDigests,
   });
-  if (mutation.planHash !== observed.planHash || mutation.evidenceSetHash !== currentEvidenceSetHash) {
+  if (
+    mutation.planHash !== observed.planHash ||
+    mutation.evidenceSetHash !== currentEvidenceSetHash
+  ) {
     return { kind: "rejected", reason: "revision-conflict", record: current, replayed: false };
   }
   if (
@@ -218,7 +218,10 @@ export function reduceOutcomeAcceptance(
     refreshed === undefined
       ? current
       : { ...refreshed.record, revision: current.revision, updatedAt: current.updatedAt };
-  if ((observed.phase !== "active" && observed.phase !== "accepted") || observed.planHash === null) {
+  if (
+    (observed.phase !== "active" && observed.phase !== "accepted") ||
+    observed.planHash === null
+  ) {
     return { kind: "rejected", reason: "invalid-state", record: current, replayed: false };
   }
   const closureHash = deriveOutcomeClosure(observed, observed.projections, mutation.serverTime);

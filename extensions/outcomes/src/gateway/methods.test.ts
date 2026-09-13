@@ -780,7 +780,15 @@ describe("P-02 Outcome handlers", () => {
     const id = await createLinkedOutcome(harness);
     await harness.call("outcomes.activate", { id, expectedRevision: 2 });
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
-    const refreshedOutcome = (refreshed[1] as { outcome: { criteria: Array<{ evidenceSetHash: string }> ; planHash: string; revision: number } }).outcome;
+    const refreshedOutcome = (
+      refreshed[1] as {
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
+      }
+    ).outcome;
     const criterion = refreshedOutcome.criteria[0]!;
 
     const writesBeforeRejectedGuard = harness.writes();
@@ -810,12 +818,17 @@ describe("P-02 Outcome handlers", () => {
       true,
       { replayed: false, receipt: { kind: "verify-criterion", committedRevision: 5 } },
     ]);
-    const verifiedOutcome = (verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }).outcome;
+    const verifiedOutcome = (
+      verified[1] as { outcome: { closureHash: string; planHash: string; revision: number } }
+    ).outcome;
 
     const originalProofs = [...cards[0]!.metadata.proof];
     cards[0]!.metadata.proof = [];
     const afterRemovedProof = await harness.call("outcomes.get", { id });
-    expect(afterRemovedProof).toMatchObject([true, { outcome: { closureHash: null, evidence: [] } }]);
+    expect(afterRemovedProof).toMatchObject([
+      true,
+      { outcome: { closureHash: null, evidence: [] } },
+    ]);
     const removedProofOutcome = (
       afterRemovedProof[1] as { outcome: { criteria: Array<{ evidenceSetHash: string | null }> } }
     ).outcome;
@@ -1182,7 +1195,11 @@ describe("P-02 Outcome handlers", () => {
     const refreshed = await harness.call("outcomes.refresh", { id, expectedRevision: 3 });
     const refreshedOutcome = (
       refreshed[1] as {
-        outcome: { criteria: Array<{ evidenceSetHash: string }>; planHash: string; revision: number };
+        outcome: {
+          criteria: Array<{ evidenceSetHash: string }>;
+          planHash: string;
+          revision: number;
+        };
       }
     ).outcome;
     const emptyEvidenceHash = refreshedOutcome.criteria[0]!.evidenceSetHash;

@@ -3,12 +3,12 @@ import type {
   OutcomeDetail,
   OutcomeNextAction,
 } from "@openclaw/outcomes-contract";
+import type { OutcomeRecord } from "../domain/types.js";
 import {
   currentOutcomeDecision,
   currentOutcomeEvidenceSourceDigests,
   isStaleOutcomeProjection,
 } from "./closure.js";
-import type { OutcomeRecord } from "../domain/types.js";
 
 type CurrentProjection = OutcomeRecord["projections"][number];
 
@@ -102,7 +102,12 @@ export function deriveOutcomeAttention(
     if (record.phase !== "active" && record.phase !== "accepted") {
       continue;
     }
-    const currentDecision = currentOutcomeDecision(record, criterion, projections, observedAt)?.decision;
+    const currentDecision = currentOutcomeDecision(
+      record,
+      criterion,
+      projections,
+      observedAt,
+    )?.decision;
     addAction("review-evidence");
     if (currentDecision === undefined) {
       addAttention("verification-required", criterion.id);
@@ -129,10 +134,7 @@ export function deriveOutcomeAttention(
   ) {
     addAction("activate");
   }
-  if (
-    (record.phase === "draft" || record.phase === "active") &&
-    !hasUncertainOperation
-  ) {
+  if ((record.phase === "draft" || record.phase === "active") && !hasUncertainOperation) {
     addAction("cancel");
   }
   const hasCurrentAcceptance =

@@ -16,7 +16,9 @@ type Forbidden = "managerProfileId" | "requestHash" | "operations";
 type DecisionForbidden = "profileId" | "requestHash";
 type AssertNever<T extends never> = T;
 type PublicForbiddenKeys = AssertNever<Extract<keyof OutcomeDetail, Forbidden>>;
-type PublicDecisionForbiddenKeys = AssertNever<Extract<keyof OutcomeDecisionView, DecisionForbidden>>;
+type PublicDecisionForbiddenKeys = AssertNever<
+  Extract<keyof OutcomeDecisionView, DecisionForbidden>
+>;
 void (undefined as unknown as PublicForbiddenKeys);
 void (undefined as unknown as PublicDecisionForbiddenKeys);
 const publicDecisionNote: OutcomeDecisionView["note"] = undefined;
