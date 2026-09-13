@@ -80,6 +80,9 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
     const form = page.querySelector<HTMLFormElement>("[data-outcome-verification-form]");
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(1));
@@ -215,6 +218,9 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
     const form = page.querySelector<HTMLFormElement>("[data-outcome-verification-form]");
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(1));
@@ -290,6 +296,9 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
     const form = page.querySelector<HTMLFormElement>("[data-outcome-verification-form]");
     form?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
     await vi.waitFor(() => expect(verificationParams).toHaveLength(1));
@@ -366,6 +375,9 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
     page
       .querySelector<HTMLFormElement>("[data-outcome-verification-form]")
       ?.dispatchEvent(new SubmitEvent("submit", { bubbles: true, cancelable: true }));
@@ -433,6 +445,9 @@ describe("OutcomesPage mutations", () => {
       expect(page.querySelector('[data-outcome-action="review-evidence"]')).not.toBeNull();
     });
     page.querySelector<HTMLButtonElement>('[data-outcome-action="review-evidence"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-verification-form]")).not.toBeNull();
+    });
     const status = page.querySelector<HTMLSelectElement>(
       '[data-outcome-verification-form] select[name="status"]',
     );
