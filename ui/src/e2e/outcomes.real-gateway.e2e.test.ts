@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 // Real Gateway proof for the Outcome Center's persisted public workflow.
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -10,6 +11,10 @@ import {
 } from "../../../src/gateway/test-helpers.e2e.js";
 import { createBackupArchive } from "../../../src/infra/backup-create.js";
 import { loadOrCreateDeviceIdentity } from "../../../src/infra/device-identity.js";
+import {
+  createPluginStateKeyedStoreForTests,
+  resetPluginStateStoreForTests,
+} from "../../../src/plugin-sdk/plugin-state-test-runtime.js";
 import type { RuntimeEnv } from "../../../src/runtime.js";
 import { withEnvAsync } from "../../../src/test-utils/env.js";
 import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
@@ -1054,6 +1059,96 @@ suite.define(() => {
         });
       },
     );
+  });
+
+  it("keeps an incompatible persisted Outcome disabled after a restart", async () => {
+    const rollbackInstance = await createOpenClawTestInstance({
+      name: "control-ui-outcomes-incompatible-rollback",
+      startTimeoutMs: 120_000,
+      env: realGatewayPluginEnv,
+      config: {
+        gateway: { controlUi: { enabled: true } },
+        plugins: {
+          enabled: true,
+          allow: ["outcomes", "workboard"],
+          entries: {
+            outcomes: { enabled: true },
+            workboard: { enabled: true },
+          },
+        },
+      },
+    });
+    const outcomeId = randomUUID();
+    try {
+      await rollbackInstance.startGateway();
+      const created = await callGatewayFor(rollbackInstance, "outcomes.create", {
+        id: outcomeId,
+        title: "Reject incompatible rollback state",
+        objective: "Keep unknown persisted schema closed",
+        criteria: [{ id: randomUUID(), text: "State remains intact", required: true }],
+      });
+      expect(created).toMatchObject({ outcome: { id: outcomeId, phase: "draft" } });
+      await rollbackInstance.stopGateway();
+
+      const store = createPluginStateKeyedStoreForTests<Record<string, unknown>>("outcomes", {
+        namespace: "outcomes-v1",
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: rollbackInstance.env,
+      });
+      const current = await store.lookup(outcomeId);
+      if (!current) {
+        throw new Error("Current Outcome was not persisted before rollback simulation");
+      }
+      const incompatible = { ...current, schemaVersion: 2 };
+      if (!store.update) {
+        throw new Error("Plugin-state test store does not support atomic update");
+      }
+      await expect(store.update(outcomeId, () => incompatible)).resolves.toBe(true);
+      resetPluginStateStoreForTests();
+
+      await rollbackInstance.state.writeConfig(
+        outcomeGatewayConfig(rollbackInstance, { outcomesEnabled: false, workboardEnabled: true }),
+      );
+      await rollbackInstance.startGateway();
+      const disabledHealth = await rollbackInstance.cli([
+        "--no-color",
+        "gateway",
+        "call",
+        "outcomes.health",
+        "--params",
+        "{}",
+        "--json",
+      ]);
+      expect(disabledHealth.code).not.toBe(0);
+      await rollbackInstance.stopGateway();
+
+      await rollbackInstance.state.writeConfig(
+        outcomeGatewayConfig(rollbackInstance, { outcomesEnabled: true, workboardEnabled: true }),
+      );
+      await rollbackInstance.startGateway();
+      const rollbackHealth = await rollbackInstance.cli([
+        "--no-color",
+        "gateway",
+        "call",
+        "outcomes.health",
+        "--params",
+        "{}",
+        "--json",
+      ]);
+      expect(rollbackHealth.code, rollbackHealth.stderr).not.toBe(0);
+
+      const rawStore = createPluginStateKeyedStoreForTests<Record<string, unknown>>("outcomes", {
+        namespace: "outcomes-v1",
+        maxEntries: 500,
+        overflowPolicy: "reject-new",
+        env: rollbackInstance.env,
+      });
+      await expect(rawStore.lookup(outcomeId)).resolves.toEqual(incompatible);
+    } finally {
+      resetPluginStateStoreForTests();
+      await rollbackInstance.cleanup();
+    }
   });
 
   it("keeps the keyboard create flow usable without horizontal overflow on a narrow screen", async () => {
