@@ -142,6 +142,15 @@ function gatewayFrame(payload: { toString(): string }): GatewayCallResult | unde
   }
 }
 
+function gatewayFailureCode(stdout: string): string {
+  const frame = gatewayFrame({ toString: () => stdout });
+  const error = frame && isGatewayCallResult(frame.error) ? frame.error : undefined;
+  const code = error?.code;
+  // A Gateway error code is safe, bounded diagnostic context for a hosted
+  // failure. Do not print the response body: it can contain params or records.
+  return typeof code === "string" && /^[A-Z_]{1,64}$/u.test(code) ? code : "UNAVAILABLE";
+}
+
 function refreshResponseSummary(frame: GatewayCallResult): RefreshResponseSummary {
   const error = isGatewayCallResult(frame.error) ? frame.error : undefined;
   const payload = isGatewayCallResult(frame.payload) ? frame.payload : undefined;
@@ -189,7 +198,10 @@ async function callGatewayFor(
     JSON.stringify(params),
     "--json",
   ]);
-  expect(result.code, `${method} failed: ${result.stderr}`).toBe(0);
+  expect(
+    result.code,
+    `${method} failed: exit=${result.code} signal=${result.signal ?? "none"} gatewayError=${gatewayFailureCode(result.stdout)}`,
+  ).toBe(0);
   expect(result.signal).toBeNull();
   const parsed: unknown = JSON.parse(result.stdout);
   if (!isGatewayCallResult(parsed)) {
