@@ -637,36 +637,37 @@ identitySuite.define(() => {
       expect(await readPersistedOutcomeEntries(target.env)).toEqual([sourceEntry]);
       await target.startGateway();
       targetProxy = await startIdentityProxy(target.url);
-      const replacementSelf = await proxyGatewayCall(
-        targetProxy.probeUrl(bobIdentity),
-        targetProxy.probeOrigin,
-        targetProxy.clientBuildId,
-        "users.self",
-        {},
-      );
-      expect(replacementSelf.ok).toBe(true);
-      const replacementProfileId = requireString(
-        requireObject(replacementSelf.payload, "profile"),
-        "id",
-      );
-      expect(replacementProfileId).not.toBe(sourceProfileId);
-      expect(resolveUserProfileId(sourceProfileId, { env: target.env })).toBeUndefined();
-
-      for (const [method, params] of [
-        ["outcomes.get", { id: outcomeId }],
-        ["outcomes.export", { id: outcomeId }],
-        ["outcomes.delete", { expectedRevision, id: outcomeId }],
-      ] as const) {
-        const response = await proxyGatewayCall(
-          targetProxy.probeUrl(bobIdentity),
+      for (const replacementIdentity of [bobIdentity, aliceIdentity]) {
+        const replacementSelf = await proxyGatewayCall(
+          targetProxy.probeUrl(replacementIdentity),
           targetProxy.probeOrigin,
           targetProxy.clientBuildId,
-          method,
-          params,
-          operatorAdminScopes,
+          "users.self",
+          {},
         );
-        expect(response.ok).toBe(false);
-        expect(stringValue(response.error?.code)).toBe("OUTCOME_NOT_FOUND");
+        expect(replacementSelf.ok).toBe(true);
+        const replacementProfileId = requireString(
+          requireObject(replacementSelf.payload, "profile"),
+          "id",
+        );
+        expect(replacementProfileId).not.toBe(sourceProfileId);
+        expect(resolveUserProfileId(sourceProfileId, { env: target.env })).toBeUndefined();
+        for (const [method, params] of [
+          ["outcomes.get", { id: outcomeId }],
+          ["outcomes.export", { id: outcomeId }],
+          ["outcomes.delete", { expectedRevision, id: outcomeId }],
+        ] as const) {
+          const response = await proxyGatewayCall(
+            targetProxy.probeUrl(replacementIdentity),
+            targetProxy.probeOrigin,
+            targetProxy.clientBuildId,
+            method,
+            params,
+            operatorAdminScopes,
+          );
+          expect(response.ok).toBe(false);
+          expect(stringValue(response.error?.code)).toBe("OUTCOME_NOT_FOUND");
+        }
       }
       expect(await readPersistedOutcomeEntries(target.env)).toEqual([sourceEntry]);
     } finally {
