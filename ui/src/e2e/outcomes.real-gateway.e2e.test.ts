@@ -14,6 +14,8 @@ import {
   isGatewayCallResult,
   outcomeGatewayConfig,
   outcomesUrlFor,
+  parseBackupCreateCliResult,
+  parseBackupRestoreCliResult,
   readPersistedOutcomeEntries,
   refreshResponseSummary,
   requireCardId,
@@ -159,68 +161,6 @@ async function callGatewayFor(
     throw new Error(`${method} returned an invalid Gateway payload`);
   }
   return parsed;
-}
-
-type BackupCliAsset = {
-  kind: string;
-  sourcePath: string;
-};
-
-type BackupCreateCliResult = {
-  archivePath: string;
-  archiveRoot: string;
-  assets: BackupCliAsset[];
-  verified: boolean;
-};
-
-type BackupRestoreCliResult = {
-  archivePath: string;
-  archiveRoot: string;
-  targetPath: string;
-};
-
-function parseBackupCliPayload(stdout: string, command: string): GatewayCallResult {
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(stdout);
-  } catch {
-    throw new Error(`${command} emitted invalid JSON`);
-  }
-  if (!isGatewayCallResult(parsed)) {
-    throw new Error(`${command} emitted an invalid JSON object`);
-  }
-  return parsed;
-}
-
-function parseBackupCreateCliResult(stdout: string): BackupCreateCliResult {
-  const parsed = parseBackupCliPayload(stdout, "backup create");
-  if (
-    typeof parsed.archivePath !== "string" ||
-    typeof parsed.archiveRoot !== "string" ||
-    parsed.verified !== true ||
-    !Array.isArray(parsed.assets) ||
-    !parsed.assets.every(
-      (asset) =>
-        isGatewayCallResult(asset) &&
-        typeof asset.kind === "string" &&
-        typeof asset.sourcePath === "string",
-    )
-  ) {
-    throw new Error("backup create JSON omitted its verified archive identity or assets");
-  }
-  return parsed as BackupCreateCliResult;
-}
-
-function parseBackupRestoreCliResult(stdout: string): BackupRestoreCliResult {
-  const parsed = parseBackupCliPayload(stdout, "backup restore");
-  if (
-    typeof parsed.archivePath !== "string" ||
-    typeof parsed.archiveRoot !== "string" ||
-    typeof parsed.targetPath !== "string"
-  ) {
-    throw new Error("backup restore JSON omitted its archive or staging identity");
-  }
-  return parsed as BackupRestoreCliResult;
 }
 
 async function outcomesUrl(): Promise<string> {

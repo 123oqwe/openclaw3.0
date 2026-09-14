@@ -7,7 +7,6 @@ import {
   disconnectGatewayClient,
 } from "../../src/gateway/test-helpers.e2e.js";
 import { loadOrCreateDeviceIdentity } from "../../src/infra/device-identity.js";
-import type { RuntimeEnv } from "../../src/runtime.js";
 import { GATEWAY_CLIENT_NAMES } from "../../src/utils/message-channel.ts";
 import type { ControlUiE2eSuite } from "../../ui/src/e2e/control-ui-e2e-suite.test-support.ts";
 import { waitForControlUiGatewayReady } from "../../ui/src/test-helpers/control-ui-e2e-readiness.ts";
@@ -21,6 +20,24 @@ const outcomeStoreOptions = {
 
 export type GatewayCallResult = Record<string, unknown>;
 
+type BackupCliAsset = {
+  kind: string;
+  sourcePath: string;
+};
+
+export type BackupCreateCliResult = {
+  archivePath: string;
+  archiveRoot: string;
+  assets: BackupCliAsset[];
+  verified: boolean;
+};
+
+export type BackupRestoreCliResult = {
+  archivePath: string;
+  archiveRoot: string;
+  targetPath: string;
+};
+
 export type RefreshResponseSummary = {
   errorCode?: string;
   ok: boolean;
@@ -32,6 +49,50 @@ export type RefreshResponseSummary = {
 
 export function isGatewayCallResult(value: unknown): value is GatewayCallResult {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function parseBackupCliPayload(stdout: string, command: string): GatewayCallResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    throw new Error(`${command} emitted invalid JSON`);
+  }
+  if (!isGatewayCallResult(parsed)) {
+    throw new Error(`${command} emitted an invalid JSON object`);
+  }
+  return parsed;
+}
+
+export function parseBackupCreateCliResult(stdout: string): BackupCreateCliResult {
+  const parsed = parseBackupCliPayload(stdout, "backup create");
+  if (
+    typeof parsed.archivePath !== "string" ||
+    typeof parsed.archiveRoot !== "string" ||
+    parsed.verified !== true ||
+    !Array.isArray(parsed.assets) ||
+    !parsed.assets.every(
+      (asset) =>
+        isGatewayCallResult(asset) &&
+        typeof asset.kind === "string" &&
+        typeof asset.sourcePath === "string",
+    )
+  ) {
+    throw new Error("backup create JSON omitted its verified archive identity or assets");
+  }
+  return parsed as BackupCreateCliResult;
+}
+
+export function parseBackupRestoreCliResult(stdout: string): BackupRestoreCliResult {
+  const parsed = parseBackupCliPayload(stdout, "backup restore");
+  if (
+    typeof parsed.archivePath !== "string" ||
+    typeof parsed.archiveRoot !== "string" ||
+    typeof parsed.targetPath !== "string"
+  ) {
+    throw new Error("backup restore JSON omitted its archive or staging identity");
+  }
+  return parsed as BackupRestoreCliResult;
 }
 
 export async function readPersistedOutcomeEntries(env: NodeJS.ProcessEnv) {
@@ -83,14 +144,6 @@ export function refreshResponseSummary(frame: GatewayCallResult): RefreshRespons
     ...(typeof refresh?.reason === "string" ? { refreshReason: refresh.reason } : {}),
     ...(typeof refresh?.status === "string" ? { refreshStatus: refresh.status } : {}),
     ...(typeof outcome?.revision === "number" ? { revision: outcome.revision } : {}),
-  };
-}
-
-export function createBackupRuntime(): RuntimeEnv {
-  return {
-    log: () => undefined,
-    error: () => undefined,
-    exit: () => undefined,
   };
 }
 
