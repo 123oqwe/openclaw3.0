@@ -1,7 +1,9 @@
 import { spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { cp, readFile } from "node:fs/promises";
+import { cp, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { isDeepStrictEqual } from "node:util";
 import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import type { Page } from "playwright";
 import { expect } from "vitest";
@@ -131,26 +133,44 @@ export type CandidateOutcomeArchiveSummary = {
   archiveSha256: string;
   candidateSha: string;
   compatible: boolean;
-  errorCategory?: "archive-changed" | "decoder-rejected" | "empty-collection" | "process-failed";
+  errorCategory?:
+    | "archive-digest-mismatch"
+    | "candidate-mismatch"
+    | "decoder-rejected"
+    | "empty-collection"
+    | "entry-count-mismatch"
+    | "process-failed"
+    | "restored-state-mismatch";
   recordsChecked: number;
 };
 
 type CandidateOutcomeArchiveCheck = {
   archivePath: string;
+  candidateCheckoutDir: string;
   candidateDecoderUrl: string;
   candidateSha: string;
+  candidateSourcePath: string;
   checkStateDir: string;
   env: NodeJS.ProcessEnv;
+  expectedArchiveSha256: string;
+  expectedEntries: Awaited<ReturnType<typeof readPersistedOutcomeEntries>>;
   restoredStateDir: string;
 };
 
-export function resolveCandidateCheckoutSha(): string {
-  const status = spawnSync("git", ["status", "--porcelain", "--untracked-files=all"], {
-    cwd: process.cwd(),
-    encoding: "utf8",
-  });
+export function resolveCandidateCheckoutSha(
+  candidateCheckoutDir: string,
+  candidateSourcePath: string,
+): string {
+  const status = spawnSync(
+    "git",
+    ["status", "--porcelain", "--untracked-files=all", "--", candidateSourcePath],
+    {
+      cwd: candidateCheckoutDir,
+      encoding: "utf8",
+    },
+  );
   const checkout = spawnSync("git", ["rev-parse", "HEAD"], {
-    cwd: process.cwd(),
+    cwd: candidateCheckoutDir,
     encoding: "utf8",
   });
   const candidateSha = checkout.stdout.trim();
@@ -171,6 +191,10 @@ export function resolveCandidateCheckoutSha(): string {
 
 function sha256(contents: Buffer): string {
   return createHash("sha256").update(contents).digest("hex");
+}
+
+export async function readOutcomeArchiveSha256(archivePath: string): Promise<string> {
+  return sha256(await readFile(archivePath));
 }
 
 function parseCandidateOutcomeArchiveSummary(
@@ -217,10 +241,46 @@ function parseCandidateOutcomeArchiveSummary(
 export async function checkCandidateOutcomeArchive(
   params: CandidateOutcomeArchiveCheck,
 ): Promise<CandidateOutcomeArchiveSummary> {
-  const archiveSha256 = sha256(await readFile(params.archivePath));
+  const archiveSha256 = await readOutcomeArchiveSha256(params.archivePath);
+  if (archiveSha256 !== params.expectedArchiveSha256) {
+    return {
+      allowContinue: false,
+      archiveSha256,
+      candidateSha: params.candidateSha,
+      compatible: false,
+      errorCategory: "archive-digest-mismatch",
+      recordsChecked: 0,
+    };
+  }
+  const candidateCheckoutDir = await realpath(params.candidateCheckoutDir);
+  const candidateSourceDir = path.resolve(candidateCheckoutDir, params.candidateSourcePath);
+  const candidateDecoderPath = await realpath(fileURLToPath(params.candidateDecoderUrl));
+  if (
+    path.relative(candidateCheckoutDir, candidateDecoderPath).startsWith("..") ||
+    path.relative(candidateSourceDir, candidateDecoderPath).startsWith("..")
+  ) {
+    return {
+      allowContinue: false,
+      archiveSha256,
+      candidateSha: params.candidateSha,
+      compatible: false,
+      errorCategory: "candidate-mismatch",
+      recordsChecked: 0,
+    };
+  }
   await cp(params.restoredStateDir, params.checkStateDir, { recursive: true });
   const checkEnv = { ...params.env, OPENCLAW_STATE_DIR: params.checkStateDir };
   const before = await readPersistedOutcomeEntries(checkEnv);
+  if (!isDeepStrictEqual(before, params.expectedEntries)) {
+    return {
+      allowContinue: false,
+      archiveSha256,
+      candidateSha: params.candidateSha,
+      compatible: false,
+      errorCategory: "restored-state-mismatch",
+      recordsChecked: 0,
+    };
+  }
   const child = spawnSync(
     process.execPath,
     [
@@ -229,10 +289,17 @@ export async function checkCandidateOutcomeArchive(
       "--input-type=module",
       "--eval",
       `
+        import { spawnSync } from "node:child_process";
         import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
         import { parseOutcomeRecord } from ${JSON.stringify(params.candidateDecoderUrl)};
+        const checkout = spawnSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8" });
+        const candidateSha = checkout.stdout.trim();
+        if (checkout.error || checkout.signal || checkout.status !== 0 || !/^[a-f0-9]{40}$/u.test(candidateSha)) {
+          process.stdout.write(JSON.stringify({ candidateSha: "", compatible: false, allowContinue: false, recordsChecked: 0, errorCategory: "process-failed" }));
+          process.exit(0);
+        }
         const result = {
-          candidateSha: ${JSON.stringify(params.candidateSha)},
+          candidateSha,
           compatible: false,
           allowContinue: false,
           recordsChecked: 0,
@@ -265,18 +332,18 @@ export async function checkCandidateOutcomeArchive(
         process.stdout.write(JSON.stringify({ ...result, compatible: true, allowContinue: true }));
       `,
     ],
-    { cwd: process.cwd(), encoding: "utf8", env: checkEnv, timeout: 30_000 },
+    { cwd: candidateCheckoutDir, encoding: "utf8", env: checkEnv, timeout: 30_000 },
   );
   const after = await readPersistedOutcomeEntries(checkEnv);
   expect(after).toEqual(before);
-  const archiveSha256After = sha256(await readFile(params.archivePath));
-  if (archiveSha256After !== archiveSha256) {
+  const archiveSha256After = await readOutcomeArchiveSha256(params.archivePath);
+  if (archiveSha256After !== params.expectedArchiveSha256) {
     return {
       allowContinue: false,
       archiveSha256,
       candidateSha: params.candidateSha,
       compatible: false,
-      errorCategory: "archive-changed",
+      errorCategory: "archive-digest-mismatch",
       recordsChecked: 0,
     };
   }
@@ -291,12 +358,34 @@ export async function checkCandidateOutcomeArchive(
       recordsChecked: 0,
     };
   }
+  if (summary.candidateSha !== params.candidateSha) {
+    return {
+      allowContinue: false,
+      archiveSha256,
+      candidateSha: params.candidateSha,
+      compatible: false,
+      errorCategory: "candidate-mismatch",
+      recordsChecked: 0,
+    };
+  }
+  if (summary.recordsChecked !== params.expectedEntries.length) {
+    return {
+      allowContinue: false,
+      archiveSha256,
+      candidateSha: params.candidateSha,
+      compatible: false,
+      errorCategory: "entry-count-mismatch",
+      recordsChecked: 0,
+    };
+  }
   return { ...summary, archiveSha256 };
 }
 
 export async function checkCandidateRejectsIncompatibleOutcomeArchive(params: {
+  candidateCheckoutDir: string;
   candidateDecoderUrl: string;
   candidateSha: string;
+  candidateSourcePath: string;
   env: Record<string, string | undefined>;
   record: Record<string, unknown>;
 }): Promise<CandidateOutcomeArchiveSummary> {
@@ -318,6 +407,7 @@ export async function checkCandidateRejectsIncompatibleOutcomeArchive(params: {
     );
     expect(created.code, created.stderr).toBe(0);
     const backup = parseBackupCreateCliResult(created.stdout);
+    const expectedArchiveSha256 = await readOutcomeArchiveSha256(backup.archivePath);
     const sourceState = backup.assets.find((asset) => asset.kind === "state");
     if (!sourceState) {
       throw new Error("Incompatible Outcome backup CLI output omitted its state asset");
@@ -331,10 +421,14 @@ export async function checkCandidateRejectsIncompatibleOutcomeArchive(params: {
     const restored = parseBackupRestoreCliResult(restoredCommand.stdout);
     const summary = await checkCandidateOutcomeArchive({
       archivePath: backup.archivePath,
+      candidateCheckoutDir: params.candidateCheckoutDir,
       candidateDecoderUrl: params.candidateDecoderUrl,
       candidateSha: params.candidateSha,
+      candidateSourcePath: params.candidateSourcePath,
       checkStateDir: fixture.state.path("incompatible-outcome-check-copy"),
       env: fixture.env,
+      expectedArchiveSha256,
+      expectedEntries: before,
       restoredStateDir: path.join(
         restored.targetPath,
         buildBackupArchivePath(backup.archiveRoot, sourceState.sourcePath),
@@ -350,20 +444,30 @@ export async function checkCandidateRejectsIncompatibleOutcomeArchive(params: {
 
 export async function verifyCandidateOutcomeArchiveGate(params: {
   archivePath: string;
+  candidateCheckoutDir: string;
   candidateDecoderUrl: string;
+  candidateSourcePath: string;
+  expectedArchiveSha256: string;
   faultEnv: Record<string, string | undefined>;
   record: Record<string, unknown>;
   restoredStateDir: string;
   sourceEntries: Awaited<ReturnType<typeof readPersistedOutcomeEntries>>;
   sourceInstance: OpenClawTestInstance;
 }): Promise<void> {
-  const candidateSha = resolveCandidateCheckoutSha();
+  const candidateSha = resolveCandidateCheckoutSha(
+    params.candidateCheckoutDir,
+    params.candidateSourcePath,
+  );
   const candidateArchive = await checkCandidateOutcomeArchive({
     archivePath: params.archivePath,
+    candidateCheckoutDir: params.candidateCheckoutDir,
     candidateDecoderUrl: params.candidateDecoderUrl,
     candidateSha,
+    candidateSourcePath: params.candidateSourcePath,
     checkStateDir: params.sourceInstance.state.path("accepted-outcome-candidate-check-copy"),
     env: params.sourceInstance.env,
+    expectedArchiveSha256: params.expectedArchiveSha256,
+    expectedEntries: params.sourceEntries,
     restoredStateDir: params.restoredStateDir,
   });
   expect(candidateArchive).toMatchObject({
@@ -375,8 +479,10 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   });
   expect(await readPersistedOutcomeEntries(params.sourceInstance.env)).toEqual(params.sourceEntries);
   const incompatibleCandidateArchive = await checkCandidateRejectsIncompatibleOutcomeArchive({
+    candidateCheckoutDir: params.candidateCheckoutDir,
     candidateDecoderUrl: params.candidateDecoderUrl,
     candidateSha,
+    candidateSourcePath: params.candidateSourcePath,
     env: params.faultEnv,
     record: params.record,
   });

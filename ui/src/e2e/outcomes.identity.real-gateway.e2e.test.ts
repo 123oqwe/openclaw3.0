@@ -637,7 +637,7 @@ identitySuite.define(() => {
       expect(await readPersistedOutcomeEntries(target.env)).toEqual([sourceEntry]);
       await target.startGateway();
       targetProxy = await startIdentityProxy(target.url);
-      for (const replacementIdentity of [bobIdentity, aliceIdentity]) {
+      for (const replacementIdentity of [bobIdentity, aliceIdentity] as const) {
         const replacementSelf = await proxyGatewayCall(
           targetProxy.probeUrl(replacementIdentity),
           targetProxy.probeOrigin,

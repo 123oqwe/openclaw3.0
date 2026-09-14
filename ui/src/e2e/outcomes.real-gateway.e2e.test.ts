@@ -18,6 +18,7 @@ import {
   outcomesUrlFor,
   parseBackupCreateCliResult,
   parseBackupRestoreCliResult,
+  readOutcomeArchiveSha256,
   readPersistedOutcomeEntries,
   refreshResponseSummary,
   revokeNewControlUiOperator,
@@ -711,6 +712,7 @@ suite.define(() => {
           expect(created.code, created.stderr).toBe(0);
           expect(created.signal).toBeNull();
           const backup = parseBackupCreateCliResult(created.stdout);
+          const expectedArchiveSha256 = await readOutcomeArchiveSha256(backup.archivePath);
           expect(backup).toMatchObject({
             archivePath,
             verified: true,
@@ -740,7 +742,10 @@ suite.define(() => {
           ).href;
           await verifyCandidateOutcomeArchiveGate({
             archivePath: backup.archivePath,
+            candidateCheckoutDir: process.cwd(),
             candidateDecoderUrl,
+            candidateSourcePath: "extensions/outcomes",
+            expectedArchiveSha256,
             faultEnv: realGatewayPluginEnv,
             record: acceptedPersistedEntry.value,
             restoredStateDir,
