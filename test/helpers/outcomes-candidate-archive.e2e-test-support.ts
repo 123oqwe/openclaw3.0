@@ -143,7 +143,7 @@ function parseCandidateOutcomeArchiveSummary(
  * Runs the plugin-owned candidate archive assertion in a separate process on
  * a disposable restored-state copy. It never activates the plugin or Gateway.
  */
-export async function checkCandidateOutcomeArchive(
+async function checkCandidateOutcomeArchive(
   params: CandidateOutcomeArchiveCheck,
 ): Promise<CandidateOutcomeArchiveSummary> {
   const archiveSha256 = await readOutcomeArchiveSha256(params.archivePath);
