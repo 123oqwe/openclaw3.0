@@ -21,6 +21,16 @@ function recordUntrustedTelemetry(method: string, result: string, startedAt: num
   Reflect.apply(recordOutcomeTelemetry, undefined, [method, result, startedAt]);
 }
 
+function expectTelemetryCalls(
+  method: "create" | "delete" | "export",
+  result: "deny" | "failure" | "success",
+): void {
+  expect(telemetry.counter.add.mock.calls).toEqual([[1, { method, result }]]);
+  expect(telemetry.histogram.record.mock.calls).toEqual([
+    [expect.any(Number), { method, result }],
+  ]);
+}
+
 describe("Outcome Gateway telemetry", () => {
   beforeEach(() => {
     telemetry.counter.add.mockReset();
@@ -40,14 +50,7 @@ describe("Outcome Gateway telemetry", () => {
     ]);
 
     expect(telemetry.getMeter).toHaveBeenCalledWith("openclaw.outcomes");
-    expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
-      method: "create",
-      result: "success",
-    });
-    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
-      method: "create",
-      result: "success",
-    });
+    expectTelemetryCalls("create", "success");
   });
 
   it("records a successful lossless export without exporting record content to telemetry", async () => {
@@ -66,14 +69,7 @@ describe("Outcome Gateway telemetry", () => {
       expect.objectContaining({ schemaVersion: 1, record: expect.objectContaining({ id }) }),
     ]);
 
-    expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
-      method: "export",
-      result: "success",
-    });
-    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
-      method: "export",
-      result: "success",
-    });
+    expectTelemetryCalls("export", "success");
   });
 
   it("records a denied export without putting the request identity in telemetry", async () => {
@@ -86,14 +82,7 @@ describe("Outcome Gateway telemetry", () => {
       { code: "OUTCOME_NOT_FOUND" },
     ]);
 
-    expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
-      method: "export",
-      result: "deny",
-    });
-    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
-      method: "export",
-      result: "deny",
-    });
+    expectTelemetryCalls("export", "deny");
   });
 
   it("records a successful confirmed delete without including its Outcome identity", async () => {
@@ -112,14 +101,7 @@ describe("Outcome Gateway telemetry", () => {
       { deleted: true, id },
     ]);
 
-    expect(telemetry.counter.add).toHaveBeenCalledWith(1, {
-      method: "delete",
-      result: "success",
-    });
-    expect(telemetry.histogram.record).toHaveBeenCalledWith(expect.any(Number), {
-      method: "delete",
-      result: "success",
-    });
+    expectTelemetryCalls("delete", "success");
   });
 
   it("rejects an unbounded operation label instead of leaking it to telemetry", () => {
