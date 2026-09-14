@@ -99,13 +99,14 @@ describe("outcome artifact policy", () => {
     expect(() => assertOutcomeArtifactPaths(["docs/plugins/reference/discord.md"])).toThrow();
     expect(() => assertOutcomeArtifactPaths(["extensions/outcomes/secret.txt"])).toThrow();
     expect(() => assertOutcomeArtifactPaths(["test/helpers/other-helper.ts"])).toThrow();
-    expect(() =>
-      assertOutcomeArtifactPaths([
-        "test/helpers/../helpers/outcomes-real-gateway.e2e-test-support.ts",
-        "test/helpers/outcomes-candidate-archive.e2e-test-support.mts",
-        "test/helpers/archive/outcomes-candidate-archive.e2e-test-support.ts",
-      ]),
-    ).toThrow();
+    for (const path of [
+      "test/helpers/../helpers/outcomes-real-gateway.e2e-test-support.ts",
+      "test/helpers/outcomes-candidate-archive.e2e-test-support.mts",
+      "test/helpers/archive/outcomes-candidate-archive.e2e-test-support.ts",
+      "test/helpers/outcomes-candidate-archive.e2e-test-support.ts/child",
+    ]) {
+      expect(() => assertOutcomeArtifactPaths([path])).toThrow();
+    }
   });
 
   it("removes only the outcomes importer for lockfile invariant comparison", () => {

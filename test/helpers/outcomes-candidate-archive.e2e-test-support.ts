@@ -4,6 +4,7 @@ import { cp, readFile, realpath } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
+import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { expect } from "vitest";
 import { buildBackupArchivePath } from "../../src/commands/backup-shared.js";
 import { createOpenClawTestInstance, type OpenClawTestInstance } from "./openclaw-test-instance.ts";
@@ -55,10 +56,6 @@ type CandidateArchiveFixtureParams = {
   fixtureName: string;
   record?: Record<string, unknown>;
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
 
 export function resolveCandidateCheckoutSha(
   candidateCheckoutDir: string,
