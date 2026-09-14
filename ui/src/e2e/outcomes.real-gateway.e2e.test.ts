@@ -302,7 +302,10 @@ function requireProofId(payload: GatewayCallResult): string {
   return proofId;
 }
 
-function outcomeGatewayConfig(owner: OpenClawTestInstance, workboardEnabled: boolean) {
+function outcomeGatewayConfig(
+  owner: OpenClawTestInstance,
+  options: { outcomesEnabled: boolean; workboardEnabled: boolean },
+) {
   return {
     gateway: {
       auth: { mode: "token", token: owner.gatewayToken },
@@ -314,8 +317,8 @@ function outcomeGatewayConfig(owner: OpenClawTestInstance, workboardEnabled: boo
       enabled: true,
       allow: ["outcomes", "workboard"],
       entries: {
-        outcomes: { enabled: true },
-        workboard: { enabled: workboardEnabled },
+        outcomes: { enabled: options.outcomesEnabled },
+        workboard: { enabled: options.workboardEnabled },
       },
     },
   };
@@ -554,7 +557,9 @@ suite.define(() => {
             path: path.join(suite.artifactDir, "outcomes-disconnected.png"),
           });
         }
-        await instance.state.writeConfig(outcomeGatewayConfig(instance, false));
+        await instance.state.writeConfig(
+          outcomeGatewayConfig(instance, { outcomesEnabled: true, workboardEnabled: false }),
+        );
         await instance.startGateway();
         await waitForControlUiGatewayReady(page);
         await page.reload();
@@ -603,7 +608,9 @@ suite.define(() => {
         await page
           .getByText("Outcome connection unavailable", { exact: true })
           .waitFor({ state: "visible" });
-        await instance.state.writeConfig(outcomeGatewayConfig(instance, true));
+        await instance.state.writeConfig(
+          outcomeGatewayConfig(instance, { outcomesEnabled: true, workboardEnabled: true }),
+        );
         await instance.startGateway();
         await waitForControlUiGatewayReady(page);
         await page.reload();
@@ -636,6 +643,65 @@ suite.define(() => {
         await expect
           .poll(async () => await restoredEvidence.textContent())
           .toContain("Proof status: passed");
+
+        const gatewayHelloCountBeforeOutcomesDisabled = gatewayHelloMethods.length;
+        await instance.stopGateway();
+        await page
+          .getByText("Outcome connection unavailable", { exact: true })
+          .waitFor({ state: "visible" });
+        await instance.state.writeConfig(
+          outcomeGatewayConfig(instance, { outcomesEnabled: false, workboardEnabled: true }),
+        );
+        await instance.startGateway();
+        await waitForControlUiGatewayReady(page);
+        await page.reload();
+        await waitForControlUiGatewayReady(page);
+        await expect
+          .poll(() =>
+            gatewayHelloMethods
+              .slice(gatewayHelloCountBeforeOutcomesDisabled)
+              .some((methods) => !methods.includes("outcomes.list")),
+          )
+          .toBe(true);
+        await page.getByText("Outcome access unavailable", { exact: true }).waitFor({
+          state: "visible",
+        });
+        await expect.poll(() => page.locator(".outcomes-list").count()).toBe(0);
+
+        const gatewayHelloCountBeforeOutcomesEnabled = gatewayHelloMethods.length;
+        await instance.stopGateway();
+        await page
+          .getByText("Outcome connection unavailable", { exact: true })
+          .waitFor({ state: "visible" });
+        await instance.state.writeConfig(
+          outcomeGatewayConfig(instance, { outcomesEnabled: true, workboardEnabled: true }),
+        );
+        await instance.startGateway();
+        await waitForControlUiGatewayReady(page);
+        await page.reload();
+        await waitForControlUiGatewayReady(page);
+        await expect
+          .poll(() =>
+            gatewayHelloMethods
+              .slice(gatewayHelloCountBeforeOutcomesEnabled)
+              .some((methods) => methods.includes("outcomes.list")),
+          )
+          .toBe(true);
+        await page
+          .locator(".outcome-summary", { hasText: "Release Outcome E2E" })
+          .waitFor({ state: "visible" });
+        await page.locator("[data-outcome-select]").click();
+        await expect
+          .poll(() =>
+            page.locator("[data-outcome-detail-id]").getAttribute("data-outcome-detail-id"),
+          )
+          .toBe(outcomeId);
+        await restoredDetail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({
+          state: "visible",
+        });
+        await restoredDetail.locator(`[data-outcome-evidence="${proofId}"]`).waitFor({
+          state: "visible",
+        });
         const cancel = restoredDetail.locator('[data-outcome-action="cancel"]');
         await cancel.focus();
         await page.keyboard.press("Enter");
@@ -759,7 +825,12 @@ suite.define(() => {
           await page
             .getByText("Outcome connection unavailable", { exact: true })
             .waitFor({ state: "visible" });
-          await outcomeInstance.state.writeConfig(outcomeGatewayConfig(outcomeInstance, false));
+          await outcomeInstance.state.writeConfig(
+            outcomeGatewayConfig(outcomeInstance, {
+              outcomesEnabled: true,
+              workboardEnabled: false,
+            }),
+          );
           await outcomeInstance.startGateway();
           await waitForControlUiGatewayReady(page);
           await page.reload();
@@ -780,7 +851,12 @@ suite.define(() => {
             .toBe(0);
         } finally {
           await outcomeInstance.stopGateway();
-          await outcomeInstance.state.writeConfig(outcomeGatewayConfig(outcomeInstance, true));
+          await outcomeInstance.state.writeConfig(
+            outcomeGatewayConfig(outcomeInstance, {
+              outcomesEnabled: true,
+              workboardEnabled: true,
+            }),
+          );
           await outcomeInstance.startGateway();
           await waitForControlUiGatewayReady(page);
           await page.reload();
