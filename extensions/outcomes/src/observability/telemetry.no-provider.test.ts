@@ -25,7 +25,7 @@ describe("Outcome Gateway telemetry without a provider", () => {
           recordOutcomeTelemetry("export", "success", Date.now());
         `,
       ],
-      { cwd: process.cwd(), encoding: "utf8" },
+      { cwd: process.cwd(), encoding: "utf8", timeout: 30_000 },
     );
 
     expect(child.error).toBeUndefined();

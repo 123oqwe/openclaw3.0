@@ -26,9 +26,7 @@ function expectTelemetryCalls(
   result: "deny" | "failure" | "success",
 ): void {
   expect(telemetry.counter.add.mock.calls).toEqual([[1, { method, result }]]);
-  expect(telemetry.histogram.record.mock.calls).toEqual([
-    [expect.any(Number), { method, result }],
-  ]);
+  expect(telemetry.histogram.record.mock.calls).toEqual([[expect.any(Number), { method, result }]]);
 }
 
 describe("Outcome Gateway telemetry", () => {
