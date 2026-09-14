@@ -31,7 +31,7 @@ import {
   verifyUnavailableOutcomeState,
   type GatewayCallResult,
   type RefreshResponseSummary,
-} from "./outcomes.real-gateway.e2e.test-support.ts";
+} from "../../../test/helpers/outcomes-real-gateway.e2e-test-support.ts";
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
@@ -129,7 +129,6 @@ const unavailableSuite = createControlUiE2eSuite({
 });
 
 let unavailableInstance: OpenClawTestInstance | undefined;
-
 
 async function callGateway(
   method: string,
