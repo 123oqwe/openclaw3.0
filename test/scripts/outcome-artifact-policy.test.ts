@@ -99,7 +99,9 @@ describe("outcome artifact policy", () => {
     expect(() => assertOutcomeArtifactPaths(["extensions/outcomes/secret.txt"])).toThrow();
     expect(() => assertOutcomeArtifactPaths(["test/helpers/other-helper.ts"])).toThrow();
     expect(() =>
-      assertOutcomeArtifactPaths(["test/helpers/../helpers/outcomes-real-gateway.e2e-test-support.ts"]),
+      assertOutcomeArtifactPaths([
+        "test/helpers/../helpers/outcomes-real-gateway.e2e-test-support.ts",
+      ]),
     ).toThrow();
   });
 
