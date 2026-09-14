@@ -7,6 +7,7 @@ import { isDeepStrictEqual } from "node:util";
 import { isRecord } from "@openclaw/normalization-core/record-coerce";
 import { expect } from "vitest";
 import { buildBackupArchivePath } from "../../src/commands/backup-shared.js";
+import { resolveRelativeBundledPluginPublicModuleId } from "../../src/test-utils/bundled-plugin-public-surface.js";
 import { createOpenClawTestInstance, type OpenClawTestInstance } from "./openclaw-test-instance.ts";
 import {
   clearPersistedOutcomeEntries,
@@ -17,7 +18,7 @@ import {
   seedPersistedOutcomeEntry,
 } from "./outcomes-real-gateway.e2e-test-support.ts";
 
-export type CandidateOutcomeArchiveSummary = {
+type CandidateOutcomeArchiveSummary = {
   allowContinue: boolean;
   archiveSha256: string;
   candidateSha: string;
@@ -48,7 +49,6 @@ type CandidateOutcomeArchiveCheck = {
 
 type CandidateArchiveFixtureParams = {
   candidateCheckoutDir: string;
-  candidateDecoderUrl: string;
   candidateSha: string;
   candidateSourcePath: string;
   env: Record<string, string | undefined>;
@@ -57,7 +57,7 @@ type CandidateArchiveFixtureParams = {
   record?: Record<string, unknown>;
 };
 
-export function resolveCandidateCheckoutSha(
+function resolveCandidateCheckoutSha(
   candidateCheckoutDir: string,
   candidateSourcePath: string,
 ): string {
@@ -85,6 +85,15 @@ export function resolveCandidateCheckoutSha(
   }
   return candidateSha;
 }
+
+const candidateDecoderUrl = new URL(
+  resolveRelativeBundledPluginPublicModuleId({
+    fromModuleUrl: import.meta.url,
+    pluginId: "outcomes",
+    artifactBasename: "test-api.js",
+  }),
+  import.meta.url,
+).href;
 
 function parseCandidateOutcomeArchiveSummary(
   stdout: string,
@@ -343,7 +352,7 @@ async function checkCandidateArchiveFixture(
     const summary = await checkCandidateOutcomeArchive({
       archivePath: backup.archivePath,
       candidateCheckoutDir: params.candidateCheckoutDir,
-      candidateDecoderUrl: params.candidateDecoderUrl,
+      candidateDecoderUrl,
       candidateSha: params.candidateSha,
       candidateSourcePath: params.candidateSourcePath,
       checkStateDir: fixture.state.path("candidate-check-copy"),
@@ -366,7 +375,6 @@ async function checkCandidateArchiveFixture(
 export async function verifyCandidateOutcomeArchiveGate(params: {
   archivePath: string;
   candidateCheckoutDir: string;
-  candidateDecoderUrl: string;
   candidateEntrypointUrl: string;
   candidateSourcePath: string;
   expectedArchiveSha256: string;
@@ -383,7 +391,7 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   const candidateArchive = await checkCandidateOutcomeArchive({
     archivePath: params.archivePath,
     candidateCheckoutDir: params.candidateCheckoutDir,
-    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateDecoderUrl,
     candidateSha,
     candidateSourcePath: params.candidateSourcePath,
     checkStateDir: params.sourceInstance.state.path("accepted-outcome-candidate-check-copy"),
@@ -402,7 +410,7 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   const candidateShaMismatch = await checkCandidateOutcomeArchive({
     archivePath: params.archivePath,
     candidateCheckoutDir: params.candidateCheckoutDir,
-    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateDecoderUrl,
     candidateSha: "0".repeat(40),
     candidateSourcePath: params.candidateSourcePath,
     checkStateDir: params.sourceInstance.state.path("candidate-sha-mismatch-check-copy"),
@@ -426,7 +434,7 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   const digestMismatch = await checkCandidateOutcomeArchive({
     archivePath: params.archivePath,
     candidateCheckoutDir: params.candidateCheckoutDir,
-    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateDecoderUrl,
     candidateSha,
     candidateSourcePath: params.candidateSourcePath,
     checkStateDir: params.sourceInstance.state.path("digest-mismatch-check-copy"),
@@ -463,7 +471,7 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   });
   const incompatibleCandidateArchive = await checkCandidateArchiveFixture({
     candidateCheckoutDir: params.candidateCheckoutDir,
-    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateDecoderUrl,
     candidateSha,
     candidateSourcePath: params.candidateSourcePath,
     env: params.faultEnv,
@@ -480,7 +488,7 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   });
   const emptyCandidateArchive = await checkCandidateArchiveFixture({
     candidateCheckoutDir: params.candidateCheckoutDir,
-    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateDecoderUrl,
     candidateSha,
     candidateSourcePath: params.candidateSourcePath,
     env: params.faultEnv,

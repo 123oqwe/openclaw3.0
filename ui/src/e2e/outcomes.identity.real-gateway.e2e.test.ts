@@ -620,7 +620,9 @@ identitySuite.define(() => {
     }
     expect(sourceEntry.value).toMatchObject({
       managerProfileId: sourceProfileId,
-      planHash: expect.stringMatching(/^[a-f0-9]{64}$/u),
+      phase: "draft",
+      planGeneration: 0,
+      planHash: null,
     });
 
     let target: OpenClawTestInstance | undefined;

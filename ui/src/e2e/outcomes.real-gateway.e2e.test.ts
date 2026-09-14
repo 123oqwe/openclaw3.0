@@ -37,11 +37,6 @@ import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts"
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-const outcomesApiModuleId = resolveRelativeBundledPluginPublicModuleId({
-  fromModuleUrl: import.meta.url,
-  pluginId: "outcomes",
-  artifactBasename: "api.js",
-});
 const outcomesEntrypointModuleId = resolveRelativeBundledPluginPublicModuleId({
   fromModuleUrl: import.meta.url,
   pluginId: "outcomes",
@@ -747,12 +742,10 @@ suite.define(() => {
             restored.targetPath,
             buildBackupArchivePath(backup.archiveRoot, sourceState.sourcePath),
           );
-          const candidateDecoderUrl = new URL(outcomesApiModuleId, import.meta.url).href;
           const candidateEntrypointUrl = new URL(outcomesEntrypointModuleId, import.meta.url).href;
           await verifyCandidateOutcomeArchiveGate({
             archivePath: backup.archivePath,
             candidateCheckoutDir: process.cwd(),
-            candidateDecoderUrl,
             candidateEntrypointUrl,
             candidateSourcePath: "extensions/outcomes",
             expectedArchiveSha256,

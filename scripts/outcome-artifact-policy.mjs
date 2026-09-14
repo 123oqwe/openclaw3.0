@@ -18,6 +18,7 @@ const ALLOWED_PATHS = new Set([
   "extensions/outcomes/openclaw.plugin.json",
   "extensions/outcomes/package.json",
   "extensions/outcomes/runtime-api.ts",
+  "extensions/outcomes/test-api.ts",
   "extensions/outcomes/src/gateway/cursor.test.ts",
   "extensions/outcomes/src/gateway/cursor.ts",
   "extensions/outcomes/src/gateway/errors.ts",
