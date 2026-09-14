@@ -69,6 +69,7 @@ describe("outcome artifact policy", () => {
         "ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts",
         "ui/src/e2e/outcomes.real-gateway.e2e.test.ts",
         "test/helpers/outcomes-real-gateway.e2e-test-support.ts",
+        "test/helpers/outcomes-candidate-archive.e2e-test-support.ts",
         "ui/src/i18n/locales/en.ts",
         "ui/src/i18n/locales/en-outcomes.ts",
         "ui/src/pages/outcomes/client.ts",
@@ -101,6 +102,8 @@ describe("outcome artifact policy", () => {
     expect(() =>
       assertOutcomeArtifactPaths([
         "test/helpers/../helpers/outcomes-real-gateway.e2e-test-support.ts",
+        "test/helpers/outcomes-candidate-archive.e2e-test-support.mts",
+        "test/helpers/archive/outcomes-candidate-archive.e2e-test-support.ts",
       ]),
     ).toThrow();
   });
