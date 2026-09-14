@@ -777,14 +777,12 @@ suite.define(() => {
           method: "outcomes.get" | "outcomes.refresh";
           outcomeId: string;
           phase: string;
-          socketId: number;
         };
-        const pendingOutcomeRequests = new Map<string, Omit<BrowserOutcomeReply, "frame">>();
         const outcomeReplies: BrowserOutcomeReply[] = [];
         let browserPhase = "source";
-        let nextSocketId = 0;
         page.on("websocket", (socket) => {
-          const socketId = ++nextSocketId;
+          const pendingOutcomeRequests = new Map<string, Omit<BrowserOutcomeReply, "frame">>();
+          socket.on("close", () => pendingOutcomeRequests.clear());
           socket.on("framesent", ({ payload }) => {
             const frame = gatewayFrame(payload);
             const params = frame && isGatewayCallResult(frame.params) ? frame.params : undefined;
@@ -799,7 +797,6 @@ suite.define(() => {
                 method: frame.method,
                 outcomeId,
                 phase: browserPhase,
-                socketId,
               });
             }
           });
@@ -930,6 +927,9 @@ suite.define(() => {
         if (!sourceOutcome) {
           throw new Error("Accepted Outcome source detail omitted its public state");
         }
+        expect(sourceOutcome.planHash).toMatch(/^[a-f0-9]{64}$/u);
+        expect(sourceOutcome.closureHash).toMatch(/^[a-f0-9]{64}$/u);
+        const sourceCards = await callGatewayFor(sourceInstance, "workboard.cards.list", {});
         let restoredInstance: OpenClawTestInstance | undefined;
         let sourceStopped = false;
         try {
@@ -1053,7 +1053,7 @@ suite.define(() => {
             .click();
           const recheckedDetail = page.locator(`[data-outcome-detail-id="${acceptedOutcomeId}"]`);
           const restoredCards = await callGatewayFor(restoredInstance, "workboard.cards.list", {});
-          expect(restoredCards).toMatchObject({ cards: [{ id: cardId }] });
+          expect(restoredCards).toEqual(sourceCards);
           await recheckedDetail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({
             state: "visible",
           });
@@ -1069,19 +1069,34 @@ suite.define(() => {
             "outcomes.refresh",
             acceptedOutcomeId,
           );
-          expect(rechecked).toMatchObject({
-            payload: {
-              outcome: {
-                id: acceptedOutcomeId,
-                planHash: sourceOutcome.planHash,
-                closureHash: sourceOutcome.closureHash,
-                acceptance: { acceptanceValidity: "current" },
-                criteria: sourceOutcome.criteria,
-                evidence: sourceOutcome.evidence,
-                decisions: sourceOutcome.decisions,
-                acceptances: sourceOutcome.acceptances,
-              },
-            },
+          const recheckedPayload = isGatewayCallResult(rechecked.payload)
+            ? rechecked.payload
+            : undefined;
+          const recheckedOutcome =
+            recheckedPayload && isGatewayCallResult(recheckedPayload.outcome)
+              ? recheckedPayload.outcome
+              : undefined;
+          if (!recheckedOutcome) {
+            throw new Error("Rechecked Outcome detail omitted its public state");
+          }
+          expect(recheckedOutcome).toMatchObject({
+            id: acceptedOutcomeId,
+            acceptance: { acceptanceValidity: "current" },
+          });
+          expect({
+            acceptances: recheckedOutcome.acceptances,
+            closureHash: recheckedOutcome.closureHash,
+            criteria: recheckedOutcome.criteria,
+            decisions: recheckedOutcome.decisions,
+            evidence: recheckedOutcome.evidence,
+            planHash: recheckedOutcome.planHash,
+          }).toEqual({
+            acceptances: sourceOutcome.acceptances,
+            closureHash: sourceOutcome.closureHash,
+            criteria: sourceOutcome.criteria,
+            decisions: sourceOutcome.decisions,
+            evidence: sourceOutcome.evidence,
+            planHash: sourceOutcome.planHash,
           });
         } finally {
           try {
