@@ -68,6 +68,7 @@ describe("outcome artifact policy", () => {
         "ui/src/e2e/browser-bootstrap.e2e.test.ts",
         "ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts",
         "ui/src/e2e/outcomes.real-gateway.e2e.test.ts",
+        "test/helpers/outcomes-real-gateway.e2e-test-support.ts",
         "ui/src/i18n/locales/en.ts",
         "ui/src/i18n/locales/en-outcomes.ts",
         "ui/src/pages/outcomes/client.ts",
@@ -96,6 +97,10 @@ describe("outcome artifact policy", () => {
     expect(() => assertOutcomeArtifactPaths([".env"])).toThrow();
     expect(() => assertOutcomeArtifactPaths(["docs/plugins/reference/discord.md"])).toThrow();
     expect(() => assertOutcomeArtifactPaths(["extensions/outcomes/secret.txt"])).toThrow();
+    expect(() => assertOutcomeArtifactPaths(["test/helpers/other-helper.ts"])).toThrow();
+    expect(() =>
+      assertOutcomeArtifactPaths(["test/helpers/../helpers/outcomes-real-gateway.e2e-test-support.ts"]),
+    ).toThrow();
   });
 
   it("removes only the outcomes importer for lockfile invariant comparison", () => {

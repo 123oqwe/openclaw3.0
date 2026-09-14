@@ -16396,6 +16396,7 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
   expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.test.ts");
   expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.ts");
+  expect(bodies).toContain("test/helpers/outcomes-real-gateway.e2e-test-support.ts");
   expect(bodies).toContain("extensions/outcomes/src/assurance/closure.test.ts");
   expect(bodies).toContain("extensions/outcomes/src/assurance/closure.ts");
   expect(bodies).toContain("ui/src/i18n/locales/en-outcomes.ts");
