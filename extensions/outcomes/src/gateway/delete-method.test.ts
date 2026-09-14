@@ -169,6 +169,20 @@ describe("P-06 Outcome delete Gateway handler", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("fails closed for a future-schema record without deleting its raw state", async () => {
+    const harness = createHarness();
+    const { id, record } = await createOutcome(harness, outcomeIds[0]!);
+    const future = { ...record, schemaVersion: 2 } as unknown as typeof record;
+    harness.records.set(id, future);
+    const writes = harness.writes();
+
+    expect(
+      await harness.call("outcomes.delete", { id, expectedRevision: record.revision }),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_INTERNAL" }]);
+    expect(harness.records.get(id)).toEqual(future);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("preserves accepted history and uncertain operations even after cancellation", async () => {
     const harness = createHarness({
       workboardCards: [
