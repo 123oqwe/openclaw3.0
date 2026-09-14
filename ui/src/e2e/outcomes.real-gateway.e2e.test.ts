@@ -915,6 +915,8 @@ suite.define(() => {
             }),
           );
           await restoredInstance.startGateway();
+          const restoredCards = await callGatewayFor(restoredInstance, "workboard.cards.list", {});
+          expect(restoredCards).toMatchObject({ cards: [{ id: cardId }] });
           const rechecked = await callGatewayFor(restoredInstance, "outcomes.refresh", {
             id: acceptedOutcomeId,
             expectedRevision: unrecheckedOutcome.revision,
@@ -932,18 +934,21 @@ suite.define(() => {
             },
           });
         } finally {
-          await restoredInstance?.cleanup();
-          if (sourceStopped) {
-            await sourceInstance.state.writeConfig(
-              outcomeGatewayConfig(sourceInstance, {
-                outcomesEnabled: true,
-                workboardEnabled: true,
-              }),
-            );
-            await sourceInstance.startGateway();
-            await waitForControlUiGatewayReady(page);
-            await page.reload();
-            await waitForControlUiGatewayReady(page);
+          try {
+            await restoredInstance?.cleanup();
+          } finally {
+            if (sourceStopped) {
+              await sourceInstance.state.writeConfig(
+                outcomeGatewayConfig(sourceInstance, {
+                  outcomesEnabled: true,
+                  workboardEnabled: true,
+                }),
+              );
+              await sourceInstance.startGateway();
+              await waitForControlUiGatewayReady(page);
+              await page.reload();
+              await waitForControlUiGatewayReady(page);
+            }
           }
         }
         await callGateway("workboard.cards.proof", {
