@@ -6,10 +6,7 @@ import { fileURLToPath } from "node:url";
 import { isDeepStrictEqual } from "node:util";
 import { expect } from "vitest";
 import { buildBackupArchivePath } from "../../src/commands/backup-shared.js";
-import {
-  createOpenClawTestInstance,
-  type OpenClawTestInstance,
-} from "./openclaw-test-instance.ts";
+import { createOpenClawTestInstance, type OpenClawTestInstance } from "./openclaw-test-instance.ts";
 import {
   clearPersistedOutcomeEntries,
   parseBackupCreateCliResult,
@@ -324,15 +321,7 @@ async function checkCandidateArchiveFixture(
     const configBefore = await readFile(fixture.configPath);
     const archivePath = fixture.state.path("candidate-outcome-backup.tar.gz");
     const created = await fixture.cli(
-      [
-        "backup",
-        "create",
-        "--output",
-        archivePath,
-        "--no-include-workspace",
-        "--verify",
-        "--json",
-      ],
+      ["backup", "create", "--output", archivePath, "--no-include-workspace", "--verify", "--json"],
       { timeoutMs: 120_000 },
     );
     expect(created.code, created.stderr).toBe(0);
@@ -400,9 +389,7 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
     candidateDecoderUrl: params.candidateDecoderUrl,
     candidateSha,
     candidateSourcePath: params.candidateSourcePath,
-    checkStateDir: params.sourceInstance.state.path(
-      "accepted-outcome-candidate-check-copy",
-    ),
+    checkStateDir: params.sourceInstance.state.path("accepted-outcome-candidate-check-copy"),
     env: params.sourceInstance.env,
     expectedArchiveSha256: params.expectedArchiveSha256,
     expectedEntries: params.sourceEntries,

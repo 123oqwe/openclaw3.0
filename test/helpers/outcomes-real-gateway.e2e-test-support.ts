@@ -16,10 +16,7 @@ import { loadOrCreateDeviceIdentity } from "../../src/infra/device-identity.js";
 import { GATEWAY_CLIENT_NAMES } from "../../src/utils/message-channel.ts";
 import type { ControlUiE2eSuite } from "../../ui/src/e2e/control-ui-e2e-suite.test-support.ts";
 import { waitForControlUiGatewayReady } from "../../ui/src/test-helpers/control-ui-e2e-readiness.ts";
-import {
-  createOpenClawTestInstance,
-  type OpenClawTestInstance,
-} from "./openclaw-test-instance.ts";
+import { createOpenClawTestInstance, type OpenClawTestInstance } from "./openclaw-test-instance.ts";
 
 const outcomeStoreOptions = {
   namespace: "outcomes-v1",
