@@ -183,6 +183,24 @@ describe("P-06 Outcome delete Gateway handler", () => {
     expect(harness.writes()).toBe(writes);
   });
 
+  it("does not disclose a foreign future-schema record through deletion", async () => {
+    const harness = createHarness();
+    const { id, record } = await createOutcome(harness, outcomeIds[0]!);
+    const future = { ...record, schemaVersion: 2 } as unknown as typeof record;
+    harness.records.set(id, future);
+    const writes = harness.writes();
+
+    expect(
+      await harness.call(
+        "outcomes.delete",
+        { id, expectedRevision: record.revision },
+        { authenticatedUserProfile: { profileId: "manager-b" } },
+      ),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
+    expect(harness.records.get(id)).toEqual(future);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("preserves accepted history and uncertain operations even after cancellation", async () => {
     const harness = createHarness({
       workboardCards: [
