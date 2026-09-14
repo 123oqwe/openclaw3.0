@@ -45,7 +45,7 @@ type CandidateOutcomeArchiveCheck = {
   expectedArchiveSha256: string;
   expectedEntries: Awaited<ReturnType<typeof readPersistedOutcomeEntries>>;
   restoredStateDir: string;
-  childOutputFault?: "malformed";
+  childOutputFault?: "inconsistent-summary" | "malformed-json";
 };
 
 type CandidateArchiveFixtureParams = {
@@ -230,6 +230,7 @@ async function checkCandidateOutcomeArchive(
           allowContinue: false,
           recordsChecked: 0,
         };
+        const childOutputFault = ${JSON.stringify(params.childOutputFault ?? null)};
         let entries;
         try {
           entries = await createPluginStateKeyedStoreForTests("outcomes", {
@@ -254,6 +255,21 @@ async function checkCandidateOutcomeArchive(
             process.stdout.write(JSON.stringify({ ...result, errorCategory: "decoder-rejected" }));
             process.exit(0);
           }
+        }
+        if (childOutputFault === "malformed-json") {
+          process.stdout.write("{");
+          process.exit(0);
+        }
+        if (childOutputFault === "inconsistent-summary") {
+          process.stdout.write(
+            JSON.stringify({
+              ...result,
+              compatible: true,
+              allowContinue: true,
+              errorCategory: "decoder-rejected",
+            }),
+          );
+          process.exit(0);
         }
         process.stdout.write(JSON.stringify({ ...result, compatible: true, allowContinue: true }));
       `,
@@ -481,9 +497,32 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
     expectedArchiveSha256: params.expectedArchiveSha256,
     expectedEntries: params.sourceEntries,
     restoredStateDir: params.restoredStateDir,
-    childOutputFault: "malformed",
+    childOutputFault: "malformed-json",
   });
   expect(malformedChildOutput).toMatchObject({
+    allowContinue: false,
+    candidateSha,
+    compatible: false,
+    errorCategory: "process-failed",
+    recordsChecked: 0,
+  });
+  expect(await readPersistedOutcomeEntries(params.sourceInstance.env)).toEqual(
+    params.sourceEntries,
+  );
+  const inconsistentChildSummary = await checkCandidateOutcomeArchive({
+    archivePath: params.archivePath,
+    candidateCheckoutDir: params.candidateCheckoutDir,
+    candidateDecoderUrl,
+    candidateSha,
+    candidateSourcePath: params.candidateSourcePath,
+    checkStateDir: params.sourceInstance.state.path("inconsistent-child-summary-check-copy"),
+    env: params.sourceInstance.env,
+    expectedArchiveSha256: params.expectedArchiveSha256,
+    expectedEntries: params.sourceEntries,
+    restoredStateDir: params.restoredStateDir,
+    childOutputFault: "inconsistent-summary",
+  });
+  expect(inconsistentChildSummary).toMatchObject({
     allowContinue: false,
     candidateSha,
     compatible: false,
