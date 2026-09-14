@@ -347,8 +347,11 @@ function createStrictOutcomeRepository(
     deleteOwnedIf: async (owner, id, predicate) => {
       assertManagerProfileId(owner);
       return deleteIf(id, (current) => {
+        if (current.managerProfileId !== owner) {
+          return false;
+        }
         const parsed = parseOutcomeRecord(current);
-        return parsed.managerProfileId === owner && predicate(parsed);
+        return predicate(parsed);
       });
     },
   };
