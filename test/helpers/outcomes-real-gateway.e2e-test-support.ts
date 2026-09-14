@@ -96,7 +96,7 @@ export function createBackupRuntime(): RuntimeEnv {
   };
 }
 
-export async function listPairedDevices(
+async function listPairedDevices(
   instance: OpenClawTestInstance,
 ): Promise<GatewayCallResult[]> {
   const result = await instance.cli([
@@ -117,7 +117,7 @@ export async function listPairedDevices(
   return parsed.paired.filter(isGatewayCallResult);
 }
 
-export async function revokeOperatorToken(
+async function revokeOperatorToken(
   instance: OpenClawTestInstance,
   deviceId: string,
 ): Promise<void> {
@@ -139,7 +139,7 @@ export async function revokeOperatorToken(
   }
 }
 
-export function requireNewBrowserDeviceId(
+function requireNewBrowserDeviceId(
   paired: GatewayCallResult[],
   existingDeviceIds: ReadonlySet<string>,
 ): string {
