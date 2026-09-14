@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import plugin from "./index.js";
 
 describe("Outcome plugin shell", () => {
+  it("keeps archive decoder validation on the plugin test API", async () => {
+    const api = await import("./api.js");
+    const testApi = await import("./test-api.js");
+
+    expect(api).not.toHaveProperty("assertCandidateOutcomeArchiveRecord");
+    expect(testApi.assertCandidateOutcomeArchiveRecord).toBeTypeOf("function");
+  });
+
   function createRegistrationStore() {
     const records = new Map<string, unknown>();
     return {
