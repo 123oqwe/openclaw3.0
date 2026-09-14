@@ -45,6 +45,7 @@ type CandidateOutcomeArchiveCheck = {
   expectedArchiveSha256: string;
   expectedEntries: Awaited<ReturnType<typeof readPersistedOutcomeEntries>>;
   restoredStateDir: string;
+  childOutputFault?: "malformed";
 };
 
 type CandidateArchiveFixtureParams = {
@@ -469,6 +470,29 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
     errorCategory: "process-failed",
     recordsChecked: 0,
   });
+  const malformedChildOutput = await checkCandidateOutcomeArchive({
+    archivePath: params.archivePath,
+    candidateCheckoutDir: params.candidateCheckoutDir,
+    candidateDecoderUrl,
+    candidateSha,
+    candidateSourcePath: params.candidateSourcePath,
+    checkStateDir: params.sourceInstance.state.path("malformed-child-output-check-copy"),
+    env: params.sourceInstance.env,
+    expectedArchiveSha256: params.expectedArchiveSha256,
+    expectedEntries: params.sourceEntries,
+    restoredStateDir: params.restoredStateDir,
+    childOutputFault: "malformed",
+  });
+  expect(malformedChildOutput).toMatchObject({
+    allowContinue: false,
+    candidateSha,
+    compatible: false,
+    errorCategory: "process-failed",
+    recordsChecked: 0,
+  });
+  expect(await readPersistedOutcomeEntries(params.sourceInstance.env)).toEqual(
+    params.sourceEntries,
+  );
   const incompatibleCandidateArchive = await checkCandidateArchiveFixture({
     candidateCheckoutDir: params.candidateCheckoutDir,
     candidateSha,
