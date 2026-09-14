@@ -471,7 +471,6 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   });
   const incompatibleCandidateArchive = await checkCandidateArchiveFixture({
     candidateCheckoutDir: params.candidateCheckoutDir,
-    candidateDecoderUrl,
     candidateSha,
     candidateSourcePath: params.candidateSourcePath,
     env: params.faultEnv,
@@ -488,7 +487,6 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
   });
   const emptyCandidateArchive = await checkCandidateArchiveFixture({
     candidateCheckoutDir: params.candidateCheckoutDir,
-    candidateDecoderUrl,
     candidateSha,
     candidateSourcePath: params.candidateSourcePath,
     env: params.faultEnv,
