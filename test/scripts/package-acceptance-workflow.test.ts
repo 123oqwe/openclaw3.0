@@ -7383,7 +7383,7 @@ printf '%s\\n' "$DEEPSEEK_API_KEY" "$DEEPINFRA_API_KEY"`,
     expect(syntheticProfileStep.if).toBe("github.event_name == 'pull_request'");
     expect(syntheticProfileStep.env).toBeUndefined();
     expect(syntheticProfileStep.run).toContain("env -i");
-    expect(syntheticProfileStep.run).toContain("DEEPSEEK_API_KEY=synthetic-arm-testbox-profile");
+    expect(syntheticProfileStep.run).toContain('DEEPSEEK_API_KEY="synthetic-arm-testbox-profile"');
     expect(syntheticProfileStep.run).toContain('test -z "${OPENAI_API_KEY+x}"');
     expect(syntheticProfileStep.run).not.toContain("${{ secrets.");
   });
