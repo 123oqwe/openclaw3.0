@@ -106,6 +106,19 @@ export async function readPersistedOutcomeEntries(env: NodeJS.ProcessEnv) {
     .toSorted((left, right) => left.key.localeCompare(right.key));
 }
 
+/** Seeds a raw archive record only into an isolated test state; it is not an import surface. */
+export async function seedPersistedOutcomeEntry(
+  env: NodeJS.ProcessEnv,
+  key: string,
+  value: Record<string, unknown>,
+): Promise<void> {
+  const store = createPluginStateKeyedStoreForTests<Record<string, unknown>>("outcomes", {
+    ...outcomeStoreOptions,
+    env,
+  });
+  expect(await store.registerIfAbsent(key, value)).toBe(true);
+}
+
 export function gatewayFrame(payload: { toString(): string }): GatewayCallResult | undefined {
   try {
     const parsed: unknown = JSON.parse(payload.toString());
