@@ -756,8 +756,7 @@ identitySuite.define(() => {
         await detail.locator('[data-outcome-action="link-work"]').click();
         const linkForm = page.locator("[data-outcome-link-form]");
         const card = linkForm.locator('select[name="card"]');
-        await card.focus();
-        await page.keyboard.press("ArrowDown");
+        await card.selectOption(cardId);
         await expect.poll(() => card.inputValue()).toBe(cardId);
         await linkForm.locator("[data-outcome-confirm-link]").click();
         await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });
