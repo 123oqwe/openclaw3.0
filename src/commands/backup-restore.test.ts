@@ -6,6 +6,10 @@ import * as tar from "tar";
 import { describe, expect, it, vi } from "vitest";
 import { createBackupArchive } from "../infra/backup-create.js";
 import { requireNodeSqlite } from "../infra/node-sqlite.js";
+import {
+  createPluginStateKeyedStoreForTests,
+  resetPluginStateStoreForTests,
+} from "../plugin-sdk/plugin-state-test-runtime.js";
 import type { RuntimeEnv } from "../runtime.js";
 import {
   closeOpenClawStateDatabase,
@@ -114,7 +118,149 @@ async function writeArchive(params: {
   );
 }
 
+function restoredStateDir(archiveRoot: string, stateDir: string, targetPath: string): string {
+  return path.join(targetPath, buildBackupArchivePath(archiveRoot, stateDir));
+}
+
+function outcomeRecordForBackup(): Record<string, unknown> {
+  const ref = {
+    owner: "workboard",
+    cardId: "card-1",
+    cardCreatedAt: 1,
+    boardIdAtLink: "board-1",
+  };
+  const criteria = [
+    { id: "criterion-1", text: "Complete the approved work", required: true, workRefs: [ref] },
+  ];
+  const plan = {
+    outcomeId: "backup-outcome",
+    objective: "Preserve the recovered contract",
+    contractRevision: 1,
+    planGeneration: 1,
+    criteria,
+  };
+  return {
+    schemaVersion: 1,
+    id: "backup-outcome",
+    createRequestHash: "a".repeat(64),
+    managerProfileId: "alice",
+    title: "Recover Outcome state",
+    objective: plan.objective,
+    phase: "accepted",
+    revision: 4,
+    contractRevision: plan.contractRevision,
+    planGeneration: plan.planGeneration,
+    planHash: "b".repeat(64),
+    criteria,
+    projections: [
+      {
+        ref,
+        availability: "available",
+        currentBoardId: "board-1",
+        status: "done",
+        observedAt: 10,
+        lastSuccessfulAt: 10,
+        sourceUpdatedAt: 10,
+        proofs: [{ sourceId: "proof-1", digest: "proof-digest-1" }],
+        artifacts: [],
+        sourceFingerprint: "c".repeat(64),
+      },
+    ],
+    evidence: [
+      {
+        id: "evidence-1",
+        criterionId: "criterion-1",
+        planGeneration: 1,
+        workRef: ref,
+        kind: "workboard-proof",
+        sourceId: "proof-1",
+        sourceDigest: "proof-digest-1",
+        observedAt: 10,
+      },
+    ],
+    decisions: [
+      {
+        id: "decision-1",
+        criterionId: "criterion-1",
+        planGeneration: 1,
+        decidedRevision: 3,
+        status: "verified",
+        requestHash: "d".repeat(64),
+        profileId: "alice",
+        planHash: "b".repeat(64),
+        decidedPlan: plan,
+        evidenceSetHash: "e".repeat(64),
+        decidedAt: 10,
+      },
+    ],
+    operations: [],
+    acceptances: [
+      {
+        id: "acceptance-1",
+        requestHash: "f".repeat(64),
+        acceptedRevision: 4,
+        profileId: "alice",
+        acceptedAt: 10,
+        planGeneration: 1,
+        planHash: "b".repeat(64),
+        closureHash: "g".repeat(64),
+        acceptedPlan: plan,
+      },
+    ],
+    createdAt: 1,
+    updatedAt: 10,
+  };
+}
+
 describe("backupRestoreCommand", () => {
+  it("preserves Outcome plugin state and history in a fresh restored target", async () => {
+    await withOpenClawTestState(
+      { layout: "state-only", prefix: "openclaw-backup-restore-outcomes-", scenario: "minimal" },
+      async (state) => {
+        const initial = outcomeRecordForBackup();
+        const sourceStore = createPluginStateKeyedStoreForTests<Record<string, unknown>>(
+          "outcomes",
+          {
+            namespace: "outcomes-v1",
+            maxEntries: 500,
+            overflowPolicy: "reject-new",
+            env: state.env,
+          },
+        );
+        await expect(sourceStore.registerIfAbsent("backup-outcome", initial)).resolves.toBe(true);
+        resetPluginStateStoreForTests();
+
+        const backup = await createBackupArchive({
+          output: state.path("outcomes-backup.tar.gz"),
+          includeWorkspace: false,
+          nowMs: Date.UTC(2026, 8, 13, 0, 0, 0),
+        });
+        const restored = await backupRestoreCommand(createRuntime(), {
+          archive: backup.archivePath,
+          target: state.path("restored"),
+        });
+        const restoredStore = createPluginStateKeyedStoreForTests<Record<string, unknown>>(
+          "outcomes",
+          {
+            namespace: "outcomes-v1",
+            maxEntries: 500,
+            overflowPolicy: "reject-new",
+            env: {
+              ...state.env,
+              OPENCLAW_STATE_DIR: restoredStateDir(
+                backup.archiveRoot,
+                state.stateDir,
+                restored.targetPath,
+              ),
+            },
+          },
+        );
+
+        await expect(restoredStore.lookup("backup-outcome")).resolves.toEqual(initial);
+      },
+    );
+  });
+
   it.for([
     { targetForm: "qualified", suffix: "" },
     { targetForm: "root-relative", suffix: "" },
