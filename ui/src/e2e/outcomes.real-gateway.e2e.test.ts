@@ -1,12 +1,17 @@
 // Real Gateway proof for the Outcome Center's persisted public workflow.
-import { writeFile } from "node:fs/promises";
+import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
+import { backupRestoreCommand } from "../../../src/commands/backup-restore.js";
+import { buildBackupArchivePath } from "../../../src/commands/backup-shared.js";
 import {
   connectGatewayClient,
   disconnectGatewayClient,
 } from "../../../src/gateway/test-helpers.e2e.js";
+import { createBackupArchive } from "../../../src/infra/backup-create.js";
 import { loadOrCreateDeviceIdentity } from "../../../src/infra/device-identity.js";
+import type { RuntimeEnv } from "../../../src/runtime.js";
+import { withEnvAsync } from "../../../src/test-utils/env.js";
 import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import {
   createOpenClawTestInstance,
@@ -167,7 +172,15 @@ async function callGateway(
   if (!instance) {
     throw new Error("Outcome Gateway fixture was not started");
   }
-  const result = await instance.cli([
+  return await callGatewayFor(instance, method, params);
+}
+
+async function callGatewayFor(
+  owner: OpenClawTestInstance,
+  method: string,
+  params: Record<string, unknown>,
+): Promise<GatewayCallResult> {
+  const result = await owner.cli([
     "--no-color",
     "gateway",
     "call",
@@ -183,6 +196,14 @@ async function callGateway(
     throw new Error(`${method} returned an invalid Gateway payload`);
   }
   return parsed;
+}
+
+function createBackupRuntime(): RuntimeEnv {
+  return {
+    log: () => undefined,
+    error: () => undefined,
+    exit: () => undefined,
+  };
 }
 
 async function listPairedDevices(): Promise<GatewayCallResult[]> {
@@ -789,6 +810,142 @@ suite.define(() => {
         await detail.locator('[data-outcome-action="accept"]').click();
         await detail.locator('[data-outcome-phase="accepted"]').waitFor({ state: "visible" });
         await detail.locator("[data-outcome-acceptance-history]").waitFor({ state: "visible" });
+        const acceptedOutcomeId = await detail.getAttribute("data-outcome-detail-id");
+        if (!acceptedOutcomeId) {
+          throw new Error("Accepted Outcome detail omitted its ID");
+        }
+        if (!instance) {
+          throw new Error("Outcome Gateway fixture was not started");
+        }
+        const sourceInstance = instance;
+        const sourceDetail = await callGateway("outcomes.get", { id: acceptedOutcomeId });
+        const sourceOutcome = sourceDetail.outcome;
+        if (!isGatewayCallResult(sourceOutcome)) {
+          throw new Error("Accepted Outcome source detail omitted its public state");
+        }
+        let restoredInstance: OpenClawTestInstance | undefined;
+        let sourceStopped = false;
+        try {
+          // A stopped source makes this an archive/restore test, rather than a read from the
+          // running source. The target has its own port, token, and isolated state root.
+          await sourceInstance.stopGateway();
+          sourceStopped = true;
+          const backup = await withEnvAsync(
+            sourceInstance.env,
+            async () =>
+              await createBackupArchive({
+                output: sourceInstance.state.path("accepted-outcome-backup.tar.gz"),
+                includeWorkspace: false,
+              }),
+          );
+          const restored = await backupRestoreCommand(createBackupRuntime(), {
+            archive: backup.archivePath,
+            target: sourceInstance.state.path("accepted-outcome-restore"),
+          });
+          const sourceState = backup.assets.find((asset) => asset.kind === "state");
+          if (!sourceState) {
+            throw new Error("Accepted Outcome backup omitted its state asset");
+          }
+          const restoredStateDir = path.join(
+            restored.targetPath,
+            buildBackupArchivePath(backup.archiveRoot, sourceState.sourcePath),
+          );
+          restoredInstance = await createOpenClawTestInstance({
+            name: "control-ui-outcomes-restore",
+            startTimeoutMs: 120_000,
+            env: realGatewayPluginEnv,
+            config: {
+              gateway: { controlUi: { enabled: true } },
+              plugins: {
+                enabled: true,
+                allow: ["outcomes", "workboard"],
+                entries: {
+                  outcomes: { enabled: true },
+                  workboard: { enabled: false },
+                },
+              },
+            },
+          });
+          // The archive is intentionally restored to staging. Activation is explicit, so place
+          // its verified state asset in the target instance before its first Gateway startup.
+          await rm(restoredInstance.stateDir, { recursive: true, force: true });
+          await cp(restoredStateDir, restoredInstance.stateDir, { recursive: true });
+          await restoredInstance.state.writeConfig(
+            outcomeGatewayConfig(restoredInstance, {
+              outcomesEnabled: true,
+              workboardEnabled: false,
+            }),
+          );
+          await restoredInstance.startGateway();
+
+          const unrechecked = await callGatewayFor(restoredInstance, "outcomes.get", {
+            id: acceptedOutcomeId,
+          });
+          expect(unrechecked).toMatchObject({
+            outcome: {
+              id: acceptedOutcomeId,
+              phase: "accepted",
+              acceptance: { acceptanceValidity: "needs-review", reason: "not-rechecked" },
+              decisions: [
+                {
+                  status: "verified",
+                  decidedPlan: { objective: "Prove human acceptance" },
+                },
+              ],
+              acceptances: [
+                {
+                  acceptedPlan: { objective: "Prove human acceptance" },
+                },
+              ],
+            },
+          });
+          const unrecheckedOutcome = unrechecked.outcome;
+          if (
+            !isGatewayCallResult(unrecheckedOutcome) ||
+            typeof unrecheckedOutcome.revision !== "number"
+          ) {
+            throw new Error("Restored Outcome detail omitted its revision");
+          }
+
+          await restoredInstance.stopGateway();
+          await restoredInstance.state.writeConfig(
+            outcomeGatewayConfig(restoredInstance, {
+              outcomesEnabled: true,
+              workboardEnabled: true,
+            }),
+          );
+          await restoredInstance.startGateway();
+          const rechecked = await callGatewayFor(restoredInstance, "outcomes.refresh", {
+            id: acceptedOutcomeId,
+            expectedRevision: unrecheckedOutcome.revision,
+          });
+          expect(rechecked).toMatchObject({
+            outcome: {
+              id: acceptedOutcomeId,
+              planHash: sourceOutcome.planHash,
+              closureHash: sourceOutcome.closureHash,
+              acceptance: { acceptanceValidity: "current" },
+              criteria: sourceOutcome.criteria,
+              evidence: sourceOutcome.evidence,
+              decisions: sourceOutcome.decisions,
+              acceptances: sourceOutcome.acceptances,
+            },
+          });
+        } finally {
+          await restoredInstance?.cleanup();
+          if (sourceStopped) {
+            await sourceInstance.state.writeConfig(
+              outcomeGatewayConfig(sourceInstance, {
+                outcomesEnabled: true,
+                workboardEnabled: true,
+              }),
+            );
+            await sourceInstance.startGateway();
+            await waitForControlUiGatewayReady(page);
+            await page.reload();
+            await waitForControlUiGatewayReady(page);
+          }
+        }
         await callGateway("workboard.cards.proof", {
           id: cardId,
           label: "Outcome acceptance evidence changed",
