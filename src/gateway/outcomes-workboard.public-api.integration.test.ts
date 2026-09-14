@@ -119,7 +119,7 @@ async function dispatch(params: {
             forceSyntheticClient: true,
             requireAuthenticatedRequest: true,
             requireScopedClient: true,
-            syntheticScopes: ["operator.read", "operator.write"],
+            syntheticScopes: [...(params.client.connect.scopes ?? [])],
           }),
       ),
   );
