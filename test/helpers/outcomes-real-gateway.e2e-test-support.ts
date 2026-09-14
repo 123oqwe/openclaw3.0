@@ -128,6 +128,14 @@ export async function seedPersistedOutcomeEntry(
   expect(await store.registerIfAbsent(key, value)).toBe(true);
 }
 
+export async function clearPersistedOutcomeEntries(env: NodeJS.ProcessEnv): Promise<void> {
+  const store = createPluginStateKeyedStoreForTests<Record<string, unknown>>("outcomes", {
+    ...outcomeStoreOptions,
+    env,
+  });
+  await store.clear();
+}
+
 export type CandidateOutcomeArchiveSummary = {
   allowContinue: boolean;
   archiveSha256: string;

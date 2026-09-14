@@ -1,9 +1,9 @@
 // Real Gateway proof for the Outcome Center's persisted public workflow.
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
 import { buildBackupArchivePath } from "../../../src/commands/backup-shared.js";
+import { resolveRelativeBundledPluginPublicModuleId } from "../../../src/test-utils/bundled-plugin-public-surface.js";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
@@ -24,19 +24,29 @@ import {
   revokeNewControlUiOperator,
   requireCardId,
   requireProofId,
-  verifyCandidateOutcomeArchiveGate,
   verifyOutcomeMobileKeyboardFlow,
   verifyOutcomeRevocation,
   verifyUnavailableOutcomeState,
   type GatewayCallResult,
   type RefreshResponseSummary,
 } from "../../../test/helpers/outcomes-real-gateway.e2e-test-support.ts";
+import { verifyCandidateOutcomeArchiveGate } from "../../../test/helpers/outcomes-candidate-archive.e2e-test-support.ts";
 import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+const outcomesApiModuleId = resolveRelativeBundledPluginPublicModuleId({
+  fromModuleUrl: import.meta.url,
+  pluginId: "outcomes",
+  artifactBasename: "api.js",
+});
+const outcomesEntrypointModuleId = resolveRelativeBundledPluginPublicModuleId({
+  fromModuleUrl: import.meta.url,
+  pluginId: "outcomes",
+  artifactBasename: "index.js",
+});
 // The isolated-instance helper defaults to a minimal Gateway and therefore does
 // not load configured plugins. This proof must load the real Outcomes and
 // Workboard entries from the fixture config.
@@ -737,13 +747,13 @@ suite.define(() => {
             restored.targetPath,
             buildBackupArchivePath(backup.archiveRoot, sourceState.sourcePath),
           );
-          const candidateDecoderUrl = pathToFileURL(
-            path.resolve("extensions/outcomes/src/domain/schema.ts"),
-          ).href;
+          const candidateDecoderUrl = new URL(outcomesApiModuleId, import.meta.url).href;
+          const candidateEntrypointUrl = new URL(outcomesEntrypointModuleId, import.meta.url).href;
           await verifyCandidateOutcomeArchiveGate({
             archivePath: backup.archivePath,
             candidateCheckoutDir: process.cwd(),
             candidateDecoderUrl,
+            candidateEntrypointUrl,
             candidateSourcePath: "extensions/outcomes",
             expectedArchiveSha256,
             faultEnv: realGatewayPluginEnv,
