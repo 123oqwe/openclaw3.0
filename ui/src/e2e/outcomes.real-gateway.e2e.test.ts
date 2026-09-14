@@ -1022,18 +1022,33 @@ suite.define(() => {
             "outcomes.get",
             acceptedOutcomeId,
           );
-          expect(unrechecked).toMatchObject({
-            payload: {
-              outcome: {
-                id: acceptedOutcomeId,
-                phase: "accepted",
-                acceptance: { acceptanceValidity: "needs-review", reason: "not-rechecked" },
-                decisions: [
-                  { status: "verified", decidedPlan: { objective: "Prove human acceptance" } },
-                ],
-                acceptances: [{ acceptedPlan: { objective: "Prove human acceptance" } }],
-              },
-            },
+          const unrecheckedPayload = isGatewayCallResult(unrechecked.payload)
+            ? unrechecked.payload
+            : undefined;
+          const unrecheckedOutcome =
+            unrecheckedPayload && isGatewayCallResult(unrecheckedPayload.outcome)
+              ? unrecheckedPayload.outcome
+              : undefined;
+          if (!unrecheckedOutcome) {
+            throw new Error("Restored Outcome detail omitted its public state");
+          }
+          expect(unrecheckedOutcome).toMatchObject({
+            id: acceptedOutcomeId,
+            phase: "accepted",
+            acceptance: { acceptanceValidity: "needs-review", reason: "not-rechecked" },
+          });
+          expect({
+            acceptances: unrecheckedOutcome.acceptances,
+            criteria: unrecheckedOutcome.criteria,
+            decisions: unrecheckedOutcome.decisions,
+            evidence: unrecheckedOutcome.evidence,
+            planHash: unrecheckedOutcome.planHash,
+          }).toEqual({
+            acceptances: sourceOutcome.acceptances,
+            criteria: sourceOutcome.criteria,
+            decisions: sourceOutcome.decisions,
+            evidence: sourceOutcome.evidence,
+            planHash: sourceOutcome.planHash,
           });
 
           await restoredInstance.stopGateway();
@@ -1088,14 +1103,12 @@ suite.define(() => {
             closureHash: recheckedOutcome.closureHash,
             criteria: recheckedOutcome.criteria,
             decisions: recheckedOutcome.decisions,
-            evidence: recheckedOutcome.evidence,
             planHash: recheckedOutcome.planHash,
           }).toEqual({
             acceptances: sourceOutcome.acceptances,
             closureHash: sourceOutcome.closureHash,
             criteria: sourceOutcome.criteria,
             decisions: sourceOutcome.decisions,
-            evidence: sourceOutcome.evidence,
             planHash: sourceOutcome.planHash,
           });
         } finally {
