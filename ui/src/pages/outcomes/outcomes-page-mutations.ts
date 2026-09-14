@@ -15,7 +15,6 @@ import { OutcomesPageExportDeleteMutations } from "./outcomes-page-export-delete
 import { replaceOutcomeSummary } from "./outcomes-page-model.ts";
 
 export abstract class OutcomesPageMutations extends OutcomesPageExportDeleteMutations {
-
   protected openCreateDialog() {
     if (!this.canCreateOutcome() || this.creating) {
       return;
