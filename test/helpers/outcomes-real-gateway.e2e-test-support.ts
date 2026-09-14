@@ -290,12 +290,30 @@ export async function checkCandidateOutcomeArchive(
       "--eval",
       `
         import { spawnSync } from "node:child_process";
-        import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
+        import {
+          createPluginStateKeyedStoreForTests,
+        } from "openclaw/plugin-sdk/plugin-state-test-runtime";
         import { parseOutcomeRecord } from ${JSON.stringify(params.candidateDecoderUrl)};
-        const checkout = spawnSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), encoding: "utf8" });
+        const checkout = spawnSync("git", ["rev-parse", "HEAD"], {
+          cwd: process.cwd(),
+          encoding: "utf8",
+        });
         const candidateSha = checkout.stdout.trim();
-        if (checkout.error || checkout.signal || checkout.status !== 0 || !/^[a-f0-9]{40}$/u.test(candidateSha)) {
-          process.stdout.write(JSON.stringify({ candidateSha: "", compatible: false, allowContinue: false, recordsChecked: 0, errorCategory: "process-failed" }));
+        if (
+          checkout.error ||
+          checkout.signal ||
+          checkout.status !== 0 ||
+          !/^[a-f0-9]{40}$/u.test(candidateSha)
+        ) {
+          process.stdout.write(
+            JSON.stringify({
+              candidateSha: "",
+              compatible: false,
+              allowContinue: false,
+              recordsChecked: 0,
+              errorCategory: "process-failed",
+            }),
+          );
           process.exit(0);
         }
         const result = {
@@ -477,7 +495,9 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
     compatible: true,
     recordsChecked: params.sourceEntries.length,
   });
-  expect(await readPersistedOutcomeEntries(params.sourceInstance.env)).toEqual(params.sourceEntries);
+  expect(await readPersistedOutcomeEntries(params.sourceInstance.env)).toEqual(
+    params.sourceEntries,
+  );
   const incompatibleCandidateArchive = await checkCandidateRejectsIncompatibleOutcomeArchive({
     candidateCheckoutDir: params.candidateCheckoutDir,
     candidateDecoderUrl: params.candidateDecoderUrl,
