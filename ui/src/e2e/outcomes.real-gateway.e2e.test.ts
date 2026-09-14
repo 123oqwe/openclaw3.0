@@ -772,6 +772,84 @@ suite.define(() => {
         viewport: { height: 900, width: 1280 },
       },
       async ({ page }) => {
+        type BrowserOutcomeReply = {
+          frame: GatewayCallResult;
+          method: "outcomes.get" | "outcomes.refresh";
+          outcomeId: string;
+          phase: string;
+          socketId: number;
+        };
+        const pendingOutcomeRequests = new Map<string, Omit<BrowserOutcomeReply, "frame">>();
+        const outcomeReplies: BrowserOutcomeReply[] = [];
+        let browserPhase = "source";
+        let nextSocketId = 0;
+        page.on("websocket", (socket) => {
+          const socketId = ++nextSocketId;
+          socket.on("framesent", ({ payload }) => {
+            const frame = gatewayFrame(payload);
+            const params = frame && isGatewayCallResult(frame.params) ? frame.params : undefined;
+            const outcomeId = params && typeof params.id === "string" ? params.id : undefined;
+            if (
+              frame?.type === "req" &&
+              (frame.method === "outcomes.get" || frame.method === "outcomes.refresh") &&
+              typeof frame.id === "string" &&
+              outcomeId
+            ) {
+              pendingOutcomeRequests.set(frame.id, {
+                method: frame.method,
+                outcomeId,
+                phase: browserPhase,
+                socketId,
+              });
+            }
+          });
+          socket.on("framereceived", ({ payload }) => {
+            const frame = gatewayFrame(payload);
+            if (frame?.type !== "res" || typeof frame.id !== "string") {
+              return;
+            }
+            const request = pendingOutcomeRequests.get(frame.id);
+            if (!request) {
+              return;
+            }
+            pendingOutcomeRequests.delete(frame.id);
+            if (frame.ok === true) {
+              outcomeReplies.push({ ...request, frame });
+            }
+          });
+        });
+        async function browserOutcomeReply(
+          phase: string,
+          method: BrowserOutcomeReply["method"],
+          outcomeId: string,
+        ): Promise<GatewayCallResult> {
+          await expect
+            .poll(() =>
+              outcomeReplies.some(
+                (reply) =>
+                  reply.phase === phase &&
+                  reply.method === method &&
+                  reply.outcomeId === outcomeId &&
+                  isGatewayCallResult(reply.frame.payload) &&
+                  isGatewayCallResult(reply.frame.payload.outcome) &&
+                  reply.frame.payload.outcome.id === outcomeId,
+              ),
+            )
+            .toBe(true);
+          const reply = outcomeReplies.findLast(
+            (candidate) =>
+              candidate.phase === phase &&
+              candidate.method === method &&
+              candidate.outcomeId === outcomeId &&
+              isGatewayCallResult(candidate.frame.payload) &&
+              isGatewayCallResult(candidate.frame.payload.outcome) &&
+              candidate.frame.payload.outcome.id === outcomeId,
+          );
+          if (!reply) {
+            throw new Error(`Owner-authenticated browser ${method} reply was not captured`);
+          }
+          return reply.frame;
+        }
         await page.goto(await outcomesUrl());
         await waitForControlUiGatewayReady(page);
         await page.locator('[data-outcome-action="create"]').click();
@@ -830,9 +908,26 @@ suite.define(() => {
           throw new Error("Outcome Gateway fixture was not started");
         }
         const sourceInstance = instance;
-        const sourceDetail = await callGateway("outcomes.get", { id: acceptedOutcomeId });
-        const sourceOutcome = sourceDetail.outcome;
-        if (!isGatewayCallResult(sourceOutcome)) {
+        browserPhase = "source-accepted";
+        await page.goto(await outcomesUrlFor(sourceInstance));
+        await waitForControlUiGatewayReady(page);
+        await page
+          .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+          .locator("[data-outcome-select]")
+          .click();
+        const sourceDetail = await browserOutcomeReply(
+          "source-accepted",
+          "outcomes.get",
+          acceptedOutcomeId,
+        );
+        const sourcePayload = isGatewayCallResult(sourceDetail.payload)
+          ? sourceDetail.payload
+          : undefined;
+        const sourceOutcome =
+          sourcePayload && isGatewayCallResult(sourcePayload.outcome)
+            ? sourcePayload.outcome
+            : undefined;
+        if (!sourceOutcome) {
           throw new Error("Accepted Outcome source detail omitted its public state");
         }
         let restoredInstance: OpenClawTestInstance | undefined;
@@ -890,34 +985,56 @@ suite.define(() => {
           );
           await restoredInstance.startGateway();
 
-          const unrechecked = await callGatewayFor(restoredInstance, "outcomes.get", {
-            id: acceptedOutcomeId,
+          // Use the Control UI's owner-authenticated transport for both reads.
+          // The shared-token CLI deliberately has no profile identity, and is
+          // therefore not a valid reader for owner-scoped Outcome records.
+          browserPhase = "restored-unrechecked";
+          await page.goto(await outcomesUrlFor(restoredInstance));
+          await waitForControlUiGatewayReady(page);
+          await page
+            .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+            .locator("[data-outcome-select]")
+            .click();
+          const unrecheckedDetail = page.locator(`[data-outcome-detail-id="${acceptedOutcomeId}"]`);
+          await unrecheckedDetail.locator('[data-outcome-phase="accepted"]').waitFor({
+            state: "visible",
           });
+          await unrecheckedDetail
+            .locator('[data-outcome-acceptance="needs-review"]')
+            .waitFor({ state: "visible" });
+          await unrecheckedDetail
+            .locator("[data-outcome-decision]")
+            .getByText("Verified", { exact: true })
+            .waitFor({ state: "visible" });
+          const restoredAcceptance = unrecheckedDetail
+            .locator("[data-outcome-acceptance-history]")
+            .first();
+          await restoredAcceptance.locator("summary").click();
+          await restoredAcceptance
+            .locator(".outcome-detail__historical-plan > p")
+            .getByText("Objective: Prove human acceptance", { exact: true })
+            .waitFor({ state: "visible" });
+          await restoredAcceptance.getByText("Proof is reviewed", { exact: true }).waitFor({
+            state: "visible",
+          });
+          const unrechecked = await browserOutcomeReply(
+            "restored-unrechecked",
+            "outcomes.get",
+            acceptedOutcomeId,
+          );
           expect(unrechecked).toMatchObject({
-            outcome: {
-              id: acceptedOutcomeId,
-              phase: "accepted",
-              acceptance: { acceptanceValidity: "needs-review", reason: "not-rechecked" },
-              decisions: [
-                {
-                  status: "verified",
-                  decidedPlan: { objective: "Prove human acceptance" },
-                },
-              ],
-              acceptances: [
-                {
-                  acceptedPlan: { objective: "Prove human acceptance" },
-                },
-              ],
+            payload: {
+              outcome: {
+                id: acceptedOutcomeId,
+                phase: "accepted",
+                acceptance: { acceptanceValidity: "needs-review", reason: "not-rechecked" },
+                decisions: [
+                  { status: "verified", decidedPlan: { objective: "Prove human acceptance" } },
+                ],
+                acceptances: [{ acceptedPlan: { objective: "Prove human acceptance" } }],
+              },
             },
           });
-          const unrecheckedOutcome = unrechecked.outcome;
-          if (
-            !isGatewayCallResult(unrecheckedOutcome) ||
-            typeof unrecheckedOutcome.revision !== "number"
-          ) {
-            throw new Error("Restored Outcome detail omitted its revision");
-          }
 
           await restoredInstance.stopGateway();
           await restoredInstance.state.writeConfig(
@@ -927,22 +1044,43 @@ suite.define(() => {
             }),
           );
           await restoredInstance.startGateway();
+          browserPhase = "restored-rechecked";
+          await page.goto(await outcomesUrlFor(restoredInstance));
+          await waitForControlUiGatewayReady(page);
+          await page
+            .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+            .locator("[data-outcome-select]")
+            .click();
+          const recheckedDetail = page.locator(`[data-outcome-detail-id="${acceptedOutcomeId}"]`);
           const restoredCards = await callGatewayFor(restoredInstance, "workboard.cards.list", {});
           expect(restoredCards).toMatchObject({ cards: [{ id: cardId }] });
-          const rechecked = await callGatewayFor(restoredInstance, "outcomes.refresh", {
-            id: acceptedOutcomeId,
-            expectedRevision: unrecheckedOutcome.revision,
+          await recheckedDetail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({
+            state: "visible",
           });
+          await recheckedDetail.locator('[data-outcome-action="refresh"]').click();
+          await recheckedDetail.locator('[data-outcome-acceptance="current"]').waitFor({
+            state: "visible",
+          });
+          await recheckedDetail.locator(`[data-outcome-evidence="${proofId}"]`).waitFor({
+            state: "visible",
+          });
+          const rechecked = await browserOutcomeReply(
+            "restored-rechecked",
+            "outcomes.refresh",
+            acceptedOutcomeId,
+          );
           expect(rechecked).toMatchObject({
-            outcome: {
-              id: acceptedOutcomeId,
-              planHash: sourceOutcome.planHash,
-              closureHash: sourceOutcome.closureHash,
-              acceptance: { acceptanceValidity: "current" },
-              criteria: sourceOutcome.criteria,
-              evidence: sourceOutcome.evidence,
-              decisions: sourceOutcome.decisions,
-              acceptances: sourceOutcome.acceptances,
+            payload: {
+              outcome: {
+                id: acceptedOutcomeId,
+                planHash: sourceOutcome.planHash,
+                closureHash: sourceOutcome.closureHash,
+                acceptance: { acceptanceValidity: "current" },
+                criteria: sourceOutcome.criteria,
+                evidence: sourceOutcome.evidence,
+                decisions: sourceOutcome.decisions,
+                acceptances: sourceOutcome.acceptances,
+              },
             },
           });
         } finally {
@@ -957,9 +1095,13 @@ suite.define(() => {
                 }),
               );
               await sourceInstance.startGateway();
+              browserPhase = "source-resumed";
+              await page.goto(await outcomesUrlFor(sourceInstance));
               await waitForControlUiGatewayReady(page);
-              await page.reload();
-              await waitForControlUiGatewayReady(page);
+              await page
+                .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
+                .locator("[data-outcome-select]")
+                .click();
             }
           }
         }
