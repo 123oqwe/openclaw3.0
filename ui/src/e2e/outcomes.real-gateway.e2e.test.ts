@@ -2,16 +2,12 @@
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
-import { backupRestoreCommand } from "../../../src/commands/backup-restore.js";
 import { buildBackupArchivePath } from "../../../src/commands/backup-shared.js";
-import { createBackupArchive } from "../../../src/infra/backup-create.js";
-import { withEnvAsync } from "../../../src/test-utils/env.js";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
 } from "../../../test/helpers/openclaw-test-instance.ts";
 import {
-  createBackupRuntime,
   captureBrowserOutcomeReplies,
   gatewayFrame,
   gatewayFailureCode,
@@ -163,6 +159,68 @@ async function callGatewayFor(
     throw new Error(`${method} returned an invalid Gateway payload`);
   }
   return parsed;
+}
+
+type BackupCliAsset = {
+  kind: string;
+  sourcePath: string;
+};
+
+type BackupCreateCliResult = {
+  archivePath: string;
+  archiveRoot: string;
+  assets: BackupCliAsset[];
+  verified: boolean;
+};
+
+type BackupRestoreCliResult = {
+  archivePath: string;
+  archiveRoot: string;
+  targetPath: string;
+};
+
+function parseBackupCliPayload(stdout: string, command: string): GatewayCallResult {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(stdout);
+  } catch {
+    throw new Error(`${command} emitted invalid JSON`);
+  }
+  if (!isGatewayCallResult(parsed)) {
+    throw new Error(`${command} emitted an invalid JSON object`);
+  }
+  return parsed;
+}
+
+function parseBackupCreateCliResult(stdout: string): BackupCreateCliResult {
+  const parsed = parseBackupCliPayload(stdout, "backup create");
+  if (
+    typeof parsed.archivePath !== "string" ||
+    typeof parsed.archiveRoot !== "string" ||
+    parsed.verified !== true ||
+    !Array.isArray(parsed.assets) ||
+    !parsed.assets.every(
+      (asset) =>
+        isGatewayCallResult(asset) &&
+        typeof asset.kind === "string" &&
+        typeof asset.sourcePath === "string",
+    )
+  ) {
+    throw new Error("backup create JSON omitted its verified archive identity or assets");
+  }
+  return parsed as BackupCreateCliResult;
+}
+
+function parseBackupRestoreCliResult(stdout: string): BackupRestoreCliResult {
+  const parsed = parseBackupCliPayload(stdout, "backup restore");
+  if (
+    typeof parsed.archivePath !== "string" ||
+    typeof parsed.archiveRoot !== "string" ||
+    typeof parsed.targetPath !== "string"
+  ) {
+    throw new Error("backup restore JSON omitted its archive or staging identity");
+  }
+  return parsed as BackupRestoreCliResult;
 }
 
 async function outcomesUrl(): Promise<string> {
@@ -689,22 +747,43 @@ suite.define(() => {
             decisions: expect.any(Array),
             acceptances: expect.any(Array),
           });
-          const backup = await withEnvAsync(
-            sourceInstance.env,
-            async () =>
-              await createBackupArchive({
-                output: sourceInstance.state.path("accepted-outcome-backup.tar.gz"),
-                includeWorkspace: false,
-              }),
+          const archivePath = sourceInstance.state.path("accepted-outcome-backup.tar.gz");
+          const restoreTarget = sourceInstance.state.path("accepted-outcome-restore");
+          const created = await sourceInstance.cli(
+            [
+              "backup",
+              "create",
+              "--output",
+              archivePath,
+              "--no-include-workspace",
+              "--verify",
+              "--json",
+            ],
+            { timeoutMs: 120_000 },
           );
-          const restored = await backupRestoreCommand(createBackupRuntime(), {
-            archive: backup.archivePath,
-            target: sourceInstance.state.path("accepted-outcome-restore"),
+          expect(created.code, created.stderr).toBe(0);
+          expect(created.signal).toBeNull();
+          const backup = parseBackupCreateCliResult(created.stdout);
+          expect(backup).toMatchObject({
+            archivePath,
+            verified: true,
           });
           const sourceState = backup.assets.find((asset) => asset.kind === "state");
           if (!sourceState) {
-            throw new Error("Accepted Outcome backup omitted its state asset");
+            throw new Error("Accepted Outcome backup CLI output omitted its state asset");
           }
+          const restoredCommand = await sourceInstance.cli(
+            ["backup", "restore", backup.archivePath, "--target", restoreTarget, "--json"],
+            { timeoutMs: 120_000 },
+          );
+          expect(restoredCommand.code, restoredCommand.stderr).toBe(0);
+          expect(restoredCommand.signal).toBeNull();
+          const restored = parseBackupRestoreCliResult(restoredCommand.stdout);
+          expect(restored).toMatchObject({
+            archivePath: backup.archivePath,
+            archiveRoot: backup.archiveRoot,
+            targetPath: restoreTarget,
+          });
           const restoredStateDir = path.join(
             restored.targetPath,
             buildBackupArchivePath(backup.archiveRoot, sourceState.sourcePath),
