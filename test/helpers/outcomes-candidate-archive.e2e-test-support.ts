@@ -276,6 +276,22 @@ async function checkCandidateOutcomeArchive(
     ],
     { cwd: candidateCheckoutDir, encoding: "utf8", env: checkEnv, timeout: 30_000 },
   );
+  if (params.childOutputFault) {
+    expect(child.error).toBeUndefined();
+    expect(child.signal).toBeNull();
+    expect(child.status).toBe(0);
+    if (params.childOutputFault === "malformed-json") {
+      expect(child.stdout).toBe("{");
+    } else {
+      expect(JSON.parse(child.stdout)).toEqual({
+        allowContinue: true,
+        candidateSha: params.candidateSha,
+        compatible: true,
+        errorCategory: "decoder-rejected",
+        recordsChecked: before.length,
+      });
+    }
+  }
   const after = await readPersistedOutcomeEntries(checkEnv);
   expect(after).toEqual(before);
   const archiveSha256After = await readOutcomeArchiveSha256(params.archivePath);
