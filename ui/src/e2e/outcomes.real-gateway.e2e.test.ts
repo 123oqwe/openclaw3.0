@@ -145,7 +145,9 @@ async function readPersistedOutcomeEntries(env: NodeJS.ProcessEnv) {
     env,
   });
   const entries = await store.entries();
-  return entries.map(({ key, value }) => ({ key, value }));
+  return entries
+    .map(({ key, value }) => ({ key, value }))
+    .toSorted((left, right) => left.key.localeCompare(right.key));
 }
 
 function gatewayFrame(payload: { toString(): string }): GatewayCallResult | undefined {
@@ -945,8 +947,6 @@ suite.define(() => {
         expect(sourceOutcome.planHash).toMatch(/^[a-f0-9]{64}$/u);
         expect(sourceOutcome.closureHash).toMatch(/^[a-f0-9]{64}$/u);
         const sourceCards = await callGatewayFor(sourceInstance, "workboard.cards.list", {});
-        const sourcePersistedEntries = await readPersistedOutcomeEntries(sourceInstance.env);
-        expect(sourcePersistedEntries).toHaveLength(1);
         let restoredInstance: OpenClawTestInstance | undefined;
         let sourceStopped = false;
         try {
@@ -954,6 +954,17 @@ suite.define(() => {
           // running source. The target has its own port, token, and isolated state root.
           await sourceInstance.stopGateway();
           sourceStopped = true;
+          const sourcePersistedEntries = await readPersistedOutcomeEntries(sourceInstance.env);
+          const acceptedPersistedEntry = sourcePersistedEntries.find(
+            ({ key }) => key === acceptedOutcomeId,
+          );
+          expect(acceptedPersistedEntry?.value).toMatchObject({
+            phase: "accepted",
+            planHash: sourceOutcome.planHash,
+            evidence: expect.any(Array),
+            decisions: expect.any(Array),
+            acceptances: expect.any(Array),
+          });
           const backup = await withEnvAsync(
             sourceInstance.env,
             async () =>
