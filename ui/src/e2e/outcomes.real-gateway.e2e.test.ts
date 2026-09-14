@@ -12,12 +12,14 @@ import {
   gatewayFrame,
   gatewayFailureCode,
   isGatewayCallResult,
+  listControlUiDeviceIds,
   outcomeGatewayConfig,
   outcomesUrlFor,
   parseBackupCreateCliResult,
   parseBackupRestoreCliResult,
   readPersistedOutcomeEntries,
   refreshResponseSummary,
+  revokeNewControlUiOperator,
   requireCardId,
   requireProofId,
   verifyOutcomeMobileKeyboardFlow,
@@ -762,6 +764,7 @@ suite.define(() => {
           // Use the Control UI's owner-authenticated transport for both reads.
           // The shared-token CLI deliberately has no profile identity, and is
           // therefore not a valid reader for owner-scoped Outcome records.
+          const restoredDeviceIds = await listControlUiDeviceIds(restoredInstance);
           browserOutcomeReplies.setPhase("restored-unrechecked");
           await page.goto(await outcomesUrlFor(restoredInstance));
           await waitForControlUiGatewayReady(page);
@@ -878,6 +881,11 @@ suite.define(() => {
             decisions: sourceOutcome.decisions,
             planHash: sourceOutcome.planHash,
           });
+          await revokeNewControlUiOperator(restoredInstance, restoredDeviceIds);
+          await expect.poll(() => recheckedDetail.count()).toBe(0);
+          await expect
+            .poll(() => page.getByText("Proof is reviewed", { exact: true }).count())
+            .toBe(0);
         } finally {
           try {
             await restoredInstance?.cleanup();

@@ -208,6 +208,24 @@ function requireNewBrowserDeviceId(
   return deviceId;
 }
 
+export async function revokeNewControlUiOperator(
+  instance: OpenClawTestInstance,
+  existingDeviceIds: ReadonlySet<string>,
+): Promise<void> {
+  const deviceId = requireNewBrowserDeviceId(await listPairedDevices(instance), existingDeviceIds);
+  await revokeOperatorToken(instance, deviceId);
+}
+
+export async function listControlUiDeviceIds(
+  instance: OpenClawTestInstance,
+): Promise<ReadonlySet<string>> {
+  return new Set(
+    (await listPairedDevices(instance))
+      .map((device) => device.deviceId)
+      .filter((deviceId): deviceId is string => typeof deviceId === "string"),
+  );
+}
+
 export async function outcomesUrlFor(owner: OpenClawTestInstance): Promise<string> {
   const result = await owner.cli(["--no-color", "dashboard", "--json"]);
   expect(result.code, result.stderr).toBe(0);
