@@ -17,8 +17,10 @@ describe("Outcome Gateway telemetry without a provider", () => {
         "--input-type=module",
         "--eval",
         `
-          import { metrics } from "@opentelemetry/api";
+          import { createRequire } from "node:module";
           import { recordOutcomeTelemetry } from ${JSON.stringify(telemetryUrl)};
+          const outcomesRequire = createRequire(${JSON.stringify(telemetryUrl)});
+          const { metrics } = outcomesRequire("@opentelemetry/api");
           if (metrics.getMeterProvider().constructor.name !== "NoopMeterProvider") {
             throw new Error("expected a fresh process without a registered meter provider");
           }
