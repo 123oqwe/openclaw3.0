@@ -399,6 +399,30 @@ export async function verifyCandidateOutcomeArchiveGate(params: {
     compatible: true,
     recordsChecked: params.sourceEntries.length,
   });
+  const candidateShaMismatch = await checkCandidateOutcomeArchive({
+    archivePath: params.archivePath,
+    candidateCheckoutDir: params.candidateCheckoutDir,
+    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateSha: "0".repeat(40),
+    candidateSourcePath: params.candidateSourcePath,
+    checkStateDir: params.sourceInstance.state.path("candidate-sha-mismatch-check-copy"),
+    env: params.sourceInstance.env,
+    expectedArchiveSha256: params.expectedArchiveSha256,
+    expectedEntries: params.sourceEntries,
+    restoredStateDir: params.restoredStateDir,
+  });
+  expect(candidateSha).not.toBe("0".repeat(40));
+  expect(candidateShaMismatch).toMatchObject({
+    allowContinue: false,
+    archiveSha256: params.expectedArchiveSha256,
+    candidateSha: "0".repeat(40),
+    compatible: false,
+    errorCategory: "candidate-mismatch",
+    recordsChecked: 0,
+  });
+  expect(await readPersistedOutcomeEntries(params.sourceInstance.env)).toEqual(
+    params.sourceEntries,
+  );
   const digestMismatch = await checkCandidateOutcomeArchive({
     archivePath: params.archivePath,
     candidateCheckoutDir: params.candidateCheckoutDir,
