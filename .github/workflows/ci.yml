@@ -2027,6 +2027,7 @@ jobs:
           artifact_root="outcome-artifacts"
           mkdir -p "$artifact_root"
           pnpm install --frozen-lockfile --ignore-scripts
+          pnpm test test/scripts/outcome-artifact-policy.test.ts
           pnpm exec oxfmt --write --threads=1 \
             extensions/outcomes/api.ts \
             extensions/outcomes/index.test.ts \
@@ -2145,6 +2146,7 @@ jobs:
             pnpmVersion: execFileSync("pnpm", ["--version"], { encoding: "utf8" }).trim(),
             commands: [
             "pnpm install --frozen-lockfile --ignore-scripts",
+            "pnpm test test/scripts/outcome-artifact-policy.test.ts",
             "pnpm exec oxfmt --write --threads=1 <fixed paths>",
             ],
             changedPaths,
