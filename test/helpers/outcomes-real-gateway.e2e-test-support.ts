@@ -9,10 +9,8 @@ import {
 import { loadOrCreateDeviceIdentity } from "../../src/infra/device-identity.js";
 import type { RuntimeEnv } from "../../src/runtime.js";
 import { GATEWAY_CLIENT_NAMES } from "../../src/utils/message-channel.ts";
-import {
-  waitForControlUiGatewayReady,
-} from "../../ui/src/test-helpers/control-ui-e2e-readiness.ts";
 import type { ControlUiE2eSuite } from "../../ui/src/e2e/control-ui-e2e-suite.test-support.ts";
+import { waitForControlUiGatewayReady } from "../../ui/src/test-helpers/control-ui-e2e-readiness.ts";
 import type { OpenClawTestInstance } from "./openclaw-test-instance.ts";
 
 export const outcomeStoreOptions = {
@@ -96,9 +94,7 @@ export function createBackupRuntime(): RuntimeEnv {
   };
 }
 
-async function listPairedDevices(
-  instance: OpenClawTestInstance,
-): Promise<GatewayCallResult[]> {
+async function listPairedDevices(instance: OpenClawTestInstance): Promise<GatewayCallResult[]> {
   const result = await instance.cli([
     "--no-color",
     "devices",
@@ -318,9 +314,7 @@ export async function verifyOutcomeMobileKeyboardFlow(
         await confirm.evaluate((element) => element.getBoundingClientRect().height),
       ).toBeGreaterThanOrEqual(44);
       await page.keyboard.press("Enter");
-      await page
-        .locator(".outcome-summary", { hasText: titleText })
-        .waitFor({ state: "visible" });
+      await page.locator(".outcome-summary", { hasText: titleText }).waitFor({ state: "visible" });
       await expect
         .poll(() => create.evaluate((element) => element === document.activeElement))
         .toBe(true);

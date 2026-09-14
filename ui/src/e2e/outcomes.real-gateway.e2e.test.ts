@@ -10,9 +10,6 @@ import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
 } from "../../../test/helpers/openclaw-test-instance.ts";
-import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
-import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
-import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 import {
   createBackupRuntime,
   captureBrowserOutcomeReplies,
@@ -32,6 +29,9 @@ import {
   type GatewayCallResult,
   type RefreshResponseSummary,
 } from "../../../test/helpers/outcomes-real-gateway.e2e-test-support.ts";
+import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
+import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
+import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
