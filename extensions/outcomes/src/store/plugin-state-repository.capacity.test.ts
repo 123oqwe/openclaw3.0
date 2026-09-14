@@ -451,7 +451,7 @@ describe("Outcome repository host adapter", () => {
     );
   });
 
-  it("preserves a complete record with an unknown schema version", async () => {
+  it("fails closed for future-schema mutations while preserving the raw record", async () => {
     await withOpenClawTestState(
       { label: "outcome-repository-future-schema", applyEnv: false },
       async (state) => {
@@ -465,6 +465,13 @@ describe("Outcome repository host adapter", () => {
         await store.registerIfAbsent(future.id, future);
         const repository = createOutcomeRepository(store);
         await expect(repository.get(future.id)).rejects.toThrow();
+        await expect(
+          repository.transactOwned("alice", future.id, () => ({
+            result: "must-not-run",
+            next: future,
+          })),
+        ).rejects.toThrow();
+        await expect(repository.deleteOwnedIf("alice", future.id, () => true)).rejects.toThrow();
         await expect(store.lookup(future.id)).resolves.toEqual(future);
       },
     );
