@@ -13,7 +13,7 @@ import type { ControlUiE2eSuite } from "../../ui/src/e2e/control-ui-e2e-suite.te
 import { waitForControlUiGatewayReady } from "../../ui/src/test-helpers/control-ui-e2e-readiness.ts";
 import type { OpenClawTestInstance } from "./openclaw-test-instance.ts";
 
-export const outcomeStoreOptions = {
+const outcomeStoreOptions = {
   namespace: "outcomes-v1",
   maxEntries: 500,
   overflowPolicy: "reject-new" as const,
