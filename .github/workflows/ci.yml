@@ -2111,6 +2111,7 @@ jobs:
             ui/src/e2e/outcomes.identity.real-gateway.e2e.test.ts \
             ui/src/e2e/outcomes.real-gateway.e2e.test.ts \
             test/helpers/outcomes-real-gateway.e2e-test-support.ts \
+            test/helpers/outcomes-candidate-archive.e2e-test-support.ts \
             ui/src/styles/outcomes.css
           {
             git diff --name-only -z HEAD

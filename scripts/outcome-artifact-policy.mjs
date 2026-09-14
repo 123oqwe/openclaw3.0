@@ -70,6 +70,7 @@ const ALLOWED_PATHS = new Set([
   "test/scripts/ci-workflow-guards.test.ts",
   "test/scripts/outcome-artifact-policy.test.ts",
   "test/helpers/outcomes-real-gateway.e2e-test-support.ts",
+  "test/helpers/outcomes-candidate-archive.e2e-test-support.ts",
   "ui/src/test-helpers/control-ui-e2e.test.ts",
   "ui/src/test-helpers/control-ui-e2e.ts",
   "ui/src/e2e/browser-bootstrap.e2e.test.ts",
