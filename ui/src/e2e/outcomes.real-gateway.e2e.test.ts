@@ -4,14 +4,8 @@ import path from "node:path";
 import { expect, it } from "vitest";
 import { backupRestoreCommand } from "../../../src/commands/backup-restore.js";
 import { buildBackupArchivePath } from "../../../src/commands/backup-shared.js";
-import {
-  connectGatewayClient,
-  disconnectGatewayClient,
-} from "../../../src/gateway/test-helpers.e2e.js";
 import { createBackupArchive } from "../../../src/infra/backup-create.js";
-import { loadOrCreateDeviceIdentity } from "../../../src/infra/device-identity.js";
 import { withEnvAsync } from "../../../src/test-utils/env.js";
-import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
@@ -21,12 +15,22 @@ import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-rea
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
 import {
   createBackupRuntime,
+  captureBrowserOutcomeReplies,
+  gatewayFrame,
   gatewayFailureCode,
   isGatewayCallResult,
   outcomeStoreOptions,
+  outcomeGatewayConfig,
+  outcomesUrlFor,
   readPersistedOutcomeEntries,
   refreshResponseSummary,
+  requireCardId,
+  requireProofId,
+  verifyOutcomeMobileKeyboardFlow,
+  verifyOutcomeRevocation,
+  verifyUnavailableOutcomeState,
   type GatewayCallResult,
+  type RefreshResponseSummary,
 } from "./outcomes.real-gateway.e2e.test-support.ts";
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
@@ -163,143 +167,11 @@ async function callGatewayFor(
   return parsed;
 }
 
-async function listPairedDevices(): Promise<GatewayCallResult[]> {
-  if (!instance) {
-    throw new Error("Outcome Gateway fixture was not started");
-  }
-  const result = await instance.cli([
-    "--no-color",
-    "devices",
-    "list",
-    "--url",
-    instance.url,
-    "--token",
-    instance.gatewayToken,
-    "--json",
-  ]);
-  expect(result.code, result.stderr).toBe(0);
-  const parsed: unknown = JSON.parse(result.stdout);
-  if (!isGatewayCallResult(parsed) || !Array.isArray(parsed.paired)) {
-    throw new Error("Device inventory omitted paired devices");
-  }
-  return parsed.paired.filter(isGatewayCallResult);
-}
-
-async function revokeOperatorToken(deviceId: string): Promise<void> {
-  if (!instance) {
-    throw new Error("Outcome Gateway fixture was not started");
-  }
-  const client = await connectGatewayClient({
-    url: instance.url,
-    token: instance.gatewayToken,
-    role: "operator",
-    scopes: ["operator.admin", "operator.read", "operator.write"],
-    deviceIdentity: loadOrCreateDeviceIdentity({
-      path: path.join(instance.stateDir, "outcomes-revocation-admin.sqlite"),
-    }),
-    requestTimeoutMs: 10_000,
-    timeoutMs: 10_000,
-  });
-  try {
-    await client.request("device.token.revoke", { deviceId, role: "operator" });
-  } finally {
-    await disconnectGatewayClient(client);
-  }
-}
-
-function requireNewBrowserDeviceId(
-  paired: GatewayCallResult[],
-  existingDeviceIds: ReadonlySet<string>,
-): string {
-  const candidates = paired.filter(
-    (device) =>
-      typeof device.deviceId === "string" &&
-      !existingDeviceIds.has(device.deviceId) &&
-      device.clientId === GATEWAY_CLIENT_NAMES.CONTROL_UI &&
-      (device.role === "operator" ||
-        (Array.isArray(device.roles) && device.roles.includes("operator"))),
-  );
-  expect(candidates).toHaveLength(1);
-  const deviceId = candidates[0]?.deviceId;
-  if (typeof deviceId !== "string") {
-    throw new Error("New browser device omitted its ID");
-  }
-  return deviceId;
-}
-
-async function outcomesUrlFor(owner: OpenClawTestInstance): Promise<string> {
-  const result = await owner.cli(["--no-color", "dashboard", "--json"]);
-  expect(result.code, result.stderr).toBe(0);
-  const parsed: unknown = JSON.parse(result.stdout);
-  if (!isGatewayCallResult(parsed)) {
-    throw new Error("Gateway dashboard handoff was invalid");
-  }
-  const browserUrl = parsed.browserUrl;
-  if (typeof browserUrl !== "string") {
-    throw new Error("Gateway dashboard handoff omitted its browser URL");
-  }
-  const issued = new URL(browserUrl);
-  const target = new URL("outcomes", issued);
-  target.hash = issued.hash;
-  return target.toString();
-}
-
 async function outcomesUrl(): Promise<string> {
   if (!instance) {
     throw new Error("Outcome Gateway fixture was not started");
   }
   return outcomesUrlFor(instance);
-}
-
-function requireCardId(payload: GatewayCallResult): string {
-  const card = payload.card;
-  if (!isGatewayCallResult(card)) {
-    throw new Error("Workboard create omitted its card");
-  }
-  const id = card.id;
-  if (typeof id !== "string") {
-    throw new Error("Workboard create omitted its card ID");
-  }
-  return id;
-}
-
-function requireProofId(payload: GatewayCallResult): string {
-  const card = payload.card;
-  if (!isGatewayCallResult(card) || !isGatewayCallResult(card.metadata)) {
-    throw new Error("Workboard proof response omitted card metadata");
-  }
-  const proofs = card.metadata.proof;
-  const proof = Array.isArray(proofs) ? proofs.at(-1) : undefined;
-  if (!isGatewayCallResult(proof)) {
-    throw new Error("Workboard proof response omitted its persisted proof");
-  }
-  const proofId = proof.id;
-  if (typeof proofId !== "string") {
-    throw new Error("Workboard proof response omitted its proof ID");
-  }
-  return proofId;
-}
-
-function outcomeGatewayConfig(
-  owner: OpenClawTestInstance,
-  options: { outcomesEnabled: boolean; workboardEnabled: boolean },
-) {
-  return {
-    gateway: {
-      auth: { mode: "token", token: owner.gatewayToken },
-      controlUi: { enabled: true },
-      port: owner.port,
-    },
-    hooks: { enabled: true, path: "/hooks", token: owner.hookToken },
-    plugins: {
-      enabled: true,
-      allow: ["outcomes", "workboard"],
-      entries: {
-        outcomes: { enabled: options.outcomesEnabled },
-        workboard: { enabled: options.workboardEnabled },
-      },
-    },
-  };
 }
 
 suite.define(() => {
@@ -717,81 +589,7 @@ suite.define(() => {
         viewport: { height: 900, width: 1280 },
       },
       async ({ page }) => {
-        type BrowserOutcomeReply = {
-          frame: GatewayCallResult;
-          method: "outcomes.get" | "outcomes.refresh";
-          outcomeId: string;
-          phase: string;
-        };
-        const outcomeReplies: BrowserOutcomeReply[] = [];
-        let browserPhase = "source";
-        page.on("websocket", (socket) => {
-          const pendingOutcomeRequests = new Map<string, Omit<BrowserOutcomeReply, "frame">>();
-          socket.on("close", () => pendingOutcomeRequests.clear());
-          socket.on("framesent", ({ payload }) => {
-            const frame = gatewayFrame(payload);
-            const params = frame && isGatewayCallResult(frame.params) ? frame.params : undefined;
-            const outcomeId = params && typeof params.id === "string" ? params.id : undefined;
-            if (
-              frame?.type === "req" &&
-              (frame.method === "outcomes.get" || frame.method === "outcomes.refresh") &&
-              typeof frame.id === "string" &&
-              outcomeId
-            ) {
-              pendingOutcomeRequests.set(frame.id, {
-                method: frame.method,
-                outcomeId,
-                phase: browserPhase,
-              });
-            }
-          });
-          socket.on("framereceived", ({ payload }) => {
-            const frame = gatewayFrame(payload);
-            if (frame?.type !== "res" || typeof frame.id !== "string") {
-              return;
-            }
-            const request = pendingOutcomeRequests.get(frame.id);
-            if (!request) {
-              return;
-            }
-            pendingOutcomeRequests.delete(frame.id);
-            if (frame.ok === true) {
-              outcomeReplies.push({ ...request, frame });
-            }
-          });
-        });
-        async function browserOutcomeReply(
-          phase: string,
-          method: BrowserOutcomeReply["method"],
-          outcomeId: string,
-        ): Promise<GatewayCallResult> {
-          await expect
-            .poll(() =>
-              outcomeReplies.some(
-                (reply) =>
-                  reply.phase === phase &&
-                  reply.method === method &&
-                  reply.outcomeId === outcomeId &&
-                  isGatewayCallResult(reply.frame.payload) &&
-                  isGatewayCallResult(reply.frame.payload.outcome) &&
-                  reply.frame.payload.outcome.id === outcomeId,
-              ),
-            )
-            .toBe(true);
-          const reply = outcomeReplies.findLast(
-            (candidate) =>
-              candidate.phase === phase &&
-              candidate.method === method &&
-              candidate.outcomeId === outcomeId &&
-              isGatewayCallResult(candidate.frame.payload) &&
-              isGatewayCallResult(candidate.frame.payload.outcome) &&
-              candidate.frame.payload.outcome.id === outcomeId,
-          );
-          if (!reply) {
-            throw new Error(`Owner-authenticated browser ${method} reply was not captured`);
-          }
-          return reply.frame;
-        }
+        const browserOutcomeReplies = captureBrowserOutcomeReplies(page);
         await page.goto(await outcomesUrl());
         await waitForControlUiGatewayReady(page);
         await page.locator('[data-outcome-action="create"]').click();
@@ -850,14 +648,14 @@ suite.define(() => {
           throw new Error("Outcome Gateway fixture was not started");
         }
         const sourceInstance = instance;
-        browserPhase = "source-accepted";
+        browserOutcomeReplies.setPhase("source-accepted");
         await page.goto(await outcomesUrlFor(sourceInstance));
         await waitForControlUiGatewayReady(page);
         await page
           .locator(".outcome-summary", { hasText: "Accept Outcome E2E" })
           .locator("[data-outcome-select]")
           .click();
-        const sourceDetail = await browserOutcomeReply(
+        const sourceDetail = await browserOutcomeReplies.reply(
           "source-accepted",
           "outcomes.get",
           acceptedOutcomeId,
@@ -947,7 +745,7 @@ suite.define(() => {
           // Use the Control UI's owner-authenticated transport for both reads.
           // The shared-token CLI deliberately has no profile identity, and is
           // therefore not a valid reader for owner-scoped Outcome records.
-          browserPhase = "restored-unrechecked";
+          browserOutcomeReplies.setPhase("restored-unrechecked");
           await page.goto(await outcomesUrlFor(restoredInstance));
           await waitForControlUiGatewayReady(page);
           await page
@@ -976,7 +774,7 @@ suite.define(() => {
           await restoredAcceptance.getByText("Proof is reviewed", { exact: true }).waitFor({
             state: "visible",
           });
-          const unrechecked = await browserOutcomeReply(
+          const unrechecked = await browserOutcomeReplies.reply(
             "restored-unrechecked",
             "outcomes.get",
             acceptedOutcomeId,
@@ -1011,7 +809,7 @@ suite.define(() => {
             }),
           );
           await restoredInstance.startGateway();
-          browserPhase = "restored-rechecked";
+          browserOutcomeReplies.setPhase("restored-rechecked");
           await page.goto(await outcomesUrlFor(restoredInstance));
           await waitForControlUiGatewayReady(page);
           await page
@@ -1031,7 +829,7 @@ suite.define(() => {
           await recheckedDetail.locator(`[data-outcome-evidence="${proofId}"]`).waitFor({
             state: "visible",
           });
-          const rechecked = await browserOutcomeReply(
+          const rechecked = await browserOutcomeReplies.reply(
             "restored-rechecked",
             "outcomes.refresh",
             acceptedOutcomeId,
@@ -1075,7 +873,7 @@ suite.define(() => {
                 }),
               );
               await sourceInstance.startGateway();
-              browserPhase = "source-resumed";
+              browserOutcomeReplies.setPhase("source-resumed");
               await page.goto(await outcomesUrlFor(sourceInstance));
               await waitForControlUiGatewayReady(page);
               await page
@@ -1191,204 +989,14 @@ suite.define(() => {
   });
 
   it("keeps the keyboard create flow usable without horizontal overflow on a narrow screen", async () => {
-    await suite.withPage(
-      {
-        locale: "en-US",
-        reducedMotion: "reduce",
-        serviceWorkers: "block",
-        viewport: { height: 852, width: 393 },
-      },
-      async ({ page }) => {
-        await page.goto(await outcomesUrl());
-        await waitForControlUiGatewayReady(page);
-
-        const titleText = "x".repeat(160);
-        const create = page.locator('[data-outcome-action="create"]');
-        await expect
-          .poll(() => page.evaluate(() => matchMedia("(prefers-reduced-motion: reduce)").matches))
-          .toBe(true);
-        expect(
-          await create.evaluate((element) => element.getBoundingClientRect().height),
-        ).toBeGreaterThanOrEqual(44);
-        expect(
-          await page
-            .locator("openclaw-outcomes-page")
-            .evaluate((element) => element.getAnimations({ subtree: true }).length),
-        ).toBe(0);
-        await create.focus();
-        await page.keyboard.press("Enter");
-        const form = page.locator("[data-outcome-create-form]");
-        await form.waitFor({ state: "visible" });
-        const title = form.locator('input[name="title"]');
-        await expect
-          .poll(() =>
-            title.evaluate(
-              (element) => element === document.activeElement && element.matches(":focus-visible"),
-            ),
-          )
-          .toBe(true);
-        await page.keyboard.type(titleText);
-        const objective = form.locator('textarea[name="objective"]');
-        await page.keyboard.press("Tab");
-        await expect
-          .poll(() =>
-            objective.evaluate(
-              (element) => element === document.activeElement && element.matches(":focus-visible"),
-            ),
-          )
-          .toBe(true);
-        await page.keyboard.press("Shift+Tab");
-        await expect
-          .poll(() =>
-            title.evaluate(
-              (element) => element === document.activeElement && element.matches(":focus-visible"),
-            ),
-          )
-          .toBe(true);
-        await page.keyboard.press("Tab");
-        await expect
-          .poll(() =>
-            objective.evaluate(
-              (element) => element === document.activeElement && element.matches(":focus-visible"),
-            ),
-          )
-          .toBe(true);
-        await page.keyboard.type("Prove the narrow-screen keyboard flow");
-        const criterion = form.locator('input[name="criterion"]');
-        await page.keyboard.press("Tab");
-        await expect
-          .poll(() =>
-            criterion.evaluate(
-              (element) => element === document.activeElement && element.matches(":focus-visible"),
-            ),
-          )
-          .toBe(true);
-        await page.keyboard.type("A required criterion is recorded");
-        const confirm = form.locator("[data-outcome-confirm-create]");
-        await page.keyboard.press("Tab");
-        await page.keyboard.press("Tab");
-        await page.keyboard.press("Tab");
-        await expect
-          .poll(() =>
-            confirm.evaluate(
-              (element) => element === document.activeElement && element.matches(":focus-visible"),
-            ),
-          )
-          .toBe(true);
-        expect(
-          await confirm.evaluate((element) => element.getBoundingClientRect().height),
-        ).toBeGreaterThanOrEqual(44);
-        await page.keyboard.press("Enter");
-
-        await page
-          .locator(".outcome-summary", { hasText: titleText })
-          .waitFor({ state: "visible" });
-        await expect
-          .poll(() => create.evaluate((element) => element === document.activeElement))
-          .toBe(true);
-        expect(
-          await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
-        ).toBe(true);
-        const summary = page.locator(".outcome-summary", { hasText: titleText });
-        expect(
-          await summary
-            .locator("[data-outcome-select]")
-            .evaluate((element) => element.getBoundingClientRect().height),
-        ).toBeGreaterThanOrEqual(44);
-        await summary.locator("[data-outcome-select]").click();
-        const detail = page.locator("[data-outcome-detail-id]");
-        await detail.waitFor({ state: "visible" });
-        expect(
-          await detail
-            .locator(".outcome-detail__back")
-            .evaluate((element) => element.getBoundingClientRect().height),
-        ).toBeGreaterThanOrEqual(44);
-        expect(
-          await page
-            .locator(".outcomes-list-panel")
-            .evaluate((element) => getComputedStyle(element).display),
-        ).toBe("none");
-        await detail.locator(".outcome-detail__back").click();
-        await expect
-          .poll(() =>
-            summary
-              .locator("[data-outcome-select]")
-              .evaluate((element) => element === document.activeElement),
-          )
-          .toBe(true);
-        await create.focus();
-        await page.keyboard.press("Enter");
-        await form.waitFor({ state: "visible" });
-        await page.keyboard.press("Escape");
-        await expect.poll(() => form.count()).toBe(0);
-        await expect
-          .poll(() => create.evaluate((element) => element === document.activeElement))
-          .toBe(true);
-        await page.screenshot({
-          fullPage: true,
-          path: path.join(suite.artifactDir, "outcomes-mobile-keyboard-create.png"),
-        });
-      },
-    );
+    await verifyOutcomeMobileKeyboardFlow(suite, outcomesUrl);
   });
 
   it("hides Outcome content after the browser operator token is revoked", async () => {
-    const existingDeviceIds = new Set(
-      (await listPairedDevices())
-        .map((device) => device.deviceId)
-        .filter((deviceId): deviceId is string => typeof deviceId === "string"),
-    );
-    await suite.withPage(
-      {
-        locale: "en-US",
-        serviceWorkers: "block",
-        viewport: { height: 900, width: 1280 },
-      },
-      async ({ page }) => {
-        await page.goto(await outcomesUrl());
-        await waitForControlUiGatewayReady(page);
-        await page.locator('[data-outcome-action="create"]').click();
-        const createForm = page.locator("[data-outcome-create-form]");
-        await createForm.locator('input[name="title"]').fill("Revoked browser Outcome");
-        await createForm
-          .locator('textarea[name="objective"]')
-          .fill("This must disappear on revocation");
-        await createForm
-          .locator('input[name="criterion"]')
-          .fill("The browser can no longer read this");
-        await createForm.locator("[data-outcome-confirm-create]").click();
-        const summary = page.locator(".outcome-summary", { hasText: "Revoked browser Outcome" });
-        await summary.waitFor({ state: "visible" });
-        await summary.locator("[data-outcome-select]").click();
-        const detail = page.locator("[data-outcome-detail-id]");
-        await detail.waitFor({ state: "visible" });
-        await detail
-          .getByText("This must disappear on revocation", { exact: true })
-          .waitFor({ state: "visible" });
-
-        const browserDeviceId = requireNewBrowserDeviceId(
-          await listPairedDevices(),
-          existingDeviceIds,
-        );
-        await revokeOperatorToken(browserDeviceId);
-
-        await expect.poll(() => detail.count()).toBe(0);
-        await expect
-          .poll(() => page.getByText("This must disappear on revocation", { exact: true }).count())
-          .toBe(0);
-        await expect.poll(() => page.locator('[data-outcome-action="create"]').count()).toBe(0);
-        await page.screenshot({
-          fullPage: true,
-          path: path.join(suite.artifactDir, "outcomes-authorization-revoked.png"),
-        });
-
-        await page.reload();
-        await expect.poll(() => detail.count()).toBe(0);
-        await expect
-          .poll(() => page.getByText("Revoked browser Outcome", { exact: true }).count())
-          .toBe(0);
-      },
-    );
+    if (!instance) {
+      throw new Error("Outcome Gateway fixture was not started");
+    }
+    await verifyOutcomeRevocation(suite, instance, outcomesUrl);
   });
 });
 
@@ -1397,25 +1005,6 @@ unavailableSuite.define(() => {
     if (!unavailableInstance) {
       throw new Error("Unavailable Outcome Gateway fixture was not started");
     }
-    const unavailableGatewayInstance = unavailableInstance;
-    await unavailableSuite.withPage(
-      {
-        locale: "en-US",
-        serviceWorkers: "block",
-        viewport: { height: 900, width: 1280 },
-      },
-      async ({ page }) => {
-        await page.goto(await outcomesUrlFor(unavailableGatewayInstance));
-        await waitForControlUiGatewayReady(page);
-        await page
-          .getByText("Outcome access unavailable", { exact: true })
-          .waitFor({ state: "visible" });
-        await expect.poll(() => page.locator(".outcomes-list").count()).toBe(0);
-        await page.screenshot({
-          fullPage: true,
-          path: path.join(unavailableSuite.artifactDir, "outcomes-access-unavailable.png"),
-        });
-      },
-    );
+    await verifyUnavailableOutcomeState(unavailableSuite, unavailableInstance);
   });
 });
