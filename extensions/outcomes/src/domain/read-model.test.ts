@@ -276,7 +276,7 @@ describe("Outcome P-01 read model", () => {
     const detail = toOutcomeDetail(parseOutcomeRecord(input), 10);
 
     expect(detail.attention).toEqual([{ code: "contract-incomplete", criterionId: "c-1" }]);
-    expect(detail.nextActions).toEqual(["edit-contract", "link-work", "cancel"]);
+    expect(detail.nextActions).toEqual(["edit-contract", "link-work", "cancel", "delete"]);
     expect(detail.nextActions).not.toContain("review-evidence");
     expect(detail.nextActions).not.toContain("accept");
     expect(detail.nextActions).not.toContain("observe-operation");
