@@ -21,6 +21,7 @@ const owner = { authenticatedUserProfile: { profileId: "manager-a" } };
 function createBundledGatewayHarness() {
   const records = new Map<string, OutcomeRecord>();
   const handlers = new Map<string, RegisteredHandler>();
+  let writes = 0;
   const publicWorkboardRequest = vi.fn(async (method: string, params: unknown) => {
     if (method !== "workboard.cards.list" || params === null || typeof params !== "object") {
       throw new Error("unexpected public Gateway request");
@@ -33,6 +34,7 @@ function createBundledGatewayHarness() {
         return false;
       }
       records.set(id, record);
+      writes += 1;
       return true;
     },
     lookup: async (id: string) => records.get(id),
@@ -46,6 +48,7 @@ function createBundledGatewayHarness() {
         return false;
       }
       records.set(id, next);
+      writes += 1;
       return true;
     },
     deleteIf: async () => false,
@@ -61,19 +64,51 @@ function createBundledGatewayHarness() {
     },
   });
   registerOutcomeGatewayMethods(api);
-  async function call(method: string, params: Record<string, unknown>) {
+  async function call(method: string, params: Record<string, unknown>, client = owner) {
     const respond = vi.fn();
     const handler = handlers.get(method);
     if (!handler) {
       throw new Error(`missing bundled handler: ${method}`);
     }
-    await handler({ client: owner, params, respond });
+    await handler({ client, params, respond });
     return respond.mock.calls[0];
   }
-  return { call, publicWorkboardRequest, records };
+  return { call, publicWorkboardRequest, records, writes: () => writes };
 }
 
 describe("Outcome bundled Workboard Gateway integration", () => {
+  it("exports an owner record through the registered read seam without mutating it", async () => {
+    const harness = createBundledGatewayHarness();
+    await harness.call("outcomes.create", {
+      id: outcomeId,
+      title: "Export fixture",
+      objective: "Verify registered export integration",
+      criteria: [{ id: criterionId, text: "Export is stable", required: true }],
+    });
+    const record = harness.records.get(outcomeId)!;
+    const writes = harness.writes();
+    harness.publicWorkboardRequest.mockClear();
+
+    expect(await harness.call("outcomes.export", { id: outcomeId })).toEqual([
+      true,
+      { schemaVersion: 1, exportedAt: expect.any(Number), record },
+    ]);
+    expect(harness.publicWorkboardRequest).not.toHaveBeenCalled();
+    expect(harness.records.get(outcomeId)).toEqual(record);
+    expect(harness.writes()).toBe(writes);
+
+    expect(
+      await harness.call(
+        "outcomes.export",
+        { id: outcomeId },
+        { authenticatedUserProfile: { profileId: "manager-b" } },
+      ),
+    ).toMatchObject([false, undefined, { code: "OUTCOME_NOT_FOUND" }]);
+    expect(harness.publicWorkboardRequest).not.toHaveBeenCalled();
+    expect(harness.records.get(outcomeId)).toEqual(record);
+    expect(harness.writes()).toBe(writes);
+  });
+
   it("reads the frozen public cards.list response through the registered runtime seam", async () => {
     const harness = createBundledGatewayHarness();
     await harness.call("outcomes.create", {

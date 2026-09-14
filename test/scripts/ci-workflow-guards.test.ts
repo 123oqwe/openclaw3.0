@@ -16393,9 +16393,14 @@ it("keeps Outcome artifact preparation exact-SHA, bounded, and review-only", () 
   const bodies = steps.map(({ run }) => run ?? "").join("\n");
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs admission");
   expect(bodies).toContain("pnpm install --frozen-lockfile --ignore-scripts");
+  expect(bodies).toContain("pnpm test test/scripts/outcome-artifact-policy.test.ts");
+  expect(bodies.indexOf("pnpm test test/scripts/outcome-artifact-policy.test.ts")).toBeLessThan(
+    bodies.indexOf("pnpm exec oxfmt --write --threads=1"),
+  );
   expect(bodies).toContain("scripts/outcome-artifact-policy.mjs paths");
   expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.test.ts");
   expect(bodies).toContain("ui/src/test-helpers/control-ui-e2e.ts");
+  expect(bodies).toContain("test/helpers/outcomes-real-gateway.e2e-test-support.ts");
   expect(bodies).toContain("extensions/outcomes/src/assurance/closure.test.ts");
   expect(bodies).toContain("extensions/outcomes/src/assurance/closure.ts");
   expect(bodies).toContain("ui/src/i18n/locales/en-outcomes.ts");

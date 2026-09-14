@@ -145,6 +145,8 @@ export function nextActionLabel(action: OutcomeNextAction): string {
       return t("common.refresh");
     case "cancel":
       return t("common.cancel");
+    case "delete":
+      return t("outcomesPage.nextAction.delete");
     case "review-evidence":
       return t("outcomesPage.nextAction.reviewEvidence");
     case "accept":

@@ -1765,6 +1765,9 @@ importers:
 
   extensions/outcomes:
     dependencies:
+      '@opentelemetry/api':
+        specifier: 1.9.1
+        version: 1.9.1
       '@openclaw/outcomes-contract':
         specifier: workspace:*
         version: link:../../packages/outcomes-contract

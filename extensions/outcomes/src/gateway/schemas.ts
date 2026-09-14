@@ -37,6 +37,8 @@ export const outcomeIdParamsSchema = Type.Object(
   { additionalProperties: false },
 );
 
+export const outcomeExportParamsSchema = outcomeIdParamsSchema;
+
 export const outcomeListParamsSchema = Type.Object(
   {
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 100 })),
@@ -64,6 +66,14 @@ export const outcomeUpdateParamsSchema = Type.Object(
 );
 
 export const outcomeCancelParamsSchema = Type.Object(
+  {
+    id: outcomeId,
+    expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),
+  },
+  { additionalProperties: false },
+);
+
+export const outcomeDeleteParamsSchema = Type.Object(
   {
     id: outcomeId,
     expectedRevision: Type.Integer({ minimum: 1, maximum: Number.MAX_SAFE_INTEGER }),

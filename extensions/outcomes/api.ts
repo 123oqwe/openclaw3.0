@@ -1,4 +1,5 @@
 // Outcomes API module exposes the plugin public contract.
+
 export {
   definePluginEntry,
   type OpenClawPluginApi,

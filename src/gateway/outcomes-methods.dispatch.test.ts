@@ -286,7 +286,7 @@ function registerHarness(
   const registrations: Array<{
     method: string;
     handler: never;
-    options: { scope: "operator.read" | "operator.write" };
+    options: { scope: "operator.read" | "operator.write" | "operator.admin" };
   }> = [];
   const store = options.store ?? {
     registerIfAbsent: async (key: string, value: unknown) => {
@@ -332,7 +332,9 @@ function registerHarness(
       registrations.push({
         method,
         handler: handler as never,
-        options: registrationOptions as { scope: "operator.read" | "operator.write" },
+        options: registrationOptions as {
+          scope: "operator.read" | "operator.write" | "operator.admin";
+        },
       });
     },
   });
@@ -385,7 +387,7 @@ async function dispatch(params: {
             forceSyntheticClient: true,
             requireAuthenticatedRequest: true,
             requireScopedClient: true,
-            syntheticScopes: ["operator.read", "operator.write"],
+            syntheticScopes: ["operator.read", "operator.write", "operator.admin"],
           }),
       ),
   );
@@ -406,7 +408,7 @@ async function dispatchWithoutAuthenticatedRequest(params: {
         forceSyntheticClient: true,
         requireAuthenticatedRequest: true,
         requireScopedClient: true,
-        syntheticScopes: ["operator.read", "operator.write"],
+        syntheticScopes: ["operator.read", "operator.write", "operator.admin"],
       }),
   );
 }
@@ -418,6 +420,7 @@ describe("P-02 Outcome Gateway admission", () => {
       ["outcomes.create", "operator.write"],
       ["outcomes.get", "operator.read"],
       ["outcomes.list", "operator.read"],
+      ["outcomes.export", "operator.read"],
       ["outcomes.update", "operator.write"],
       ["outcomes.linkWorkboard", "operator.write"],
       ["outcomes.unlinkWorkboard", "operator.write"],
@@ -425,6 +428,7 @@ describe("P-02 Outcome Gateway admission", () => {
       ["outcomes.refresh", "operator.write"],
       ["outcomes.verifyCriterion", "operator.write"],
       ["outcomes.accept", "operator.write"],
+      ["outcomes.delete", "operator.admin"],
       ["outcomes.cancel", "operator.write"],
     ] as const;
     expect(

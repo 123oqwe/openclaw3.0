@@ -34,6 +34,9 @@ export abstract class OutcomesPageState extends OpenClawLightDomElement {
   @state() protected cancelConfirmationOpen = false;
   @state() protected cancelError: string | null = null;
   @state() protected cancelling = false;
+  @state() protected deleteConfirmationOpen = false;
+  @state() protected deleteError: string | null = null;
+  @state() protected deleting = false;
   @state() protected mutationError: string | null = null;
   @state() protected refreshing = false;
   @state() protected verificationDialogOpen = false;

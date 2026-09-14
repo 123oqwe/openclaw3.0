@@ -255,7 +255,21 @@ function createStrictOutcomeRepository(
     list: async () => (await base.list()).map(parseOutcomeRecord),
     inspectCapacity: () => base.inspectCapacity(),
     getOwned: async (owner, id) => strict(await base.getOwned(owner, id)),
-    listOwned: async (owner) => (await base.listOwned(owner)).map(parseOutcomeRecord),
+    listOwned: async (owner) => {
+      assertManagerProfileId(owner);
+      const entries = await store.entries();
+      diagnostics.observeEntryCount(entries.length);
+      const records: OutcomeRecord[] = [];
+      for (const entry of entries) {
+        // Preserve the legacy boundary: a foreign raw value stays opaque to this owner.
+        if (entry.value.managerProfileId === owner) {
+          records.push(parseOutcomeRecord(entry.value));
+        }
+      }
+      return records.toSorted(
+        (a, b) => b.updatedAt - a.updatedAt || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+      );
+    },
     transact: async <T>(
       id: string,
       decide: (current: OutcomeRecord | undefined) => { result: T; next?: OutcomeRecord },
@@ -333,8 +347,11 @@ function createStrictOutcomeRepository(
     deleteOwnedIf: async (owner, id, predicate) => {
       assertManagerProfileId(owner);
       return deleteIf(id, (current) => {
+        if (current.managerProfileId !== owner) {
+          return false;
+        }
         const parsed = parseOutcomeRecord(current);
-        return parsed.managerProfileId === owner && predicate(parsed);
+        return predicate(parsed);
       });
     },
   };

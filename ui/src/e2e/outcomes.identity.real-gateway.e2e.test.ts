@@ -10,10 +10,15 @@ import { WebSocket, WebSocketServer, type RawData } from "ws";
 import type { HelloOk } from "../../../packages/gateway-protocol/src/index.js";
 import { PROTOCOL_VERSION } from "../../../packages/gateway-protocol/src/index.js";
 import { redactSensitiveText } from "../../../src/logging/redact.js";
+import { resolveUserProfileId } from "../../../src/state/user-profiles.js";
 import {
   createOpenClawTestInstance,
   type OpenClawTestInstance,
 } from "../../../test/helpers/openclaw-test-instance.ts";
+import {
+  readPersistedOutcomeEntries,
+  seedPersistedOutcomeEntry,
+} from "../../../test/helpers/outcomes-real-gateway.e2e-test-support.ts";
 import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
@@ -21,6 +26,7 @@ import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts"
 const aliceIdentity = "alice@outcomes.example.invalid";
 const bobIdentity = "bob@outcomes.example.invalid";
 const operatorScopes = ["operator.read", "operator.write"];
+const operatorAdminScopes = [...operatorScopes, "operator.admin"];
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 
 type JsonRecord = Record<string, unknown>;
@@ -83,8 +89,8 @@ function identityGatewayConfig(owner: OpenClawTestInstance) {
     gateway: {
       auth: {
         identityScopes: {
-          [aliceIdentity]: operatorScopes,
-          [bobIdentity]: operatorScopes,
+          [aliceIdentity]: operatorAdminScopes,
+          [bobIdentity]: operatorAdminScopes,
         },
         mode: "trusted-proxy" as const,
         token: undefined,
@@ -375,6 +381,7 @@ async function proxyGatewayCall(
   clientBuildId: string,
   method: string,
   params: JsonRecord,
+  scopes = operatorScopes,
 ): Promise<ProxiedGatewayResponse> {
   const socket = new WebSocket(proxyUrl, { origin });
   const probeInstanceId = `outcome-identity-probe-${randomUUID()}`;
@@ -423,7 +430,7 @@ async function proxyGatewayCall(
               maxProtocol: PROTOCOL_VERSION,
               minProtocol: PROTOCOL_VERSION,
               role: "operator",
-              scopes: operatorScopes,
+              scopes,
             },
           }),
         );
@@ -566,6 +573,114 @@ const identitySuite = createControlUiE2eSuite({
 });
 
 identitySuite.define(() => {
+  it("does not substitute a missing restored ordinary owner with a new identity", async () => {
+    if (!instance || !proxy) {
+      throw new Error("Outcome identity-switch fixture was not started");
+    }
+    const source = instance;
+    const sourceProxy = proxy;
+    const sourceSelf = await proxyGatewayCall(
+      sourceProxy.probeUrl(aliceIdentity),
+      sourceProxy.probeOrigin,
+      sourceProxy.clientBuildId,
+      "users.self",
+      {},
+    );
+    expect(sourceSelf.ok).toBe(true);
+    const sourceProfileId = requireString(requireObject(sourceSelf.payload, "profile"), "id");
+    const created = await proxyGatewayCall(
+      sourceProxy.probeUrl(aliceIdentity),
+      sourceProxy.probeOrigin,
+      sourceProxy.clientBuildId,
+      "outcomes.create",
+      {
+        criteria: [
+          {
+            id: randomUUID(),
+            required: true,
+            text: "Do not replace a missing restored owner",
+          },
+        ],
+        id: randomUUID(),
+        objective: "Keep the archived owner binding immutable",
+        title: "Missing owner archive fixture",
+      },
+    );
+    expect(created.ok).toBe(true);
+    const sourceOutcome = requireObject(created.payload, "outcome");
+    const outcomeId = requireString(sourceOutcome, "id");
+    const expectedRevision = sourceOutcome.revision;
+    if (typeof expectedRevision !== "number") {
+      throw new Error("Created Outcome omitted its revision");
+    }
+    const sourceEntries = await readPersistedOutcomeEntries(source.env);
+    const sourceEntry = sourceEntries.find(({ key }) => key === outcomeId);
+    if (!sourceEntry) {
+      throw new Error("Created Outcome was not persisted in the source state");
+    }
+    expect(sourceEntry.value).toMatchObject({
+      managerProfileId: sourceProfileId,
+      phase: "draft",
+      planGeneration: 0,
+      planHash: null,
+    });
+
+    let target: OpenClawTestInstance | undefined;
+    let targetProxy: IdentityProxy | undefined;
+    try {
+      target = await createOpenClawTestInstance({
+        name: "control-ui-outcomes-missing-restored-owner",
+        startTimeoutMs: 120_000,
+        env: realGatewayPluginEnv,
+      });
+      await target.state.writeConfig(identityGatewayConfig(target));
+      expect(resolveUserProfileId(sourceProfileId, { env: target.env })).toBeUndefined();
+      await seedPersistedOutcomeEntry(target.env, outcomeId, sourceEntry.value);
+      expect(await readPersistedOutcomeEntries(target.env)).toEqual([sourceEntry]);
+      await target.startGateway();
+      targetProxy = await startIdentityProxy(target.url);
+      for (const replacementIdentity of [bobIdentity, aliceIdentity] as const) {
+        const replacementSelf = await proxyGatewayCall(
+          targetProxy.probeUrl(replacementIdentity),
+          targetProxy.probeOrigin,
+          targetProxy.clientBuildId,
+          "users.self",
+          {},
+        );
+        expect(replacementSelf.ok).toBe(true);
+        const replacementProfileId = requireString(
+          requireObject(replacementSelf.payload, "profile"),
+          "id",
+        );
+        expect(replacementProfileId).not.toBe(sourceProfileId);
+        expect(resolveUserProfileId(sourceProfileId, { env: target.env })).toBeUndefined();
+        for (const [method, params] of [
+          ["outcomes.get", { id: outcomeId }],
+          ["outcomes.export", { id: outcomeId }],
+          ["outcomes.delete", { expectedRevision, id: outcomeId }],
+        ] as const) {
+          const response = await proxyGatewayCall(
+            targetProxy.probeUrl(replacementIdentity),
+            targetProxy.probeOrigin,
+            targetProxy.clientBuildId,
+            method,
+            params,
+            operatorAdminScopes,
+          );
+          expect(response.ok).toBe(false);
+          expect(stringValue(response.error?.code)).toBe("OUTCOME_NOT_FOUND");
+        }
+      }
+      expect(await readPersistedOutcomeEntries(target.env)).toEqual([sourceEntry]);
+    } finally {
+      try {
+        await targetProxy?.close();
+      } finally {
+        await target?.cleanup();
+      }
+    }
+  });
+
   it("clears A data on real same-page trusted-proxy reauthentication and restores it only for A", async () => {
     if (!instance || !proxy) {
       throw new Error("Outcome identity-switch fixture was not started");
@@ -641,8 +756,7 @@ identitySuite.define(() => {
         await detail.locator('[data-outcome-action="link-work"]').click();
         const linkForm = page.locator("[data-outcome-link-form]");
         const card = linkForm.locator('select[name="card"]');
-        await card.focus();
-        await page.keyboard.press("ArrowDown");
+        await card.selectOption(cardId);
         await expect.poll(() => card.inputValue()).toBe(cardId);
         await linkForm.locator("[data-outcome-confirm-link]").click();
         await detail.locator(`[data-outcome-work-card="${cardId}"]`).waitFor({ state: "visible" });

@@ -36,6 +36,7 @@ export const OUTCOME_NEXT_ACTIONS = [
   "activate",
   "refresh",
   "cancel",
+  "delete",
   "review-evidence",
   "accept",
   "observe-operation",
@@ -239,6 +240,8 @@ export type OutcomeUpdateParams = {
 
 export type OutcomeRevisionParams = { id: string; expectedRevision: number };
 export type OutcomeRefreshParams = OutcomeRevisionParams;
+/** Deletion is an admin-only, exact-revision mutation. */
+export type OutcomeDeleteParams = OutcomeRevisionParams;
 
 /** Client may name a card, but the server derives its immutable Workboard identity. */
 export type OutcomeWorkboardLinkParams = OutcomeRevisionParams & {
@@ -276,6 +279,12 @@ export type OutcomeCreateResult = {
 };
 
 export type OutcomeMutationResult = { outcome: OutcomeDetail };
+
+export type OutcomeDeleteResult = { deleted: true; id: string };
+
+export type OutcomeExportParams = { id: string };
+/** Persisted record stays opaque to ordinary client DTO consumers. */
+export type OutcomeExportResult = { schemaVersion: 1; exportedAt: number; record: unknown };
 
 export type OutcomeAssuranceMutationResult = {
   outcome: OutcomeDetail;

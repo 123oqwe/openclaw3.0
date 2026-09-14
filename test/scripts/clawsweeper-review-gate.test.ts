@@ -5,6 +5,10 @@ import { describe, expect, it } from "vitest";
 const helper = join(process.cwd(), "scripts/pr-lib/clawsweeper-review-gate.mjs");
 const head = "a".repeat(40);
 const ago = (milliseconds: number) => new Date(Date.now() - milliseconds).toISOString();
+const trustedBotEnvironmentKeys = [
+  "OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID",
+  "OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN",
+] as const;
 
 function reviewComment({
   id = 1,
@@ -28,9 +32,14 @@ function reviewComment({
   };
 }
 
-function run(comments: unknown[]) {
+function run(comments: unknown[], trustedBot?: Record<string, string | undefined>) {
+  const environment = { ...process.env };
+  for (const key of trustedBotEnvironmentKeys) {
+    delete environment[key];
+  }
   return spawnSync(process.execPath, [helper, "123", head], {
     encoding: "utf8",
+    env: { ...environment, ...trustedBot },
     input: JSON.stringify([comments]),
   });
 }
@@ -44,6 +53,97 @@ describe("ClawSweeper review completion gate", () => {
       reviewedSha: head,
       sourceRevision: "b".repeat(64),
     });
+  });
+
+  it("accepts only the explicitly configured self-hosted bot login and numeric id", () => {
+    const result = run(
+      [reviewComment({ user: { id: 987654321, login: "openclaw-review[bot]", type: "Bot" } })],
+      {
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321",
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+      },
+    );
+    expect(result.status, result.stderr).toBe(0);
+  });
+
+  it.each([
+    [
+      "the default official bot after self-hosted replacement",
+      reviewComment(),
+      {
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321",
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+      },
+    ],
+    [
+      "a matching self-hosted login with a different numeric id",
+      reviewComment({ user: { id: 1, login: "openclaw-review[bot]", type: "Bot" } }),
+      {
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321",
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+      },
+    ],
+    [
+      "a matching self-hosted id with a different login",
+      reviewComment({ user: { id: 987654321, login: "other-review[bot]", type: "Bot" } }),
+      {
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321",
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+      },
+    ],
+    [
+      "a non-Bot author with an otherwise matching pair",
+      reviewComment({ user: { id: 987654321, login: "openclaw-review[bot]", type: "User" } }),
+      {
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321",
+        OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+      },
+    ],
+  ])("rejects %s", (_name, comment, trustedBot) => {
+    const result = run([comment], trustedBot);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("completed review is missing or expired");
+  });
+
+  it("rejects an unconfigured self-hosted bot even when its marker is otherwise valid", () => {
+    const result = run([
+      reviewComment({ user: { id: 987654321, login: "openclaw-review[bot]", type: "Bot" } }),
+    ]);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("completed review is missing or expired");
+  });
+
+  it.each([
+    { OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]" },
+    { OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321" },
+    {
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "",
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+    },
+    {
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321",
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: " ",
+    },
+    {
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "not-a-number",
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+    },
+    {
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "0",
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+    },
+    {
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "9007199254740992",
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "openclaw-review[bot]",
+    },
+    {
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID: "987654321",
+      OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN: "not a github app bot",
+    },
+  ])("fails closed for incomplete or malformed self-hosted trusted identity", (trustedBot) => {
+    const result = run([reviewComment()], trustedBot);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("trusted bot configuration");
   });
 
   it.each([

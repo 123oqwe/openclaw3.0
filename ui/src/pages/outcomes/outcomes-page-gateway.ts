@@ -144,6 +144,9 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
     this.cancelling = false;
+    this.deleteConfirmationOpen = false;
+    this.deleteError = null;
+    this.deleting = false;
     this.createDialogOpen = false;
     this.creating = false;
     this.createError = null;
@@ -272,6 +275,9 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
     this.cancelling = false;
+    this.deleteConfirmationOpen = false;
+    this.deleteError = null;
+    this.deleting = false;
     this.editDialogOpen = false;
     this.editing = false;
     this.editError = null;
@@ -302,6 +308,9 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
     this.cancelConfirmationOpen = false;
     this.cancelError = null;
     this.cancelling = false;
+    this.deleteConfirmationOpen = false;
+    this.deleteError = null;
+    this.deleting = false;
     this.editDialogOpen = false;
     this.editing = false;
     this.editError = null;
@@ -386,6 +395,23 @@ export abstract class OutcomesPageGateway extends OutcomesPageState {
       this.detail &&
       this.gatewayIdentity?.canRead &&
       canCallGatewayMethod(this.gateway.snapshot, method, "operator.write"),
+    );
+  }
+
+  protected canExportOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.export", "operator.read"),
+    );
+  }
+
+  protected canDeleteOutcome(): boolean {
+    return Boolean(
+      this.detail &&
+      this.detail.nextActions.includes("delete") &&
+      this.gatewayIdentity?.canRead &&
+      canCallGatewayMethod(this.gateway.snapshot, "outcomes.delete", "operator.admin"),
     );
   }
 

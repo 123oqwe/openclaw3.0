@@ -25,6 +25,27 @@ if (!Array.isArray(pages) || !pages.every(Array.isArray)) {
 }
 const versionPrefix = "<!-- clawsweeper-review-version ";
 const identityPrefix = "<!-- clawsweeper-review item=";
+const configuredBotLogin = process.env.OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_LOGIN;
+const configuredBotId = process.env.OPENCLAW_CLAWSWEEPER_TRUSTED_BOT_ID;
+const hasConfiguredBotLogin = configuredBotLogin !== undefined;
+const hasConfiguredBotId = configuredBotId !== undefined;
+let trustedBot;
+
+if (!hasConfiguredBotLogin && !hasConfiguredBotId) {
+  trustedBot = { login: "clawsweeper[bot]", id: 274271284 };
+} else {
+  const trustedBotId = Number(configuredBotId);
+  if (
+    !hasConfiguredBotLogin ||
+    !hasConfiguredBotId ||
+    !/^[a-z\d](?:[a-z\d-]{0,37})?\[bot\]$/.test(configuredBotLogin) ||
+    !/^[1-9]\d*$/.test(configuredBotId) ||
+    !Number.isSafeInteger(trustedBotId)
+  ) {
+    fail("trusted bot configuration is invalid.");
+  }
+  trustedBot = { login: configuredBotLogin, id: trustedBotId };
+}
 const completionTail =
   /<!-- clawsweeper-review-version item=(?<item>[1-9]\d*) reviewed_at=(?<reviewedAt>[\w./:@-]+) sha=(?<reviewedSha>[\w./:@-]+) source_revision=(?<sourceRevision>[0-9a-f]{64}) lease_owner=(?<leaseOwner>[\w./:@-]+) lease_comment_id=(?<leaseCommentValue>[\w./:@-]+) v=(?<version>[\w./:@-]+) -->\s*<!-- clawsweeper-review item=(?<identityItem>[1-9]\d*) -->\s*$/;
 const completions = [];
@@ -38,9 +59,9 @@ for (const comment of pages.flat()) {
     continue;
   }
   if (
-    comment?.user?.login !== "clawsweeper[bot]" ||
+    comment?.user?.login !== trustedBot.login ||
     comment?.user?.type !== "Bot" ||
-    comment?.user?.id !== 274271284
+    comment?.user?.id !== trustedBot.id
   ) {
     continue;
   }

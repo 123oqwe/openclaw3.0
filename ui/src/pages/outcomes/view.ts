@@ -11,6 +11,8 @@ import { t } from "../../i18n/index.ts";
 import { registerOutcomesEnglish } from "../../i18n/locales/en-outcomes.ts";
 import { formatDateTimeMs } from "../../lib/format.ts";
 import "../../styles/outcomes.css";
+import { renderOutcomeCancelDialog } from "./outcome-cancel-dialog.ts";
+import { renderOutcomeDeleteDialog } from "./outcome-delete-dialog.ts";
 import { renderOutcomeVerificationDialog } from "./outcome-verification-dialog.ts";
 import {
   acceptanceValidityLabel,
@@ -30,7 +32,9 @@ export type OutcomeDetailViewData = {
   canActivate: boolean;
   canAccept: boolean;
   canCancel: boolean;
+  canDelete: boolean;
   canEdit: boolean;
+  canExport: boolean;
   canLink: boolean;
   canRefresh: boolean;
   canUnlink: boolean;
@@ -38,6 +42,9 @@ export type OutcomeDetailViewData = {
   cancelConfirmationOpen: boolean;
   cancelError: string | null;
   cancelling: boolean;
+  deleteConfirmationOpen: boolean;
+  deleteError: string | null;
+  deleting: boolean;
   detail: OutcomeDetail | null;
   detailExpired?: boolean;
   editCriteria: readonly OutcomeCriterionInput[];
@@ -51,6 +58,7 @@ export type OutcomeDetailViewData = {
   onBack: () => void;
   onActivate: () => void;
   onAccept: () => void;
+  onExport: () => void;
   onDismissEdit: (event: Event) => void;
   onEditCriterionInput: (index: number, value: string) => void;
   onEditInput: (field: "title" | "objective", value: string) => void;
@@ -62,6 +70,9 @@ export type OutcomeDetailViewData = {
   onCancelConfirmationDismiss: (event: Event) => void;
   onConfirmCancel: () => void;
   onRequestCancel: () => void;
+  onDeleteConfirmationDismiss: (event: Event) => void;
+  onConfirmDelete: () => void;
+  onRequestDelete: () => void;
   onRefresh: () => void;
   onDismissVerification: (event: Event) => void;
   onSubmitVerification: (event: SubmitEvent) => void;
@@ -474,41 +485,28 @@ export function renderOutcomeDetail(data: OutcomeDetailViewData) {
           ${t("common.cancel")}
         </button>`
       : nothing}
-    ${data.cancelConfirmationOpen
-      ? html`<openclaw-modal-dialog
-          label=${t("outcomesPage.cancelOutcome")}
-          description=${t("outcomesPage.cancelHelp")}
-          @modal-cancel=${data.onCancelConfirmationDismiss}
+    ${data.canExport
+      ? html`<button
+          data-outcome-action="export"
+          type="button"
+          ?disabled=${data.mutationInFlight}
+          @click=${data.onExport}
         >
-          <section class="outcome-cancel-dialog" aria-busy=${data.cancelling ? "true" : "false"}>
-            <h2>${t("outcomesPage.cancelOutcome")}</h2>
-            <p>${t("outcomesPage.cancelHelp")}</p>
-            ${data.cancelError
-              ? html`<p class="outcomes-state outcomes-state--error" role="alert">
-                  ${data.cancelError}
-                </p>`
-              : nothing}
-            <div class="outcome-cancel-dialog__actions">
-              <button
-                data-outcome-dismiss-cancel
-                type="button"
-                ?disabled=${data.cancelling}
-                @click=${() => data.onCancelConfirmationDismiss(new Event("modal-cancel"))}
-              >
-                ${t("common.back")}
-              </button>
-              <button
-                data-outcome-confirm-cancel
-                type="button"
-                ?disabled=${data.cancelling}
-                @click=${data.onConfirmCancel}
-              >
-                ${data.cancelling ? t("outcomesPage.cancelling") : t("common.confirm")}
-              </button>
-            </div>
-          </section>
-        </openclaw-modal-dialog>`
+          ${t("outcomesPage.exportOutcome")}
+        </button>`
       : nothing}
+    ${data.canDelete && data.detail.nextActions.includes("delete")
+      ? html`<button
+          class="outcome-detail__cancel"
+          data-outcome-action="delete"
+          type="button"
+          ?disabled=${data.deleting || data.mutationInFlight}
+          @click=${data.onRequestDelete}
+        >
+          ${t("outcomesPage.deleteOutcome")}
+        </button>`
+      : nothing}
+    ${renderOutcomeCancelDialog(data)} ${renderOutcomeDeleteDialog(data)}
     ${data.editDialogOpen
       ? html`<openclaw-modal-dialog
           label=${t("outcomesPage.editOutcome")}

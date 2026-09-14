@@ -20,6 +20,94 @@ afterEach(() => {
 });
 
 describe("OutcomesPage mutations", () => {
+  it("offers explicit export and a confirmed delete only for an authorized draft", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({
+          outcome: {
+            ...outcomeDetail("outcome-a", "Outcome A"),
+            nextActions: ["delete"] as unknown as OutcomeDetail["nextActions"],
+          },
+        });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.export", "outcomes.delete"],
+      ["operator.read", "operator.admin"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="export"]'),
+      ).not.toBeNull();
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="delete"]'),
+      ).not.toBeNull();
+    });
+    expect(request).not.toHaveBeenCalledWith("outcomes.export", expect.anything());
+    page.querySelector<HTMLButtonElement>('[data-outcome-action="delete"]')?.click();
+    await vi.waitFor(() => {
+      expect(page.querySelector("[data-outcome-confirm-delete]")).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>("[data-outcome-confirm-delete]")?.click();
+    expect(request).toHaveBeenCalledWith("outcomes.delete", {
+      expectedRevision: 1,
+      id: "outcome-a",
+    });
+  });
+
+  it("offers export without requiring a delete action", async () => {
+    const request = vi.fn((method: string) => {
+      if (method === "outcomes.list") {
+        return Promise.resolve({ outcomes: [outcomeSummary("outcome-a", "Outcome A")] });
+      }
+      if (method === "outcomes.get") {
+        return Promise.resolve({ outcome: outcomeDetail("outcome-a", "Outcome A") });
+      }
+      throw new Error(`Unexpected method: ${method}`);
+    });
+    const client = { request } as unknown as GatewayBrowserClient;
+    const gateway = createGateway(client);
+    (gateway.snapshot as ApplicationGatewaySnapshot).hello = gatewayHelloForMethods(
+      ["outcomes.list", "outcomes.get", "outcomes.export"],
+      ["operator.read"],
+    );
+    const page = document.createElement("openclaw-outcomes-page") as OutcomesPageTestElement;
+    page.context = { gateway } as ApplicationContext;
+    document.body.append(page);
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]'),
+      ).not.toBeNull();
+    });
+    page.querySelector<HTMLButtonElement>('[data-outcome-select="outcome-a"]')?.click();
+
+    await vi.waitFor(() => {
+      expect(
+        page.querySelector<HTMLButtonElement>('[data-outcome-action="export"]'),
+      ).not.toBeNull();
+    });
+    expect(request).not.toHaveBeenCalledWith("outcomes.export", expect.anything());
+    expect(page.querySelector('[data-outcome-action="delete"]')).toBeNull();
+  });
+
   it("refreshes a selected Outcome only after the Gateway confirms the mutation", async () => {
     let resolveRefresh: ((result: { outcome: OutcomeDetail }) => void) | undefined;
     const request = vi.fn((method: string) => {

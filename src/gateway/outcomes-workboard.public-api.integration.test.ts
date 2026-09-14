@@ -119,7 +119,7 @@ async function dispatch(params: {
             forceSyntheticClient: true,
             requireAuthenticatedRequest: true,
             requireScopedClient: true,
-            syntheticScopes: ["operator.read", "operator.write"],
+            syntheticScopes: [...(params.client.connect.scopes ?? [])],
           }),
       ),
   );
@@ -233,6 +233,54 @@ function createHarness(state: { env: NodeJS.ProcessEnv }) {
 }
 
 describe("Outcome public Workboard Gateway integration", () => {
+  it("requires operator.admin for deletion and atomically removes an owner record", async () => {
+    await withOpenClawTestState(
+      { label: "outcome-public-delete", scenario: "minimal" },
+      async (state) => {
+        const harness = createHarness(state);
+        const writer = createOperatorClient("manager-a", ["operator.write"]);
+        const admin = createOperatorClient("manager-a", ["operator.admin"]);
+        await expect(
+          dispatch({
+            client: writer,
+            context: harness.context,
+            method: "outcomes.create",
+            request: {
+              id: outcomeId,
+              title: "Delete safely",
+              objective: "Allow only an authorized quiescent Outcome deletion",
+              criteria: [
+                {
+                  id: criterionId,
+                  text: "Deletion has a bounded authorization contract",
+                  required: true,
+                },
+              ],
+            },
+          }),
+        ).resolves.toMatchObject({ outcome: { id: outcomeId } });
+        await expect(
+          dispatch({
+            client: writer,
+            context: harness.context,
+            method: "outcomes.delete",
+            request: { id: outcomeId, expectedRevision: 1 },
+          }),
+        ).rejects.toThrow(/scope/i);
+        await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toBeDefined();
+        await expect(
+          dispatch({
+            client: admin,
+            context: harness.context,
+            method: "outcomes.delete",
+            request: { id: outcomeId, expectedRevision: 1 },
+          }),
+        ).resolves.toEqual({ deleted: true, id: outcomeId });
+        await expect(harness.outcomeStore.lookup(outcomeId)).resolves.toBeUndefined();
+      },
+    );
+  });
+
   it("reads a public Workboard card, proof, and artifact through both bundled runtime APIs", async () => {
     await withOpenClawTestState(
       { label: "outcome-public-workboard", scenario: "minimal" },

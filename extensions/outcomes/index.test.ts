@@ -4,6 +4,14 @@ import { describe, expect, it, vi } from "vitest";
 import plugin from "./index.js";
 
 describe("Outcome plugin shell", () => {
+  it("keeps archive decoder validation on the plugin test API", async () => {
+    const api = await import("./api.js");
+    const testApi = await import("./test-api.js");
+
+    expect(api).not.toHaveProperty("assertCandidateOutcomeArchiveRecord");
+    expect(testApi.assertCandidateOutcomeArchiveRecord).toBeTypeOf("function");
+  });
+
   function createRegistrationStore() {
     const records = new Map<string, unknown>();
     return {
@@ -69,6 +77,7 @@ describe("Outcome plugin shell", () => {
       peerDependenciesMeta: { openclaw: { optional: true } },
     });
     expect(packageManifest.dependencies).toEqual({
+      "@opentelemetry/api": "1.9.1",
       "@openclaw/outcomes-contract": "workspace:*",
       "@openclaw/workboard-contract": "workspace:*",
       typebox: "1.3.18",
@@ -97,6 +106,7 @@ describe("Outcome plugin shell", () => {
       { method: "outcomes.create", options: { scope: "operator.write" } },
       { method: "outcomes.get", options: { scope: "operator.read" } },
       { method: "outcomes.list", options: { scope: "operator.read" } },
+      { method: "outcomes.export", options: { scope: "operator.read" } },
       { method: "outcomes.update", options: { scope: "operator.write" } },
       { method: "outcomes.linkWorkboard", options: { scope: "operator.write" } },
       { method: "outcomes.unlinkWorkboard", options: { scope: "operator.write" } },
@@ -104,6 +114,7 @@ describe("Outcome plugin shell", () => {
       { method: "outcomes.refresh", options: { scope: "operator.write" } },
       { method: "outcomes.verifyCriterion", options: { scope: "operator.write" } },
       { method: "outcomes.accept", options: { scope: "operator.write" } },
+      { method: "outcomes.delete", options: { scope: "operator.admin" } },
       { method: "outcomes.cancel", options: { scope: "operator.write" } },
     ]);
   });

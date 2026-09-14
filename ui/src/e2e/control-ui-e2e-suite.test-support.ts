@@ -30,7 +30,7 @@ type ControlUiE2ePage = {
   page: Page;
 };
 
-type ControlUiE2eSuite = {
+export type ControlUiE2eSuite = {
   readonly artifactDir: string;
   readonly browser: Browser;
   readonly server: ControlUiE2eServer;
