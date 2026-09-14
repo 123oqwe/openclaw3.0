@@ -1,6 +1,7 @@
 // Real Gateway proof for the Outcome Center's persisted public workflow.
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { expect, it } from "vitest";
 import { backupRestoreCommand } from "../../../src/commands/backup-restore.js";
 import { buildBackupArchivePath } from "../../../src/commands/backup-shared.js";
@@ -23,6 +24,11 @@ import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts"
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+const outcomeStoreOptions = {
+  namespace: "outcomes-v1",
+  maxEntries: 500,
+  overflowPolicy: "reject-new" as const,
+};
 // The isolated-instance helper defaults to a minimal Gateway and therefore does
 // not load configured plugins. This proof must load the real Outcomes and
 // Workboard entries from the fixture config.
@@ -131,6 +137,15 @@ type RefreshResponseSummary = {
 
 function isGatewayCallResult(value: unknown): value is GatewayCallResult {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+async function readPersistedOutcomeEntries(env: NodeJS.ProcessEnv) {
+  const store = createPluginStateKeyedStoreForTests<Record<string, unknown>>("outcomes", {
+    ...outcomeStoreOptions,
+    env,
+  });
+  const entries = await store.entries();
+  return entries.map(({ key, value }) => ({ key, value }));
 }
 
 function gatewayFrame(payload: { toString(): string }): GatewayCallResult | undefined {
@@ -930,6 +945,8 @@ suite.define(() => {
         expect(sourceOutcome.planHash).toMatch(/^[a-f0-9]{64}$/u);
         expect(sourceOutcome.closureHash).toMatch(/^[a-f0-9]{64}$/u);
         const sourceCards = await callGatewayFor(sourceInstance, "workboard.cards.list", {});
+        const sourcePersistedEntries = await readPersistedOutcomeEntries(sourceInstance.env);
+        expect(sourcePersistedEntries).toHaveLength(1);
         let restoredInstance: OpenClawTestInstance | undefined;
         let sourceStopped = false;
         try {
@@ -982,6 +999,9 @@ suite.define(() => {
               outcomesEnabled: true,
               workboardEnabled: false,
             }),
+          );
+          expect(await readPersistedOutcomeEntries(restoredInstance.env)).toEqual(
+            sourcePersistedEntries,
           );
           await restoredInstance.startGateway();
 
@@ -1036,19 +1056,12 @@ suite.define(() => {
             id: acceptedOutcomeId,
             phase: "accepted",
             acceptance: { acceptanceValidity: "needs-review", reason: "not-rechecked" },
-          });
-          expect({
-            acceptances: unrecheckedOutcome.acceptances,
-            criteria: unrecheckedOutcome.criteria,
-            decisions: unrecheckedOutcome.decisions,
-            evidence: unrecheckedOutcome.evidence,
-            planHash: unrecheckedOutcome.planHash,
-          }).toEqual({
-            acceptances: sourceOutcome.acceptances,
-            criteria: sourceOutcome.criteria,
-            decisions: sourceOutcome.decisions,
-            evidence: sourceOutcome.evidence,
-            planHash: sourceOutcome.planHash,
+            criteria: [{ sourcesVisibility: "restricted", workRefs: [] }],
+            evidence: [],
+            decisions: [
+              { status: "verified", decidedPlan: { objective: "Prove human acceptance" } },
+            ],
+            acceptances: [{ acceptedPlan: { objective: "Prove human acceptance" } }],
           });
 
           await restoredInstance.stopGateway();
