@@ -17,7 +17,3 @@ Outcome responsibility and acceptance layer.
 ## Surface
 
 plugin
-
-The persisted Outcome record and its decoder remain plugin-local. The bundled
-plugin API has a test-only candidate-archive assertion that accepts opaque
-restored input and returns neither a persisted record nor a record type.

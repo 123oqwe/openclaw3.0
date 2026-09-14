@@ -59,6 +59,10 @@ type CandidateArchiveFixtureParams = {
   record?: Record<string, unknown>;
 };
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
 export function resolveCandidateCheckoutSha(
   candidateCheckoutDir: string,
   candidateSourcePath: string,
@@ -94,8 +98,7 @@ function parseCandidateOutcomeArchiveSummary(
   try {
     const parsed: unknown = JSON.parse(stdout);
     if (
-      typeof parsed !== "object" ||
-      parsed === null ||
+      !isRecord(parsed) ||
       typeof parsed.candidateSha !== "string" ||
       typeof parsed.compatible !== "boolean" ||
       typeof parsed.allowContinue !== "boolean" ||
