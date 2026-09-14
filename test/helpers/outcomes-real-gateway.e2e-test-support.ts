@@ -1,7 +1,11 @@
+import { spawnSync } from "node:child_process";
+import { createHash } from "node:crypto";
+import { cp, readFile } from "node:fs/promises";
 import path from "node:path";
 import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import type { Page } from "playwright";
 import { expect } from "vitest";
+import { buildBackupArchivePath } from "../../src/commands/backup-shared.js";
 import {
   connectGatewayClient,
   disconnectGatewayClient,
@@ -10,7 +14,10 @@ import { loadOrCreateDeviceIdentity } from "../../src/infra/device-identity.js";
 import { GATEWAY_CLIENT_NAMES } from "../../src/utils/message-channel.ts";
 import type { ControlUiE2eSuite } from "../../ui/src/e2e/control-ui-e2e-suite.test-support.ts";
 import { waitForControlUiGatewayReady } from "../../ui/src/test-helpers/control-ui-e2e-readiness.ts";
-import type { OpenClawTestInstance } from "./openclaw-test-instance.ts";
+import {
+  createOpenClawTestInstance,
+  type OpenClawTestInstance,
+} from "./openclaw-test-instance.ts";
 
 const outcomeStoreOptions = {
   namespace: "outcomes-v1",
@@ -117,6 +124,270 @@ export async function seedPersistedOutcomeEntry(
     env,
   });
   expect(await store.registerIfAbsent(key, value)).toBe(true);
+}
+
+export type CandidateOutcomeArchiveSummary = {
+  allowContinue: boolean;
+  archiveSha256: string;
+  candidateSha: string;
+  compatible: boolean;
+  errorCategory?: "archive-changed" | "decoder-rejected" | "empty-collection" | "process-failed";
+  recordsChecked: number;
+};
+
+type CandidateOutcomeArchiveCheck = {
+  archivePath: string;
+  candidateDecoderUrl: string;
+  candidateSha: string;
+  checkStateDir: string;
+  env: NodeJS.ProcessEnv;
+  restoredStateDir: string;
+};
+
+export function resolveCandidateCheckoutSha(): string {
+  const status = spawnSync("git", ["status", "--porcelain", "--untracked-files=all"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  const checkout = spawnSync("git", ["rev-parse", "HEAD"], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+  });
+  const candidateSha = checkout.stdout.trim();
+  if (
+    status.error ||
+    status.signal ||
+    status.status !== 0 ||
+    status.stdout.trim() !== "" ||
+    checkout.error ||
+    checkout.signal ||
+    checkout.status !== 0 ||
+    !/^[a-f0-9]{40}$/u.test(candidateSha)
+  ) {
+    throw new Error("Candidate checkout SHA is unavailable; leave the plugin disabled");
+  }
+  return candidateSha;
+}
+
+function sha256(contents: Buffer): string {
+  return createHash("sha256").update(contents).digest("hex");
+}
+
+function parseCandidateOutcomeArchiveSummary(
+  stdout: string,
+): Omit<CandidateOutcomeArchiveSummary, "archiveSha256"> | undefined {
+  try {
+    const parsed: unknown = JSON.parse(stdout);
+    if (
+      !isGatewayCallResult(parsed) ||
+      typeof parsed.candidateSha !== "string" ||
+      typeof parsed.compatible !== "boolean" ||
+      typeof parsed.allowContinue !== "boolean" ||
+      typeof parsed.recordsChecked !== "number" ||
+      !Number.isSafeInteger(parsed.recordsChecked) ||
+      parsed.recordsChecked < 0
+    ) {
+      return undefined;
+    }
+    const errorCategory = parsed.errorCategory;
+    if (
+      errorCategory !== undefined &&
+      errorCategory !== "decoder-rejected" &&
+      errorCategory !== "empty-collection"
+    ) {
+      return undefined;
+    }
+    return {
+      allowContinue: parsed.allowContinue,
+      candidateSha: parsed.candidateSha,
+      compatible: parsed.compatible,
+      ...(errorCategory === undefined ? {} : { errorCategory }),
+      recordsChecked: parsed.recordsChecked,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * Runs a candidate's real persistence decoder in a separate process against a
+ * disposable restored-state copy. It neither activates a plugin nor starts a
+ * Gateway. The bounded return value is suitable for an operator gate only.
+ */
+export async function checkCandidateOutcomeArchive(
+  params: CandidateOutcomeArchiveCheck,
+): Promise<CandidateOutcomeArchiveSummary> {
+  const archiveSha256 = sha256(await readFile(params.archivePath));
+  await cp(params.restoredStateDir, params.checkStateDir, { recursive: true });
+  const checkEnv = { ...params.env, OPENCLAW_STATE_DIR: params.checkStateDir };
+  const before = await readPersistedOutcomeEntries(checkEnv);
+  const child = spawnSync(
+    process.execPath,
+    [
+      "--import",
+      import.meta.resolve("tsx"),
+      "--input-type=module",
+      "--eval",
+      `
+        import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
+        import { parseOutcomeRecord } from ${JSON.stringify(params.candidateDecoderUrl)};
+        const result = {
+          candidateSha: ${JSON.stringify(params.candidateSha)},
+          compatible: false,
+          allowContinue: false,
+          recordsChecked: 0,
+        };
+        let entries;
+        try {
+          entries = await createPluginStateKeyedStoreForTests("outcomes", {
+            namespace: "outcomes-v1",
+            maxEntries: 500,
+            overflowPolicy: "reject-new",
+            env: process.env,
+          }).entries();
+        } catch {
+          process.stdout.write(JSON.stringify({ ...result, errorCategory: "process-failed" }));
+          process.exit(0);
+        }
+        if (entries.length === 0) {
+          process.stdout.write(JSON.stringify({ ...result, errorCategory: "empty-collection" }));
+          process.exit(0);
+        }
+        for (const entry of entries) {
+          try {
+            parseOutcomeRecord(entry.value);
+            result.recordsChecked += 1;
+          } catch {
+            process.stdout.write(JSON.stringify({ ...result, errorCategory: "decoder-rejected" }));
+            process.exit(0);
+          }
+        }
+        process.stdout.write(JSON.stringify({ ...result, compatible: true, allowContinue: true }));
+      `,
+    ],
+    { cwd: process.cwd(), encoding: "utf8", env: checkEnv, timeout: 30_000 },
+  );
+  const after = await readPersistedOutcomeEntries(checkEnv);
+  expect(after).toEqual(before);
+  const archiveSha256After = sha256(await readFile(params.archivePath));
+  if (archiveSha256After !== archiveSha256) {
+    return {
+      allowContinue: false,
+      archiveSha256,
+      candidateSha: params.candidateSha,
+      compatible: false,
+      errorCategory: "archive-changed",
+      recordsChecked: 0,
+    };
+  }
+  const summary = parseCandidateOutcomeArchiveSummary(child.stdout);
+  if (child.error || child.signal || child.status !== 0 || !summary) {
+    return {
+      allowContinue: false,
+      archiveSha256,
+      candidateSha: params.candidateSha,
+      compatible: false,
+      errorCategory: "process-failed",
+      recordsChecked: 0,
+    };
+  }
+  return { ...summary, archiveSha256 };
+}
+
+export async function checkCandidateRejectsIncompatibleOutcomeArchive(params: {
+  candidateDecoderUrl: string;
+  candidateSha: string;
+  env: Record<string, string | undefined>;
+  record: Record<string, unknown>;
+}): Promise<CandidateOutcomeArchiveSummary> {
+  const fixture = await createOpenClawTestInstance({
+    name: "outcomes-candidate-incompatible-archive",
+    env: params.env,
+  });
+  try {
+    await seedPersistedOutcomeEntry(fixture.env, "incompatible-outcome", {
+      ...params.record,
+      schemaVersion: 2,
+    });
+    const before = await readPersistedOutcomeEntries(fixture.env);
+    const configBefore = await readFile(fixture.configPath);
+    const archivePath = fixture.state.path("incompatible-outcome-backup.tar.gz");
+    const created = await fixture.cli(
+      ["backup", "create", "--output", archivePath, "--no-include-workspace", "--verify", "--json"],
+      { timeoutMs: 120_000 },
+    );
+    expect(created.code, created.stderr).toBe(0);
+    const backup = parseBackupCreateCliResult(created.stdout);
+    const sourceState = backup.assets.find((asset) => asset.kind === "state");
+    if (!sourceState) {
+      throw new Error("Incompatible Outcome backup CLI output omitted its state asset");
+    }
+    const restoreTarget = fixture.state.path("incompatible-outcome-restore");
+    const restoredCommand = await fixture.cli(
+      ["backup", "restore", backup.archivePath, "--target", restoreTarget, "--json"],
+      { timeoutMs: 120_000 },
+    );
+    expect(restoredCommand.code, restoredCommand.stderr).toBe(0);
+    const restored = parseBackupRestoreCliResult(restoredCommand.stdout);
+    const summary = await checkCandidateOutcomeArchive({
+      archivePath: backup.archivePath,
+      candidateDecoderUrl: params.candidateDecoderUrl,
+      candidateSha: params.candidateSha,
+      checkStateDir: fixture.state.path("incompatible-outcome-check-copy"),
+      env: fixture.env,
+      restoredStateDir: path.join(
+        restored.targetPath,
+        buildBackupArchivePath(backup.archiveRoot, sourceState.sourcePath),
+      ),
+    });
+    expect(await readPersistedOutcomeEntries(fixture.env)).toEqual(before);
+    expect(await readFile(fixture.configPath)).toEqual(configBefore);
+    return summary;
+  } finally {
+    await fixture.cleanup();
+  }
+}
+
+export async function verifyCandidateOutcomeArchiveGate(params: {
+  archivePath: string;
+  candidateDecoderUrl: string;
+  faultEnv: Record<string, string | undefined>;
+  record: Record<string, unknown>;
+  restoredStateDir: string;
+  sourceEntries: Awaited<ReturnType<typeof readPersistedOutcomeEntries>>;
+  sourceInstance: OpenClawTestInstance;
+}): Promise<void> {
+  const candidateSha = resolveCandidateCheckoutSha();
+  const candidateArchive = await checkCandidateOutcomeArchive({
+    archivePath: params.archivePath,
+    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateSha,
+    checkStateDir: params.sourceInstance.state.path("accepted-outcome-candidate-check-copy"),
+    env: params.sourceInstance.env,
+    restoredStateDir: params.restoredStateDir,
+  });
+  expect(candidateArchive).toMatchObject({
+    allowContinue: true,
+    archiveSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    candidateSha,
+    compatible: true,
+    recordsChecked: params.sourceEntries.length,
+  });
+  expect(await readPersistedOutcomeEntries(params.sourceInstance.env)).toEqual(params.sourceEntries);
+  const incompatibleCandidateArchive = await checkCandidateRejectsIncompatibleOutcomeArchive({
+    candidateDecoderUrl: params.candidateDecoderUrl,
+    candidateSha,
+    env: params.faultEnv,
+    record: params.record,
+  });
+  expect(incompatibleCandidateArchive).toMatchObject({
+    allowContinue: false,
+    archiveSha256: expect.stringMatching(/^[a-f0-9]{64}$/u),
+    candidateSha,
+    compatible: false,
+    errorCategory: "decoder-rejected",
+    recordsChecked: 0,
+  });
 }
 
 export function gatewayFrame(payload: { toString(): string }): GatewayCallResult | undefined {

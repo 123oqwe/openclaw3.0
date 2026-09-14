@@ -1,6 +1,7 @@
 // Real Gateway proof for the Outcome Center's persisted public workflow.
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { expect, it } from "vitest";
 import { buildBackupArchivePath } from "../../../src/commands/backup-shared.js";
 import {
@@ -22,6 +23,7 @@ import {
   revokeNewControlUiOperator,
   requireCardId,
   requireProofId,
+  verifyCandidateOutcomeArchiveGate,
   verifyOutcomeMobileKeyboardFlow,
   verifyOutcomeRevocation,
   verifyUnavailableOutcomeState,
@@ -682,7 +684,10 @@ suite.define(() => {
           const acceptedPersistedEntry = sourcePersistedEntries.find(
             ({ key }) => key === acceptedOutcomeId,
           );
-          expect(acceptedPersistedEntry?.value).toMatchObject({
+          if (!acceptedPersistedEntry) {
+            throw new Error("Accepted Outcome persisted entry was not found");
+          }
+          expect(acceptedPersistedEntry.value).toMatchObject({
             phase: "accepted",
             planHash: sourceOutcome.planHash,
             evidence: expect.any(Array),
@@ -730,6 +735,18 @@ suite.define(() => {
             restored.targetPath,
             buildBackupArchivePath(backup.archiveRoot, sourceState.sourcePath),
           );
+          const candidateDecoderUrl = pathToFileURL(
+            path.resolve("extensions/outcomes/src/domain/schema.ts"),
+          ).href;
+          await verifyCandidateOutcomeArchiveGate({
+            archivePath: backup.archivePath,
+            candidateDecoderUrl,
+            faultEnv: realGatewayPluginEnv,
+            record: acceptedPersistedEntry.value,
+            restoredStateDir,
+            sourceEntries: sourcePersistedEntries,
+            sourceInstance,
+          });
           restoredInstance = await createOpenClawTestInstance({
             name: "control-ui-outcomes-restore",
             startTimeoutMs: 120_000,
