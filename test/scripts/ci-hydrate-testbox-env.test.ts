@@ -24,6 +24,15 @@ function runBash(args: string[], env: NodeJS.ProcessEnv = {}): string {
   });
 }
 
+function runBashWithCleanEnvironment(args: string[], env: NodeJS.ProcessEnv): string {
+  return execFileSync("/bin/bash", ["--noprofile", "--norc", ...args], {
+    cwd: process.cwd(),
+    encoding: "utf8",
+    env,
+    stdio: ["ignore", "pipe", "pipe"],
+  });
+}
+
 describe("scripts/ci-hydrate-testbox-env.sh", () => {
   it("bakes custom profile paths into the generated helper default", () => {
     const root = makeTempDir(tempDirs, "openclaw-testbox-env-");
@@ -52,5 +61,31 @@ describe("scripts/ci-hydrate-testbox-env.sh", () => {
       OPENCLAW_TESTBOX_PROFILE_FILE: "",
     });
     expect(output).toContain("OPENAI_API_KEY=testbox-sentinel-key\n");
+  });
+
+  it("hydrates a helper from a clean synthetic provider environment", () => {
+    const root = makeTempDir(tempDirs, "openclaw-testbox-clean-env-");
+    const profilePath = join(root, "profile");
+    const helperPath = join(root, "bin", "openclaw-testbox-env");
+    const home = process.env.HOME;
+    const path = process.env.PATH;
+
+    expect(home).toBeTruthy();
+    expect(path).toBeTruthy();
+    runBashWithCleanEnvironment([SCRIPT, profilePath, helperPath], {
+      HOME: home,
+      PATH: path,
+      DEEPSEEK_API_KEY: "synthetic-arm-testbox-profile",
+    });
+
+    expect(existsSync(profilePath)).toBe(true);
+    expect(statSync(profilePath).mode & 0o777).toBe(0o600);
+    expect(statSync(helperPath).mode & 0o777).toBe(0o700);
+    const output = runBashWithCleanEnvironment(
+      [helperPath, "bash", "-ceu", 'printf "%s|%s" "$DEEPSEEK_API_KEY" "${OPENAI_API_KEY+x}"'],
+      { HOME: home, PATH: path },
+    );
+
+    expect(output).toBe("synthetic-arm-testbox-profile|");
   });
 });

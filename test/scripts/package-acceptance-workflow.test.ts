@@ -7196,10 +7196,6 @@ describe("package artifact reuse", () => {
         "Hydrate Testbox provider env helper",
       ),
       workflowStep(
-        workflowJob(CI_CHECK_ARM_TESTBOX_WORKFLOW, "check-arm"),
-        "Hydrate Testbox provider env helper",
-      ),
-      workflowStep(
         workflowJob(CI_BUILD_ARTIFACTS_TESTBOX_WORKFLOW, "build-artifacts"),
         "Hydrate Testbox provider env helper",
       ),
@@ -7227,6 +7223,14 @@ describe("package artifact reuse", () => {
       for (const key of testboxProviderSecretKeys) {
         expect(step.env?.[key]).toBe("${{ secrets." + key + " }}");
       }
+    }
+    const armHydrationStep = workflowStep(
+      workflowJob(CI_CHECK_ARM_TESTBOX_WORKFLOW, "check-arm"),
+      "Hydrate Testbox provider env helper",
+    );
+    expect(armHydrationStep.if).toBe("github.event_name == 'workflow_dispatch'");
+    for (const key of testboxProviderSecretKeys) {
+      expect(armHydrationStep.env?.[key]).toBe("${{ secrets." + key + " }}");
     }
     for (const workflowPath of [LIVE_E2E_WORKFLOW, PACKAGE_ACCEPTANCE_WORKFLOW]) {
       expect(readWorkflow(workflowPath).on?.workflow_call).toMatchObject({
@@ -7351,7 +7355,7 @@ printf '%s\\n' "$DEEPSEEK_API_KEY" "$DEEPINFRA_API_KEY"`,
     expect(checkTestboxSteps.indexOf(closeTestboxSshStep)).toBe(
       checkTestboxSteps.indexOf(runTestboxStep) + 1,
     );
-    expect(runArmTestboxStep.if).toBe("always()");
+    expect(runArmTestboxStep.if).toBe("github.event_name == 'workflow_dispatch' && always()");
     expect(runBuildArtifactsTestboxStep.if).toBe(
       "github.event_name == 'workflow_dispatch' && always()",
     );
@@ -7362,6 +7366,26 @@ printf '%s\\n' "$DEEPSEEK_API_KEY" "$DEEPINFRA_API_KEY"`,
     );
     expect(runWindowsTestboxStep.run).toContain("${NATIVE_SSH_USER}@${runner_host}");
     expect(runTestboxStep["continue-on-error"]).toBeUndefined();
+  });
+
+  it("uses hosted ARM setup and synthetic profile verification for pull requests", () => {
+    const checkArmJob = workflowJob(CI_CHECK_ARM_TESTBOX_WORKFLOW, "check-arm");
+    const beginTestboxStep = workflowStep(checkArmJob, "Begin Testbox");
+    const syntheticProfileStep = workflowStep(
+      checkArmJob,
+      "Verify synthetic Testbox profile helper",
+    );
+
+    expect(checkArmJob["runs-on"]).toBe(
+      "${{ github.event_name == 'pull_request' && 'ubuntu-24.04-arm' || 'blacksmith-16vcpu-ubuntu-2404-arm' }}",
+    );
+    expect(beginTestboxStep.if).toBe("github.event_name == 'workflow_dispatch'");
+    expect(syntheticProfileStep.if).toBe("github.event_name == 'pull_request'");
+    expect(syntheticProfileStep.env).toBeUndefined();
+    expect(syntheticProfileStep.run).toContain("env -i");
+    expect(syntheticProfileStep.run).toContain("DEEPSEEK_API_KEY=synthetic-arm-testbox-profile");
+    expect(syntheticProfileStep.run).toContain('test -z "${OPENAI_API_KEY+x}"');
+    expect(syntheticProfileStep.run).not.toContain("${{ secrets.");
   });
 
   it("allows the Telegram lane to run from reusable package acceptance artifacts", () => {
