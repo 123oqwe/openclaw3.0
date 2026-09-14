@@ -1,7 +1,6 @@
 // Real Gateway proof for the Outcome Center's persisted public workflow.
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { createPluginStateKeyedStoreForTests } from "openclaw/plugin-sdk/plugin-state-test-runtime";
 import { expect, it } from "vitest";
 import { backupRestoreCommand } from "../../../src/commands/backup-restore.js";
 import { buildBackupArchivePath } from "../../../src/commands/backup-shared.js";
@@ -11,7 +10,6 @@ import {
 } from "../../../src/gateway/test-helpers.e2e.js";
 import { createBackupArchive } from "../../../src/infra/backup-create.js";
 import { loadOrCreateDeviceIdentity } from "../../../src/infra/device-identity.js";
-import type { RuntimeEnv } from "../../../src/runtime.js";
 import { withEnvAsync } from "../../../src/test-utils/env.js";
 import { GATEWAY_CLIENT_NAMES } from "../../../src/utils/message-channel.ts";
 import {
@@ -21,14 +19,18 @@ import {
 import { runQaGatewayFixture } from "../../../test/helpers/qa-gateway-cleanup.ts";
 import { waitForControlUiGatewayReady } from "../test-helpers/control-ui-e2e-readiness.ts";
 import { createControlUiE2eSuite } from "./control-ui-e2e-suite.test-support.ts";
+import {
+  createBackupRuntime,
+  gatewayFailureCode,
+  isGatewayCallResult,
+  outcomeStoreOptions,
+  readPersistedOutcomeEntries,
+  refreshResponseSummary,
+  type GatewayCallResult,
+} from "./outcomes.real-gateway.e2e.test-support.ts";
 
 const captureUiProofEnabled = process.env.OPENCLAW_CAPTURE_UI_PROOF === "1";
 const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-const outcomeStoreOptions = {
-  namespace: "outcomes-v1",
-  maxEntries: 500,
-  overflowPolicy: "reject-new" as const,
-};
 // The isolated-instance helper defaults to a minimal Gateway and therefore does
 // not load configured plugins. This proof must load the real Outcomes and
 // Workboard entries from the fixture config.
@@ -124,72 +126,6 @@ const unavailableSuite = createControlUiE2eSuite({
 
 let unavailableInstance: OpenClawTestInstance | undefined;
 
-type GatewayCallResult = Record<string, unknown>;
-
-type RefreshResponseSummary = {
-  errorCode?: string;
-  ok: boolean;
-  refreshReason?: string;
-  refreshStatus?: string;
-  revision?: number;
-  sourceIssueReasons: string[];
-};
-
-function isGatewayCallResult(value: unknown): value is GatewayCallResult {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-async function readPersistedOutcomeEntries(env: NodeJS.ProcessEnv) {
-  const store = createPluginStateKeyedStoreForTests<Record<string, unknown>>("outcomes", {
-    ...outcomeStoreOptions,
-    env,
-  });
-  const entries = await store.entries();
-  return entries
-    .map(({ key, value }) => ({ key, value }))
-    .toSorted((left, right) => left.key.localeCompare(right.key));
-}
-
-function gatewayFrame(payload: { toString(): string }): GatewayCallResult | undefined {
-  try {
-    const parsed: unknown = JSON.parse(payload.toString());
-    return isGatewayCallResult(parsed) ? parsed : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-function gatewayFailureCode(stdout: string): string {
-  const frame = gatewayFrame({ toString: () => stdout });
-  const error = frame && isGatewayCallResult(frame.error) ? frame.error : undefined;
-  const code = error?.code;
-  // A Gateway error code is safe, bounded diagnostic context for a hosted
-  // failure. Do not print the response body: it can contain params or records.
-  return typeof code === "string" && /^[A-Z_]{1,64}$/u.test(code) ? code : "UNAVAILABLE";
-}
-
-function refreshResponseSummary(frame: GatewayCallResult): RefreshResponseSummary {
-  const error = isGatewayCallResult(frame.error) ? frame.error : undefined;
-  const payload = isGatewayCallResult(frame.payload) ? frame.payload : undefined;
-  const refresh = payload && isGatewayCallResult(payload.refresh) ? payload.refresh : undefined;
-  const outcome = payload && isGatewayCallResult(payload.outcome) ? payload.outcome : undefined;
-  const sourceIssueReasons = Array.isArray(outcome?.sourceIssues)
-    ? outcome.sourceIssues.flatMap((issue) => {
-        if (!isGatewayCallResult(issue) || typeof issue.reason !== "string") {
-          return [];
-        }
-        return [issue.reason];
-      })
-    : [];
-  return {
-    ok: frame.ok === true,
-    sourceIssueReasons,
-    ...(typeof error?.code === "string" ? { errorCode: error.code } : {}),
-    ...(typeof refresh?.reason === "string" ? { refreshReason: refresh.reason } : {}),
-    ...(typeof refresh?.status === "string" ? { refreshStatus: refresh.status } : {}),
-    ...(typeof outcome?.revision === "number" ? { revision: outcome.revision } : {}),
-  };
-}
 
 async function callGateway(
   method: string,
@@ -225,14 +161,6 @@ async function callGatewayFor(
     throw new Error(`${method} returned an invalid Gateway payload`);
   }
   return parsed;
-}
-
-function createBackupRuntime(): RuntimeEnv {
-  return {
-    log: () => undefined,
-    error: () => undefined,
-    exit: () => undefined,
-  };
 }
 
 async function listPairedDevices(): Promise<GatewayCallResult[]> {
