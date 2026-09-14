@@ -20,6 +20,36 @@ const outcomeStoreOptions = {
   overflowPolicy: "reject-new" as const,
 };
 
+export const realGatewayPluginEnv = {
+  OPENCLAW_GATEWAY_TOKEN: undefined,
+  OPENCLAW_GATEWAY_PASSWORD: undefined,
+  OPENCLAW_TEST_MINIMAL_GATEWAY: undefined,
+  OPENCLAW_SKIP_CHANNELS: undefined,
+  OPENCLAW_SKIP_PROVIDERS: undefined,
+  VITEST: undefined,
+  VITEST_POOL_ID: undefined,
+  VITEST_WORKER_ID: undefined,
+  NODE_ENV: undefined,
+  CODEX_HOME: undefined,
+  OPENAI_API_KEY: undefined,
+  ANTHROPIC_API_KEY: undefined,
+  OPENCLAW_BUILD_PRIVATE_QA: "1",
+} as const;
+
+export function outcomeGatewayFixtureConfig(outcomesEnabled: boolean) {
+  return {
+    gateway: { controlUi: { enabled: true } },
+    plugins: {
+      enabled: true,
+      allow: ["outcomes", "workboard"],
+      entries: {
+        outcomes: { enabled: outcomesEnabled },
+        workboard: { enabled: true },
+      },
+    },
+  };
+}
+
 export type GatewayCallResult = Record<string, unknown>;
 
 type BackupCliAsset = {

@@ -1,4 +1,3 @@
-// Real Gateway proof for the Outcome Center's persisted public workflow.
 import { cp, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, it } from "vitest";
@@ -16,12 +15,14 @@ import {
   isGatewayCallResult,
   listControlUiDeviceIds,
   outcomeGatewayConfig,
+  outcomeGatewayFixtureConfig,
   outcomesUrlFor,
   parseBackupCreateCliResult,
   parseBackupRestoreCliResult,
   readOutcomeArchiveSha256,
   readPersistedOutcomeEntries,
   refreshResponseSummary,
+  realGatewayPluginEnv,
   revokeNewControlUiOperator,
   requireCardId,
   requireProofId,
@@ -42,25 +43,6 @@ const outcomesEntrypointModuleId = resolveRelativeBundledPluginPublicModuleId({
   pluginId: "outcomes",
   artifactBasename: "index.js",
 });
-// The isolated-instance helper defaults to a minimal Gateway and therefore does
-// not load configured plugins. This proof must load the real Outcomes and
-// Workboard entries from the fixture config.
-const realGatewayPluginEnv = {
-  OPENCLAW_GATEWAY_TOKEN: undefined,
-  OPENCLAW_GATEWAY_PASSWORD: undefined,
-  OPENCLAW_TEST_MINIMAL_GATEWAY: undefined,
-  OPENCLAW_SKIP_CHANNELS: undefined,
-  OPENCLAW_SKIP_PROVIDERS: undefined,
-  VITEST: undefined,
-  VITEST_POOL_ID: undefined,
-  VITEST_WORKER_ID: undefined,
-  NODE_ENV: undefined,
-  CODEX_HOME: undefined,
-  OPENAI_API_KEY: undefined,
-  ANTHROPIC_API_KEY: undefined,
-  OPENCLAW_BUILD_PRIVATE_QA: "1",
-} as const;
-
 const suite = createControlUiE2eSuite({
   name: "Control UI Outcomes with a real Gateway",
   startServerBeforeBrowser: true,
@@ -69,17 +51,7 @@ const suite = createControlUiE2eSuite({
       name: "control-ui-outcomes",
       startTimeoutMs: 120_000,
       env: realGatewayPluginEnv,
-      config: {
-        gateway: { controlUi: { enabled: true } },
-        plugins: {
-          enabled: true,
-          allow: ["outcomes", "workboard"],
-          entries: {
-            outcomes: { enabled: true },
-            workboard: { enabled: true },
-          },
-        },
-      },
+      config: outcomeGatewayFixtureConfig(true),
     });
     instance = owner;
     try {
@@ -107,17 +79,7 @@ const unavailableSuite = createControlUiE2eSuite({
       name: "control-ui-outcomes-unavailable",
       startTimeoutMs: 120_000,
       env: realGatewayPluginEnv,
-      config: {
-        gateway: { controlUi: { enabled: true } },
-        plugins: {
-          enabled: true,
-          allow: ["outcomes", "workboard"],
-          entries: {
-            outcomes: { enabled: false },
-            workboard: { enabled: true },
-          },
-        },
-      },
+      config: outcomeGatewayFixtureConfig(false),
     });
     unavailableInstance = owner;
     try {
@@ -353,12 +315,10 @@ suite.define(() => {
         });
         expect(Number.isFinite(gatewayConnectionRevisionBeforeExpiry)).toBe(true);
         const gatewayWebSocketCloseCountBeforeExpiry = gatewayWebSocketCloseCount;
-        // Keep Gateway's wall-clock silence checks at the current time while
-        // still advancing the page's monotonic freshness timer.
+        // Keep Gateway wall-clock checks current while advancing page freshness.
         await page.clock.setFixedTime(await page.evaluate(() => Date.now()));
         await page.clock.fastForward(twentyFourHoursMs + 1);
-        // Playwright advances due timers during fastForward, then a short run
-        // lets the reactive render scheduled by the freshness callback settle.
+        // Let the reactive freshness render settle after fastForward.
         await page.clock.runFor(100);
         const freshnessClockAfterExpiry = await page.evaluate(() => performance.now());
         expect(freshnessClockAfterExpiry - freshnessClockBeforeExpiry).toBeGreaterThanOrEqual(
@@ -682,8 +642,7 @@ suite.define(() => {
         let restoredInstance: OpenClawTestInstance | undefined;
         let sourceStopped = false;
         try {
-          // A stopped source makes this an archive/restore test, rather than a read from the
-          // running source. The target has its own port, token, and isolated state root.
+          // A stopped source makes this an archive/restore test with isolated target state.
           await sourceInstance.stopGateway();
           sourceStopped = true;
           const sourcePersistedEntries = await readPersistedOutcomeEntries(sourceInstance.env);
@@ -771,8 +730,7 @@ suite.define(() => {
               },
             },
           });
-          // The archive is intentionally restored to staging. Activation is explicit, so place
-          // its verified state asset in the target instance before its first Gateway startup.
+          // Restore to staging and explicitly place its verified state before target startup.
           await rm(restoredInstance.stateDir, { recursive: true, force: true });
           await cp(restoredStateDir, restoredInstance.stateDir, { recursive: true });
           await restoredInstance.state.writeConfig(
@@ -786,9 +744,7 @@ suite.define(() => {
           );
           await restoredInstance.startGateway();
 
-          // Use the Control UI's owner-authenticated transport for both reads.
-          // The shared-token CLI deliberately has no profile identity, and is
-          // therefore not a valid reader for owner-scoped Outcome records.
+          // The owner-authenticated UI, unlike the profile-less shared-token CLI, reads records.
           const restoredDeviceIds = await listControlUiDeviceIds(restoredInstance);
           browserOutcomeReplies.setPhase("restored-unrechecked");
           await page.goto(await outcomesUrlFor(restoredInstance));
