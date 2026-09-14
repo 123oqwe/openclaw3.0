@@ -16,7 +16,6 @@ import {
   gatewayFrame,
   gatewayFailureCode,
   isGatewayCallResult,
-  outcomeStoreOptions,
   outcomeGatewayConfig,
   outcomesUrlFor,
   readPersistedOutcomeEntries,
